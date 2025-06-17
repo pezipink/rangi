@@ -682,7 +682,7 @@
    (define port (open-input-bytes all-bytes)) ;binary default
 
    ;todo; we can skip some of the pe header
-   (define hash
+   (define pe-headers
      (make-hash
       (map (λ (x) (let ([id (car x)]
                         [spec (cadr x)])
@@ -691,7 +691,7 @@
    ; at this point we have read all the static header data, now there will be a number of section
    ; headers as per pe-num-secs which we will stick in a list
    (define num-secs
-     (to-int (hash-ref (hash-ref hash 'pe) 'num-secs)))
+     (to-int (hash-ref (hash-ref pe-headers 'pe) 'num-secs)))
    (define section-headers
      (for/list ([i (in-range 0 num-secs)]) (read-spec pe-section-header-spec port))) 
    ;after this there is padding until the first section data as pointed to by
@@ -722,7 +722,7 @@
 ;;    (writeln (format "import table : ~x" (calc-file-pos (to-int (hash-ref (hash-ref hash 'pe-opt) 'import-table-rva)))))
    ;cli header
    (define cli-header
-     (begin (file-position port (calc-file-pos (to-int (hash-ref (hash-ref hash 'pe-opt) 'cli-header-table-rva))))
+     (begin (file-position port (calc-file-pos (to-int (hash-ref (hash-ref pe-headers 'pe-opt) 'cli-header-table-rva))))
             (read-spec cli-header-spec port)))
 
 ;;    (writeln (format "cli metadata : ~x" (calc-file-pos (to-int (hash-ref cli-header 'metadata-rva)))))
@@ -734,7 +734,7 @@
       
    ;(writeln cli-meta)
    ;the rest gets more complex and is handled in other functions
-   (hash-set! hash 'sec-headers section-headers)
+   (hash-set! pe-headers 'sec-headers section-headers)
 
    (writeln (format "ended at location 0x~X ~a" (file-position port)(file-position port)))
 
