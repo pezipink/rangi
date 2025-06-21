@@ -2,7 +2,7 @@
 (require racket/match)
 (require racket/hash)
 (require "cli-reader.rkt") 
-
+(provide assemble parse-il)
 (define nano2
   '(
     (.assembly extern "C:/Program Files (x86)/Reference Assemblies/Microsoft/Framework/.NETFramework/v4.7.1/mscorlib.dll" {})
@@ -82,7 +82,7 @@
    ; hash - name -> meth-builder
    [meth-builders])
   #:mutable
-  ;#:transparent
+  #:transparent
   )
          
 
@@ -246,8 +246,9 @@
   acc)
 
 (define (wlf . args)
-  
-  (writeln (apply format args)))
+  ;(void)
+  (writeln (apply format args))
+  )
 
 (define (cli-compress-unsigned num)
   (cond
@@ -325,7 +326,7 @@
        (write-byte (bitwise-and #xFF (arithmetic-shift num -24)) port)]
       [(list 'call ret-type (list assembly type) name param-list)
        (define num (table-rid-lookup 'memberref `(,ret-type (,assembly ,type) ,name ,param-list)))
-       (writeln (format "memberref row id for ~a is ~a" x num))
+       ;(writeln (format "memberref row id for ~a is ~a" x num))
        (write-byte #x28 port)
        
        ;type has the full assembly qualifier, this is a methodref. (memberref 0A)
@@ -464,14 +465,21 @@
             (hash-set! meth-row-lookup mr (add1 i))
             ; first byte is blob len
             (write-byte (bytes-length encoded) blob-heap)
-            (for ([b encoded]) (write-byte b blob-heap))
+            (for ([b encoded])
+              (begin
+                ;(wlf "bh ~a" b)
+                (write-byte b blob-heap)))
             ))))
 
   ; methoddefs
   ; the method defs are keyed by name iside a hash in the cb of their parent.
   ; the signature is identified by name, ret-type and the params - it is possible
   ; for methods from different types to share the sig.  set the waiting sig-index
-  ; on each meth-builder  
+  ; on each meth-builder
+  ; TODO: this is not good enough - the typeref table needs to point at the first index
+  ;  in the method table where its methods begin.  here we assign the indexes probably in some random
+  ;  order due to the hash.  we need to do this more ordered and also store the index to the first method
+  ;  on the cb.
   (for ([mb  (collect (map hash-values (map class-builder-meth-builders (asm-builder-class-defs asm))))]
         [table-index (in-naturals)])
     (let ([index (file-position blob-heap)]
@@ -487,6 +495,7 @@
             (set-meth-builder-sig-index! mb index)
             (set-meth-builder-table-index! mb (add1 table-index))
             (hash-set! meth-row-lookup (mb->key mb) (add1 table-index))
+            (write-byte (bytes-length encoded) blob-heap)
             (for ([b encoded]) (write-byte b blob-heap))))))
 
 
@@ -511,9 +520,13 @@
         )))
   ; we know the heap will be placed at a 4-byte aligned address, so we can calculate
   ; any padding here to ensure it ends correctly aligned
+  (writeln (get-output-bytes string-heap))
   (align-stream 4 string-heap)
   (define string-heap-size (file-position string-heap))
-
+  (writeln (get-output-bytes string-heap))
+  (writeln string-heap-size)
+  
+  
 
   ; the US heap will be empty to start with. for some reason it always has a 1 char blank string (a space)
   ; in additon to the null byte. all strings have a terminal byte to indicate unicode stuff, and
@@ -703,7 +716,8 @@
   ; then once we determine the section layout, we can re-calculate the actual rva
   ; when we are writing the metadata tables that reference the code.
   (define il-heap (open-output-bytes))
-
+  
+  
   ; the il will also need to know which row id some things appear at eg method, type, methodref, etc
 
   (define (table-rid-lookup type key)
@@ -715,9 +729,11 @@
   (for ([md  (collect (map hash-values (map class-builder-meth-builders (asm-builder-class-defs asm))))])
     (assemble-md md encodings table-rid-lookup il-heap))
 
+  (align-stream 4 il-heap)
   (define il-bytes (get-output-bytes il-heap))
+  (define il-heap-size (bytes-length il-bytes))
   
-(writeln tables)
+  ;(writeln tables)
   ; ////////////////////////////////////////////////////////////////
   ; ////////////////////////////////////////////////////////////////
 
@@ -729,9 +745,51 @@
   (define pe (open-output-file "c:\\temp\\rangi.exe" #:exists 'replace))
   
 
-  ; calculate section sizes and determine layout
+  ; before we can write the exe we need to determine the size of the .text section
+  ; which contains the cli metadata and il opcodes.
+  ; we know our .text can always start at x2000 so that makes it slightly easier
+  ; the structure is as follows
+  ; 0x2000 .text
+  ; (x8) import adress table. this is an rva into the hint/name table after the cli data. and an empty 4 bytes.
+  ; (x48) cli header (includes pointer to metadata, after il )
+  ; n  il bytes (align 4)
+  ; metadata header / root
+  ; metadata
+  ; import table 
+  ; import lookup table
+  ; hint/name table
 
+  ; the import lookup and subsequent reloc sections we still neeed to study properly, but we know we only need the same
+  ; fixups and the table sizes will be the same, it is the addresses that will neeed calculating.
+  ; the area for the import tables after the cli data is x68  
+
+
+  ; to do the cli header we need to know the size of the il and the metadata first.
+  (define text-section-size
+    (+
+     #x8   ; IAT
+     #x48  ; cli header
+     il-heap-size  ; il code (aligned)
+     #x20  ; metadata root
+     #x4C  ; metadata headers.  this is known ahead of time since there's always the same 5 streams
+     total-~-stream-size ; includes header
+     string-heap-size
+     us-heap-size
+     guid-heap-size
+     blob-heap-size
+     #x68  ; trailing import tables     
+     ))
+  (wlf ".text section size x~x ~a" text-section-size text-section-size)
+  (when (>= text-section-size #x400 )
+    (raise ".text section larger than x400.  Now you'll have to do that work you've been putting off!"))
   
+  ; calculate section sizes and determine layout
+  ; for now we'll pretend the .text is x400 so we don't have to modify the import table at all.
+  ; however, we will calcuate the cli header properly which will allow us to assemble different programs!!
+  (define text-section-phys #x200)
+  (define text-section-virt #x2000)
+  (define reloc-section-phys #x600)
+  (define reloc-section-virt #x4000)
   ; write PE -
 
   ;   ms dos header
@@ -784,11 +842,30 @@
   
   ;cli header : #x208
   ; this has some very important things to calculate, including the size of the metadata and entrypoint token
-  (write-bytes (bytes #x48 #x00 #x00 #x00 #x02 #x00 #x05 #x00 #x5C #x20 #x00 #x00 #x6C #x01 #x00 #x00 #x01 #x00 #x00 #x00 #x01 #x00 #x00 #x06 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 )
+  ;(write-bytes (bytes #x48 #x00 #x00 #x00 #x02 #x00 #x05 #x00 #x5C #x20 #x00 #x00 #x6C #x01 #x00 #x00 #x01 #x00 #x00 #x00 #x01 #x00 #x00 #x06 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 )
+  ;             pe)
+  (define (calc-text-rva offset)
+    (+ text-section-virt offset))
+  
+  (write-le-4 #x48 pe)  ; header size
+  (write-le-2 2 pe)     ; major
+  (write-le-2 0 pe)     ; minor
+  (write-le-4 (calc-text-rva (+ #x48 #x8 il-heap-size)) pe) ;rva for metadata - this is from the start of the section, skipping iat, cli header and il
+  (write-le-4
+   (+  #x6C  ; metadata headers.  this is known ahead of time since there's always the same 5 streams
+       total-~-stream-size ; includes header
+       string-heap-size
+       us-heap-size
+       guid-heap-size
+       blob-heap-size ) pe )  ; metadata size
+  (write-bytes (bytes #x01 #x00 #x00 #x00 #x01 #x00 #x00 #x06 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 )
                pe)
+  
 
   
   ;at x250 we output our il
+  (define il-start-offset (file-position pe))
+  (wlf "il start ~x" (file-position pe))
   (for ([b il-bytes])
     (write-byte b pe))
 
@@ -896,22 +973,115 @@
        (let ([split (string-split (symbol->string type) ".")])
          ;(wlf "~a" (hash-ref string-index (car split)))
          ;(wlf "~a" (hash-ref string-index (cadr split)))
-         ; first is resolution scope, top byte is x23 (assemblyref)
-         (write-byte #x23 pe)
+         ; first is resolution scope, lowest 2 bits are 10 (assemblyref)
+         ; TODO: lookup and use correct size for 'resolutionscope
+         
          ; todo: lookup assembly ref row index
-         (write-le-3 1 pe)
-         (write-sr (hash-ref string-index (car split)) pe)  ;type name
+         (write-le-2 (bitwise-ior #x2 (arithmetic-shift #x1 2))  pe)
+         ; note: these two seem to be around the wrong way in the spec!!!
          (write-sr (hash-ref string-index (cadr split)) pe)  ;namespace 
+         (write-sr (hash-ref string-index (car split)) pe)  ;type name
          )
        ]
       [else (raise "unexpected typeref")]))
 
   (wlf "typedef start ~x" (file-position pe))
+  (for ([cb (asm-builder-class-defs asm)])
+;    (wlf "~a" cb)
+    (write-le-4 0 pe)  ; flags TODO, we are not encoding these yet, they are zero for our type 
+    (write-sr (hash-ref string-index (symbol->string (class-builder-name cb))) pe) ; name
+    (write-sr 0 pe)  ;namespace
+     ; 'typedeforref  typedef extends.  module pseudo-classextends itself seemingly
+    (write-le-2 0  pe)         
+
+    (write-le-2 1  pe) ; fieldlist - field index todo: proper size
+
+    (write-le-2 1  pe) ; methodlist - field index todo: proper size
+    
+    
+    )
+                                          
+  (wlf "method start ~x" (file-position pe))
+  (for ([cb (asm-builder-class-defs asm)])
+    (for ([mb (sort (hash-values (class-builder-meth-builders cb)) < #:key meth-builder-table-index)])
+      ; first field is the RVA. This will be the virt section address + (il start offset - physical offset of section start) + il index
+      (write-le-4 (+ #x2000 (- il-start-offset #x200) (meth-builder-il-index mb)) pe)
+      (write-le-2 0 pe)  ; implflags todo
+      (write-le-2 #x16 pe)  ; flags todo
+      (write-sr (hash-ref string-index (symbol->string (meth-builder-name mb))) pe)  ; name
+      (write-br (meth-builder-sig-index mb) pe)  ; signature
+      (write-le-2 1 pe)  ; paramlist todo
+      
+      
+;    (wlf "~a" mb)
+    )
+  )
+
+  (wlf "memberref start ~x" (file-position pe))
+  (for ([mb (sort (hash->list (hash-ref (asm-builder-refs asm) 'memref)) < #:key caddr)])
+    (wlf "~a" mb)
+    (wlf "~a" (cdar mb))
+    
+    (match (car mb)
+     [(list ret (list asm type) name params)
+      ; class - memberrefparent - for us this is only typedef at the moment
+      ; 3 bits, zero
+      ; todo: lookup typeref index
+      (write-le-2 (bitwise-ior #x1 (arithmetic-shift #x1 3))  pe)
+      (write-sr (hash-ref string-index (symbol->string name)) pe) ; name
+      (write-br (car (cdr mb)) pe) ; signature
+
+      ]
+      [else (raise "!")])
+    
+    )
+; 
+  (wlf "assembly start ~x" (file-position pe))
+  (write-le-4 0 pe)  ;hashalgid
+  (write-le-8 0 pe)  ;major, minor, build, rev
+  (write-le-4 0 pe)  ;flags
+  (write-br 0 pe)  ;public key
+  (write-sr (hash-ref string-index (symbol->string (asm-builder-asm-def asm))) pe)  ;public key
+  (write-sr 0 pe)
+
+  (wlf "assemblyref start ~x" (file-position pe))
+  (write-le-8 0 pe)  ;major, minor, build, rev
+  (write-le-4 0 pe)  ;flags
+  (write-br 0 pe)  ;public key
+  (write-sr (hash-ref string-index "mscorlib") pe)  ;public key  
+  (write-sr 0 pe)
+
+  ;mysterious padding bytes
+  (write-le-4 0 pe)
+  (write-le-2 0 pe)
+
   
+  ; END #~ STREAM
+  ; ////////////////////////////////////////////////////////////////////////////
+  
+  
+  ; ////////////////////////////////////////////////////////////////////////////
+  ; begin #Strings stream
+  (wlf "strings start ~x" (file-position pe))
+  (write-bytes (get-output-bytes string-heap) pe)
   
 
-  ; END #~ STREAM
-  ; ////////////////////////////////////////////////////////////////////////////|>
+  ; ////////////////////////////////////////////////////////////////////////////
+  ; begin #Us stream
+  (wlf "us start ~x" (file-position pe))
+  (write-bytes (get-output-bytes us-heap) pe)
+
+
+  ; ////////////////////////////////////////////////////////////////////////////
+  ; begin #guid stream
+  (wlf "guid start ~x" (file-position pe))
+  (write-bytes (get-output-bytes guid-heap) pe)
+
+
+  ; ////////////////////////////////////////////////////////////////////////////
+  ; begin #blob stream
+  (wlf "blob start ~x" (file-position pe))
+  (write-bytes (get-output-bytes blob-heap) pe)
   
   
 ;;   (define (bytes-to-next n align)
@@ -920,13 +1090,27 @@
 ;;        (- align (modulo n align))))
 
   
-  ;"import table : 3c8"
-  
+  ;"import table : 3c8"  this is pointed to by the rva in the  "import" section header
+  ; 31 bit rva into the "hint/name" table (which is the actual table...)
 
+  ; then the actual ttable with the mscoree bits.  we need to look at how to generate this properly
+  (write-bytes (bytes #xF0 #x21 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x0E #x22 #x00 #x00
+#x00 #x20 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00
+#x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x22 #x00 #x00 #x00 #x00 #x00 #x00
+#x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x5F #x43 #x6F #x72 #x45 #x78
+#x65 #x4D #x61 #x69 #x6E #x00 #x6D #x73 #x63 #x6F #x72 #x65 #x65 #x2E #x64 #x6C
+#x6C #x00 #x00 #x00 #x00 #x00 #xFF #x25 #x00 #x20 #x40 #x00 #x00 #x00 #x00 #x00
+#x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 ) pe)
 
+  (do ()
+    ((equal? (file-position pe) #x600))
+    (write-byte 0 pe))
   ;"base reloc table : 600"
-
-  
+  ; also need to work out to to move this
+  (write-bytes (bytes #x00 #x20 #x00 #x00 #x0C #x00 #x00 #x00 #x20 #x32 #x00 #x00 #x00 #x00 #x00 #x00 ) pe)
+  (do ()
+    ((equal? (file-position pe) #x800))
+    (write-byte 0 pe))
   (writeln (file-position pe))
   ;   pe & opt header
   ;   sections .text
