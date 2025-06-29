@@ -16,8 +16,8 @@
                (.entrypoint)
                (.maxstack 8)
                (ldc.i 42)
-            ;   (ldc.i 42)
-             ;  (add)
+               (ldc.i 42)
+              (add)
                (call void (mscorlib System.Console) WriteLine (int32))
                (ret)     
                })
@@ -843,7 +843,7 @@
   ; lookup table below it
   (define import-table-rva-to-lookup (calc-text-rva (- (+ text-section-phys import-start-offset #x28) text-section-phys)))
 
-  (define dll-hint-rva (+ import-table-rva-to-lookup #x8 ))
+  (define dll-hint-rva (+ import-table-rva-to-lookup #x8 cli-to-hint-size ))
   (define dll-name-rva (+ dll-hint-rva #xE))
   ; points past the hint table 
   (define entry-point-rva (+ dll-hint-rva #x1E ))
@@ -928,7 +928,10 @@
   ; next are the section headers, this exe has 2 sections .text and .reloc
   ; each header is 40 bytes
   ;.text
-  (write-bytes (bytes #x2E #x74 #x65 #x78 #x74 #x00 #x00 #x00 #x24 #x02 #x00 #x00 #x00 #x20 #x00 #x00 #x00 #x04 #x00 #x00 #x00 #x02 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x20 #x00 #x00 #x60 )
+  (write-bytes (bytes #x2E #x74 #x65 #x78 #x74 #x00 #x00 #x00) pe)
+
+  (write-le-4 text-section-size pe)
+  (write-bytes (bytes #x00 #x20 #x00 #x00 #x00 #x04 #x00 #x00 #x00 #x02 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x20 #x00 #x00 #x60 )
                pe)
 
   ;.reloc
@@ -1215,7 +1218,8 @@
   (write-le-4 dll-hint-rva pe)
   (write-le-4 0 pe)
   ; except some more padding
-;  (write-le-8 0 pe)
+  (for ([n (in-range cli-to-hint-size)])
+    (write-byte 0 pe))
   ; now the hint/name table, dll string and actual entry point bits  
   (write-bytes (bytes   #x00 #x00 #x5F #x43 #x6F #x72 #x45 #x78
                         #x65 #x4D #x61 #x69 #x6E #x00 #x6D #x73 #x63 #x6F #x72 #x65 #x65 #x2E #x64 #x6C
