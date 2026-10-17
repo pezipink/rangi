@@ -252,10 +252,24 @@
          [else (list (cadr item))]))
      (effect name (opcode-pop-count op) (opcode-push-count op) flow targets)]))
 
+; II.25.4.6: a catch handler starts with the exception object on the stack. finally and fault
+; handlers start with an empty stack (III.1.7.5).
+(define (handler-depth clause)
+  (if (eq? (eh-clause-kind clause) 'catch) 1 0))
+
+; endfault has the same encoding as endfinally, 0xDC (III.4.5, III.4.6), so the front end
+; accepts both and lowering sees only endfinally.
+(define (canonical-node node)
+  (match node
+    ['endfault 'endfinally]
+    [(list 'endfault) 'endfinally]
+    [_ node]))
+
 ; Lowers the instruction list to labels.rkt items and assembles them. Returns the assembly
 ; (code bytes and label offsets) and the maximum stack depth computed from the control-flow
-; graph. Each catch handler starts with one item, the exception object (III.1.7.5, II.25.4.6).
-(define (encode-il cx code nparams nlocals ret-void? handlers)
+; graph.
+(define (encode-il cx code0 nparams nlocals ret-void? handlers)
+  (define code (map canonical-node code0))
   (define items
     (for/list ([node (in-list code)]) (lower-instruction cx node nparams nlocals)))
   (define effects
@@ -264,7 +278,7 @@
   (values (assemble-items items)
           (compute-max-stack effects
                              #:handlers (for/list ([h (in-list handlers)])
-                                          (cons (eh-clause-handler-start h) 1)))))
+                                          (cons (eh-clause-handler-start h) (handler-depth h))))))
 
 ; .maxstack given: it is an explicit override and must be at least the computed depth.
 ; Otherwise the default of 8 is kept unless the code needs more.
@@ -296,22 +310,34 @@
                    (make-bytes pad 0)
                    (or eh #""))]))
 
+; II.25.4.6 Flags: catch 0x0000, filter 0x0001 (not supported), finally 0x0002, fault 0x0004.
+; ClassToken is the exception type for a catch and 0 otherwise.
+(define (clause-flags c)
+  (case (eh-clause-kind c)
+    [(catch) #x0000]
+    [(finally) #x0002]
+    [(fault) #x0004]))
+
+(define (clause-class-token cx c)
+  (define class (eh-clause-class c))
+  (if class
+      (bitwise-ior #x01000000 (typeref! cx (car class) (cadr class)))
+      0))
+
 ; II.25.4.5, II.25.4.6: one fat EHTable section (Kind 0x01 | FatFormat 0x40, 3-byte DataSize)
-; with a 24-byte clause per catch. Offsets come from the assembled labels.
+; with a 24-byte clause per handler. Offsets come from the assembled labels.
 (define (eh-section cx asm clauses)
   (define (at l) (assembly-label-offset asm l))
   (define clause-bytes
     (for/list ([c (in-list clauses)])
       (define ts (at (eh-clause-try-start c)))
       (define hs (at (eh-clause-handler-start c)))
-      (define class (eh-clause-class c))
-      (define tok (bitwise-ior #x01000000 (typeref! cx (car class) (cadr class))))
-      (bytes-append (le 0 4)                                   ; Flags: catch
+      (bytes-append (le (clause-flags c) 4)
                     (le ts 4)
                     (le (- (at (eh-clause-try-end c)) ts) 4)
                     (le hs 4)
                     (le (- (at (eh-clause-handler-end c)) hs) 4)
-                    (le tok 4))))
+                    (le (clause-class-token cx c) 4))))
   (define body (apply bytes-append clause-bytes))
   (bytes-append (bytes #x41) (le (+ 4 (bytes-length body)) 3) body))
 
