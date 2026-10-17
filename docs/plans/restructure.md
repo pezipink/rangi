@@ -54,6 +54,6 @@ Deviations so far: a chunk holds plain bytes with zeroed holes and a list of typ
 
 ### R6 Reader hardening
 
-* [ ] Corpus test against every reference assembly (verification milestone V7).
+* [x] Corpus test against every reference assembly (verification milestone V7).
 * [ ] Benchmark `read-file` plus `get-public-typedefs` on `mscorlib.dll` and record the timing in a test, so phase-1 load time does not regress.
 * [ ] Consider memory-mapping or reading only the metadata section instead of the whole file.
