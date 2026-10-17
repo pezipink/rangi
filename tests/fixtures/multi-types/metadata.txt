@@ -1,0 +1,29 @@
+Module rows=1
+  Module[1] Name="multi-types.exe" Mvid=07c7c7b737878f0ec4611bd94e87b851
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=5
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Point" Namespace="Geometry" Extends=0x01000001 Fields=[1..2] Methods=[2..3]
+  TypeDef[4] Flags=1 Name="Shapes" Namespace="Geometry" Extends=0x01000001 Fields=[] Methods=[4..5]
+  TypeDef[5] Flags=1 Name="Holder" Namespace="Demo" Extends=0x01000001 Fields=[3..3] Methods=[6..6]
+Field rows=3
+  Field[1] Flags=6 Name="x" Signature=0608
+  Field[2] Flags=6 Name="y" Signature=0608
+  Field[3] Flags=6 Name="item" Signature=06120c
+MethodDef rows=6
+  MethodDef[1] Rva=8908 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=191a7302000006256f03000006280100000a73060000067b030000046f03000006280100000a1f0a2804000006256f03000006280100000a2805000006280100000a2a
+  MethodDef[2] Rva=8988 ImplFlags=0 Flags=6150 Name=".ctor" Signature=2002010808 Params=[] Il=02280200000a02037d0100000402047d020000042a
+  MethodDef[3] Rva=9012 ImplFlags=0 Flags=6 Name="Sum" Signature=200008 Params=[] Il=027b01000004027b02000004582a
+  MethodDef[4] Rva=9028 ImplFlags=0 Flags=22 Name="Make" Signature=0001120c08 Params=[] Il=0202175873020000062a
+  MethodDef[5] Rva=9040 ImplFlags=0 Flags=22 Name="Twice" Signature=000108120c Params=[] Il=026f03000006185a2a
+  MethodDef[6] Rva=9052 ImplFlags=0 Flags=6150 Name=".ctor" Signature=200101120c Params=[] Il=02280200000a02037d030000042a
+MemberRef rows=2
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+  MemberRef[2] Parent=0x01000001 Name=".ctor" Signature=200001
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
