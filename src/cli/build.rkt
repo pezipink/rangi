@@ -126,9 +126,14 @@
   (for ([ms (in-list (cli-program-methodspecs p))])
     (match-let ([(list method inst) ms])
       (add-methodspec-row! tb bh method inst)))
+  ; GenericParam rows (II.22.20) and their GenericParamConstraint rows (II.22.21). The constraint
+  ; owner is the GenericParam rid as inserted; sort-tables! remaps it with the table order.
   (for ([gp (in-list (cli-program-genericparams p))])
-    (match-let ([(list number name owner) gp])
-      (add-genericparam-row! tb sh number 0 owner name)))
+    (match-let ([(list number flags name owner constraints) gp])
+      (define rid (add1 (table-row-count tb 'genericparam)))
+      (add-genericparam-row! tb sh number flags owner name)
+      (for ([c (in-list constraints)])
+        (add-genericparamconstraint-row! tb rid c))))
   (for ([sig (in-list (cli-program-standalone-sigs p))])
     (add-row! tb 'standalonesig (b sig)))
   (for ([mi (in-list (cli-program-methodimpls p))])

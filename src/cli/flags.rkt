@@ -10,7 +10,8 @@
          pa-reserved3 pa-reserved4 pa-reserved-mask
          field-attributes-flags
          param-attributes-flags
-         pinvoke-attributes-flags)
+         pinvoke-attributes-flags
+         generic-param-attributes-flags)
 
 ; II.23.1.5 FieldAttributes. The access field is a 3-bit value (FieldAccessMask 0x7).
 (define fa-privatescope #x0000)
@@ -95,3 +96,20 @@
                             (error 'flags "unsupported charset ~a" charset)))
                    0)
                (if lasterr? pinvoke-supports-last-error 0)))
+
+; II.23.1.7 GenericParamAttributes. Only the special constraints are written in source; the
+; variance bits (covariant, contravariant) are left zero.
+(define gpa-reference-type #x0004)
+(define gpa-not-nullable-valuetype #x0008)
+(define gpa-default-ctor #x0010)
+(define gp-special-keyword-flags
+  `((class . ,gpa-reference-type) (valuetype . ,gpa-not-nullable-valuetype)
+    (.ctor . ,gpa-default-ctor)))
+
+; specials are the keywords class, valuetype and .ctor (new()) of one type parameter.
+(define (generic-param-attributes-flags specials)
+  (when (and (memq 'class specials) (memq 'valuetype specials))
+    (error 'flags "a type parameter cannot be both class and valuetype"))
+  (for/fold ([acc 0]) ([k (in-list specials)])
+    (bitwise-ior acc (cond [(assq k gp-special-keyword-flags) => cdr]
+                           [else (error 'flags "unsupported generic parameter constraint ~a" k)]))))

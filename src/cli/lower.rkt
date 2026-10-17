@@ -7,8 +7,8 @@
          (only-in "sigs.rkt" encode-localvar-sig encode-method-sig encode-method-instantiation
                   encode-typespec encode-type encode-field-sig encode-property-sig primitive-names
                   element-codes)
-         (only-in "flags.rkt" field-attributes-flags fa-hasdefault fa-hasfieldrva
-                  pinvoke-attributes-flags)
+         (only-in "flags.rkt" field-attributes-flags generic-param-attributes-flags fa-hasdefault
+                  fa-hasfieldrva pinvoke-attributes-flags)
          (only-in "../il/encode.rkt" find-opcode opcode-named)
          (only-in "../il/opcodes.rkt" opcode-operand opcode-type)
          (only-in racket/string string-prefix?)
@@ -87,11 +87,12 @@
 ; initial value bytes of a FieldRVA field (II.22.18), which lives in the image's data area.
 (struct fdef (name flags sig const data))
 
-; class-rids maps a module class name to its TypeDef rid. method-rids maps
-; (list class name ret params), as written in the source, to (vector MethodDef-rid arity instance?).
+; class-rids maps a module class name to its TypeDef rid. class-arities maps the same names to the
+; number of type parameters. method-rids maps (list class name ret params), as written in the
+; source, to (vector MethodDef-rid arity instance?).
 ; field-rids maps (cons class name) to (vector Field-rid type static?) for fields of this module.
 (struct ctx (asm-refs typerefs memberrefs typespecs methodspecs standalone-sigs us-heap
-             class-rids method-rids field-rids))
+             class-rids class-arities method-rids field-rids))
 
 ; insertion-ordered interner: rids are 1-based and follow first-seen order
 (struct interner (table [rows #:mutable]))
@@ -210,8 +211,13 @@
      (define args (if (pair? (cddr t)) (caddr t) '()))
      (cond
        [(symbol? owner)
-        (unless (null? args) (error 'rangi "generic class ~a is not lowered yet" owner))
-        (list (car t) (cons 'typedef (module-class-rid cx owner)))]
+        (define arity (module-class-arity cx owner))
+        (unless (= arity (length args))
+          (error 'rangi "class ~a takes ~a type arguments, got ~a" owner arity (length args)))
+        (define rid (cons 'typedef (module-class-rid cx owner)))
+        (if (null? args)
+            (list (car t) rid)
+            (list 'genericinst (list (car t) rid) (lower-args cx scope args)))]
        [else
         (define-values (asm ty) (asm-type-parts owner))
         (define tr (typeref-rid! cx asm ty (length args)))
@@ -235,6 +241,9 @@
 (define (module-class-rid cx name)
   (or (hash-ref (ctx-class-rids cx) name #f)
       (error 'rangi "unknown class ~a" name)))
+
+(define (module-class-arity cx name)
+  (hash-ref (ctx-class-arities cx) name 0))
 
 (define (asm-type-parts owner)
   (match owner
@@ -278,6 +287,8 @@
      (when (memq 'interface (class-decl-flags target))
        (error 'rangi "~a cannot extend interface ~a" name base))
      (when (eq? base '<Module>) (error 'rangi "~a cannot extend <Module>" name))
+     (unless (zero? (module-class-arity cx base))
+       (error 'rangi "~a cannot extend generic class ~a without type arguments" name base))
      (check-no-cycle! name base decls)
      (cons 'typedef (module-class-rid cx base))]
     [else
@@ -507,6 +518,23 @@
      (values asm ty args)]
     [_ (error 'rangi "unsupported call owner ~s in ~s" owner node)]))
 
+; The MemberRef parent for a call or newobj owner that is not an array or a plain same-module
+; class: a TypeRef, or a TypeSpec for a generic instance of a same-module or external class
+; (II.22.25). Returns the parent and the owner's type argument count.
+(define (member-parent! cx scope owner node)
+  (match owner
+    [(list 'class (list (? symbol? cls)) (? pair? args))
+     (define arity (module-class-arity cx cls))
+     (unless (= arity (length args))
+       (error 'rangi "class ~a takes ~a type arguments, got ~a" cls arity (length args)))
+     (define blob (encode-typespec
+                   (list 'genericinst (list 'class (cons 'typedef (module-class-rid cx cls)))
+                         (lower-args cx scope args))))
+     (values (cons 'typespec (typespec-rid! cx blob)) (length args))]
+    [_
+     (define-values (asm ty args) (external-owner owner node))
+     (values (owner-parent! cx asm ty args scope) (length args))]))
+
 ; (inst T ...) after the parameters of a call names the type arguments of a generic method.
 (define (inst-arg more node)
   (cond
@@ -576,12 +604,11 @@
                                   (method-sig cx scope ret params #:hasthis? #t)))
         (list op (token #x0A000000 mref))]
        [else
-        (define-values (asm ty args) (external-owner owner node))
+        (define-values (parent nargs) (member-parent! cx scope owner node))
         (define ninst (if inst (length inst) 0))
-        (define parent (owner-parent! cx asm ty args scope))
         ; the callee's !N are the owner's type arguments and !!N its own, so they are
         ; lowered against (owner arity . method arity)
-        (define sig (method-sig cx (cons (length args) ninst) ret params
+        (define sig (method-sig cx (cons nargs ninst) ret params
                                 #:hasthis? this? #:arity ninst))
         (define mref (member-ref! cx parent name sig))
         (list op
@@ -611,9 +638,8 @@
                                   (method-sig cx scope 'void params #:hasthis? #t)))
         (list 'newobj (token #x0A000000 mref))]
        [else
-        (define-values (asm ty args) (external-owner owner node))
-        (define parent (owner-parent! cx asm ty args scope))
-        (define sig (method-sig cx (cons (length args) 0) 'void params #:hasthis? #t))
+        (define-values (parent nargs) (member-parent! cx scope owner node))
+        (define sig (method-sig cx (cons nargs 0) 'void params #:hasthis? #t))
         (list 'newobj (token #x0A000000 (member-ref! cx parent '.ctor sig)))])]
     [_ (error 'rangi "malformed IL instruction ~s" node)]))
 
@@ -831,16 +857,43 @@
   (define body (apply bytes-append clause-bytes))
   (bytes-append (bytes #x41) (le (+ 4 (bytes-length body)) 3) body))
 
-; Returns the MethodDef row and its GenericParam rows (number, name, owner). Method type
-; parameters are !!N in this method's scope (II.23.2.12); the class has no type parameters yet.
-(define (encode-method cx class-name rid m)
+; A GenericParamConstraint target (II.22.21, TypeDefOrRef): a class in this module, an external
+; class, or a generic instantiation (a TypeSpec). Returns (cons 'typedef|'typeref|'typespec rid).
+(define (lower-constraint cx scope c)
+  (match c
+    [(list (or 'class 'valuetype) (? symbol? owner))
+     (unless (zero? (module-class-arity cx owner))
+       (error 'rangi "constraint ~s names a generic class without type arguments" c))
+     (cons 'typedef (module-class-rid cx owner))]
+    [(list (or 'class 'valuetype) (list (? symbol? asm) (? symbol? ty)))
+     (cons 'typeref (typeref-rid! cx asm ty 0))]
+    [(list (or 'class 'valuetype) (? symbol? owner) (? list? args))
+     (define t (lower-type cx scope c))
+     (cons 'typespec (typespec-rid! cx (encode-typespec t)))]
+    [(list (or 'class 'valuetype) (list (? symbol? asm) (? symbol? ty)) (? list? args))
+     (define t (lower-type cx scope c))
+     (cons 'typespec (typespec-rid! cx (encode-typespec t)))]
+    [_ (error 'rangi "unsupported generic parameter constraint ~s" c)]))
+
+; GenericParam rows (II.22.20) and their GenericParamConstraint rows (II.22.21) for one owner.
+; Each row is (list number flags name owner constraints), where owner is (cons 'typedef|'methoddef rid)
+; and constraints is a list of lowered TypeDefOrRef targets. Declaration order; the table sort
+; orders them by owner and number (II.22.20, II.22.21).
+(define (gparam-rows cx scope owner gparams)
+  (for/list ([g (in-list gparams)] [i (in-naturals)])
+    (list i
+          (generic-param-attributes-flags (generic-param-specials g))
+          (symbol->string (generic-param-name g))
+          owner
+          (for/list ([c (in-list (generic-param-constraints g))])
+            (lower-constraint cx scope c)))))
+
+; Returns the MethodDef row and its GenericParam rows. Method type parameters are !!N in this
+; method's scope and class type parameters are !N (II.23.2.12); nclass is the class's count.
+(define (encode-method cx class-name nclass rid m)
   (define name (method-decl-name m))
   (define gparams (method-decl-gparams m))
   (define nmth (length gparams))
-  (for ([g (in-list gparams)])
-    (unless (and (null? (generic-param-specials g)) (null? (generic-param-constraints g)))
-      (error 'rangi "constraints on generic parameters of ~a.~a are not lowered yet"
-             class-name name)))
   (when (and (pair? gparams) (method-decl-entry? m))
     (error 'rangi "the entry point ~a.~a cannot be generic" class-name name))
   (define instance? (method-instance? m))
@@ -852,7 +905,7 @@
              class-name name))
     (when (method-decl-entry? m)
       (error 'rangi "the type initializer ~a.~a cannot be the entry point" class-name name)))
-  (define scope (cons 0 nmth))
+  (define scope (cons nclass nmth))
   (define flags (if (cctor? name)
                     (cctor-flags (method-decl-flags m))
                     (method-flags (method-decl-flags m))))
@@ -903,17 +956,17 @@
          body
          (method-decl-entry? m)
          pinvoke)
-   (for/list ([g (in-list gparams)] [i (in-naturals)])
-     (list i (symbol->string (generic-param-name g)) (cons 'methoddef rid)))))
+   (gparam-rows cx scope (cons 'methoddef rid) gparams)))
 
 ; first-rid is the MethodDef rid of the first method of this class. Methods named in special are
-; accessors of a property or event, which get SpecialName (II.22.26, II.10.5.3.1).
+; accessors of a property or event, which get SpecialName (II.22.26, II.10.5.3.1). nclass is the
+; class's type parameter count, so the class's !N variables are in scope (II.23.2.12).
 (define method-specialname #x800)
-(define (encode-methods cx class-name first-rid methods #:special [special '()])
+(define (encode-methods cx class-name nclass first-rid methods #:special [special '()])
   (define seen (make-hash))
   (for/fold ([mdefs '()] [gps '()] #:result (values (reverse mdefs) (append* (reverse gps))))
             ([m (in-list methods)] [rid (in-naturals first-rid)])
-    (define-values (enc0 rows) (encode-method cx class-name rid m))
+    (define-values (enc0 rows) (encode-method cx class-name nclass rid m))
     (define enc
       (if (memq (method-decl-name m) special)
           (struct-copy mdef enc0 [flags (bitwise-ior (mdef-flags enc0) method-specialname)])
@@ -1236,8 +1289,6 @@
 
 (define (lower-module m)
   (define classes (module-model-classes m))
-  (for ([cls (in-list classes)] #:unless (null? (class-decl-gparams cls)))
-    (error 'rangi "generic class ~a is not lowered yet" (class-decl-name cls)))
   (define asm-refs (make-interner))
   (for ([r (in-list (module-model-asm-refs m))]) (intern! asm-refs (asm-ref-name r)))
   (define typerefs (make-interner))
@@ -1249,6 +1300,9 @@
   (define class-rids (make-hash))
   (for ([cls (in-list classes)] [rid (in-naturals 1)])
     (hash-set! class-rids (class-decl-name cls) rid))
+  (define class-arities (make-hash))
+  (for ([cls (in-list classes)])
+    (hash-set! class-arities (class-decl-name cls) (length (class-decl-gparams cls))))
   (define method-rids (make-hash))
   (for/fold ([next 1]) ([cls (in-list classes)])
     (for/fold ([next next]) ([md (in-list (class-decl-methods cls))])
@@ -1266,7 +1320,7 @@
                  (vector next (field-decl-type fd) (and (memq 'static (field-decl-flags fd)) #t)))
       (add1 next)))
   (define cx (ctx asm-refs typerefs memberrefs typespecs methodspecs standalone-sigs us-heap
-                  class-rids method-rids field-rids))
+                  class-rids class-arities method-rids field-rids))
   (define class-decls (for/hasheq ([cls (in-list classes)]) (values (class-decl-name cls) cls)))
   (define data-decls (for/hasheq ([d (in-list (module-model-data m))]) (values (data-decl-name d) d)))
   (for ([cls (in-list classes)]) (check-abstract-members! cls))
@@ -1282,11 +1336,14 @@
         (and enclosing
              (or (hash-ref class-rids enclosing #f)
                  (error 'rangi "nested class ~a has no enclosing class ~a" name enclosing))))
-      ; a nested type's TypeDef has an empty namespace and a simple name (II.22.37)
+      (define arity (length (class-decl-gparams cls)))
+      ; a generic type's simple name carries its arity, Box`1 (II.10.7)
       (define-values (ns short)
-        (if enclosing
-            (values "" (cadr (regexp-match #rx"([^/]*)$" (symbol->string name))))
-            (split-type-name name)))
+        (let-values ([(ns short)
+                      (if enclosing
+                          (values "" (cadr (regexp-match #rx"([^/]*)$" (symbol->string name))))
+                          (split-type-name name))])
+          (values ns (if (zero? arity) short (format "~a`~a" short arity)))))
       (define extends (lower-extends cx cls class-decls))
       (define fdefs
         (for/list ([fd (in-list (class-decl-fields cls))])
@@ -1298,15 +1355,18 @@
                 (bitwise-ior (field-attributes-flags (field-decl-flags fd))
                              (if const fa-hasdefault 0)
                              (if data fa-hasfieldrva 0))
-                (encode-field-sig (lower-type cx '(0 . 0) (field-decl-type fd)))
+                (encode-field-sig (lower-type cx (cons arity 0) (field-decl-type fd)))
                 const
                 data)))
       (define-values (mdefs rows)
-        (encode-methods cx name next-rid (class-decl-methods cls) #:special (accessor-names cls)))
+        (encode-methods cx name arity next-rid (class-decl-methods cls) #:special (accessor-names cls)))
+      (define class-gps
+        (gparam-rows cx (cons arity 0) (cons 'typedef (hash-ref class-rids name))
+                     (class-decl-gparams cls)))
       (values (cons (tdef (typedef-flags flags (and enclosing #t)) short ns extends mdefs fdefs
                           enclosing-rid)
                     tdefs)
-              (cons rows gps)
+              (cons (append class-gps rows) gps)
               (+ next-rid (length mdefs)))))
   (define entry-rid
     (for/first ([md (in-list (append-map tdef-methods tdefs))]
