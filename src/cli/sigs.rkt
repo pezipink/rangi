@@ -9,6 +9,7 @@
 ;   (genericinst base (arg ...))      base is a class or valuetype descriptor
 ;   (var n) (mvar n)                  generic parameter by number (!n and !!n)
 ;   (szarray t) (byref t) (ptr t)
+;   (array t rank)                    multi-dimensional, zero lower bounds and no sizes (II.23.2.13)
 ;   (pinned t)                        only as a top-level local in a LocalVarSig
 ;
 ; Custom modifiers (II.23.2.7) are (modreq tok) or (modopt tok), with tok as above.
@@ -38,7 +39,7 @@
     (uint64 . #x0B) (float32 . #x0C) (float64 . #x0D) (string . #x0E)
     (ptr . #x0F) (byref . #x10) (valuetype . #x11) (class . #x12) (var . #x13)
     (genericinst . #x15) (typedref . #x16) (intptr . #x18) (uintptr . #x19)
-    (object . #x1C) (szarray . #x1D) (mvar . #x1E) (pinned . #x45)
+    (object . #x1C) (array . #x14) (szarray . #x1D) (mvar . #x1E) (pinned . #x45)
     ; II.23.1.16 custom modifier markers (II.23.2.7)
     (cmod-reqd . #x1F) (cmod-opt . #x20)))
 
@@ -64,8 +65,8 @@
     (error 'sigs "bad type token ~s" tok))
   (compress-unsigned (coded-encode 'typedeforref (car tok) (cdr tok))))
 
-; Encodes one Type (II.23.2.12). Custom modifiers and multi-dimensional ARRAY are not
-; supported yet; SZARRAY (a zero-based vector) is.
+; Encodes one Type (II.23.2.12). Custom modifiers and bounded ARRAY (sizes, lower bounds) are not
+; supported; SZARRAY and zero-based multi-dimensional ARRAY are.
 (define (encode-type t)
   (cond
     [(memq t primitive-names) (bytes (element-code t))]
@@ -91,6 +92,16 @@
         (when (memq (cadr t) '(void typedref))
           (error 'sigs "SZARRAY element type cannot be ~a" (cadr t)))
         (bytes-append (bytes (element-code 'szarray)) (encode-type (cadr t)))]
+       [(array)
+        (define elem (cadr t))
+        (define rank (caddr t))
+        (when (memq elem '(void typedref))
+          (error 'sigs "ARRAY element type cannot be ~a" elem))
+        (unless (and (exact-integer? rank) (>= rank 1))
+          (error 'sigs "ARRAY rank must be a positive integer: ~s" rank))
+        ; II.23.2.13 ArrayShape: Rank, NumSizes = 0, NumLoBounds = 0
+        (bytes-append (bytes (element-code 'array)) (encode-type elem)
+                      (compress-unsigned rank) (compress-unsigned 0) (compress-unsigned 0))]
        [(byref ptr)
         (bytes-append (bytes (element-code (car t))) (encode-type (cadr t)))]
        [else (error 'sigs "bad type descriptor ~s" t)])]))
@@ -211,6 +222,19 @@
                 t))]
        [(var mvar) (list name (sig-compressed who port))]
        [(szarray byref ptr) (list name (sig-type who port))]
+       [(array)
+        (define elem (sig-type who port))
+        (when (memq elem '(void typedref)) (error who "ARRAY element type cannot be ~a" elem))
+        (define rank (sig-compressed who port))
+        (when (zero? rank) (error who "ARRAY rank must be positive"))
+        ; II.23.2.13: sizes and lower bounds are not supported; only the zero-based form decodes
+        (define nsizes (sig-compressed who port))
+        (define sizes (for/list ([i (in-range nsizes)]) (sig-compressed who port)))
+        (define nlobounds (sig-compressed who port))
+        (define lobounds (for/list ([i (in-range nlobounds)]) (sig-compressed who port)))
+        (unless (and (null? sizes) (null? lobounds))
+          (error who "bounded ARRAY (sizes or lower bounds) is not supported"))
+        (list 'array elem rank)]
        [else (error who "unsupported element type ~a" name)])]))
 
 ; II.23.2.7 CustomMod*, as (modreq tok) and (modopt tok) pairs in blob order
