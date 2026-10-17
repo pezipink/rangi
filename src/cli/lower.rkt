@@ -24,7 +24,9 @@
 (struct tdef (flags name ns extends methods))
 (struct mdef (name flags sig body entry?))
 
-(struct ctx (asm-refs typerefs memberrefs standalone-sigs us-heap))
+; local-methods maps (class name, method name, ret, params) to the MethodDef rid. It is
+; built before any method is encoded, so calls may name methods defined later (lookup only).
+(struct ctx (asm-refs typerefs memberrefs standalone-sigs us-heap local-methods))
 
 ; insertion-ordered interner: rids are 1-based and follow first-seen order
 (struct interner (table [rows #:mutable]))
@@ -133,6 +135,28 @@
   (bitwise-ior #x0A000000
                (member-ref! cx asm ty name (method-sig ret params #:cc cc))))
 
+; MethodDef rids (II.22.26) in TypeDef order, the same order build.rkt emits the rows.
+; Both the MethodDef and the call-site signature come from the same parsed decls.
+(define (index-local-methods classes)
+  (define index (make-hash))
+  (for*/fold ([rid 1]) ([cls (in-list classes)] [m (in-list (class-decl-methods cls))])
+    (hash-set! index (list (class-decl-name cls) (method-decl-name m)
+                           (method-decl-ret m) (method-decl-params m))
+               rid)
+    (add1 rid))
+  index)
+
+; call with a one-element class (Program): the token is a MethodDef token, 0x06000000 | rid
+; (II.22.26, II.3.2). The call-site signature must match the callee exactly, so the stack
+; effect in node-effect is the callee's. callvirt is rejected: all local methods are static.
+(define (local-method-token cx op ret cls name params)
+  (when (eq? op 'callvirt)
+    (error 'rangi "callvirt to same-module method ~a is not supported; only static methods are lowered" name))
+  (define rid (hash-ref (ctx-local-methods cx) (list cls name ret params) #f))
+  (unless rid
+    (error 'rangi "no method ~a in ~a with return ~a and parameters ~s" name cls ret params))
+  (bitwise-ior #x06000000 rid))
+
 ; FieldSig (II.23.2.4): 0x06, then the field type
 (define (field-token! cx asm ty name type)
   (bitwise-ior #x0A000000
@@ -189,6 +213,8 @@
     [(list (and base (or 'ldloc 'stloc 'ldloca)) n) (var-item base n nlocals "locals")]
     [(list (and op (or 'call 'callvirt)) ret (list asm ty) (? symbol? name) params)
      (list op (method-token! cx (if (eq? op 'call) #x00 #x20) ret asm ty name params))]
+    [(list (and op (or 'call 'callvirt)) ret (list cls) (? symbol? name) params)
+     (list op (local-method-token cx op ret cls name params))]
     [(list 'newobj (list asm ty) params)
      (list 'newobj (method-token! cx #x20 'void asm ty '.ctor params))]
     [(list (and op (or 'ldfld 'stfld)) (list asm ty) (? symbol? name) type)
@@ -339,7 +365,8 @@
   (define memberrefs (make-interner))
   (define standalone-sigs (make-interner))
   (define us-heap (make-us-heap))
-  (define cx (ctx asm-refs typerefs memberrefs standalone-sigs us-heap))
+  (define cx (ctx asm-refs typerefs memberrefs standalone-sigs us-heap
+                  (index-local-methods (module-model-classes m))))
   (define tdefs
     (for/list ([cls (in-list (module-model-classes m))])
       (define name (class-decl-name cls))
