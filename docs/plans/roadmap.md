@@ -52,7 +52,7 @@ Open items, in order:
 3. Done: V7 reader corpus test over the .NET 4.7.1 reference assemblies and `System.Private.CoreLib`, diffed against SRM. 133 of 133 assemblies match.
 4. Done: P2 R1 and R2 (A1 and A2 merged). `src/private/binary.rkt` holds the little-endian, compressed-integer, alignment, and pad-to helpers. `src/cli/schema.rkt` is the single source of table and coded-index layouts, and the reader and writer both use it. Signed compressed integers are still open; nothing calls them. `src/cli/heaps.rkt` is merged (C), and the writer uses it.
 5. Done: V5 L2 layout map, landed with R3.
-6. Partly done: V6 ilasm differential fixtures. `ldstr-hello` and `switch-dispatch` are in. The rest wait for P5 features.
+6. Partly done: V6 ilasm differential fixtures. `ldstr-hello`, `switch-dispatch`, `multi-types`, and `static-fields` are in `tests/oracles/ilasm-diff-test.rkt`. The rest wait for P5 features, or have no textual source yet (see [verification.md](verification.md#l8-differential-comparison-with-ilasm)).
 7. Writer gaps: follow the "Suggested order" in [cli-coverage.md](cli-coverage.md).
 8. Done: the ILVerify oracle (L6) is in `tests/oracles/ilverify`, checked by `tests/oracles/ilverify-test.rkt`.
 
