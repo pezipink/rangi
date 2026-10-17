@@ -212,7 +212,7 @@
     [(memq t primitive-names) t]
     [(and (pair? t) (eq? (car t) 'szarray)) (list 'szarray (lower-type cx scope (cadr t)))]
     [(and (pair? t) (eq? (car t) 'array))
-     (list 'array (lower-type cx scope (cadr t)) (caddr t))]
+     (list* 'array (lower-type cx scope (cadr t)) (cddr t))]
     [(and (pair? t) (eq? (car t) 'byref)) (list 'byref (lower-type cx scope (cadr t)))]
     [(and (symbol? t) (tyvar-ref t))
      => (lambda (ref)
@@ -410,7 +410,7 @@
     [(and (symbol? t) (tyvar-ref t))
      => (λ (ref) (if (equal? (car ref) "!") (list-ref args (cdr ref)) t))]
     [(and (pair? t) (memq (car t) '(szarray byref))) (list (car t) (inst (cadr t)))]
-    [(and (pair? t) (eq? (car t) 'array)) (list 'array (inst (cadr t)) (caddr t))]
+    [(and (pair? t) (eq? (car t) 'array)) (list* 'array (inst (cadr t)) (cddr t))]
     [(and (pair? t) (memq (car t) '(class valuetype)) (pair? (cddr t)))
      (list (car t) (cadr t) (map inst (caddr t)))]
     [else t]))
@@ -551,26 +551,29 @@
 (define (array-parent! cx owner scope)
   (cons 'typespec (typespec-rid! cx (encode-typespec (lower-type cx scope owner)))))
 
-; A multi-dimensional array type is (array ELEM RANK). Its methods come from the CLR (II.14.2):
-; .ctor takes one int32 per dimension, Get returns ELEM, Set takes the indices and an ELEM, and
-; Address returns a managed pointer to ELEM. The source signature must match these exactly.
+; A multi-dimensional array type is (array ELEM RANK) or, bounded, (array ELEM RANK SIZES LOBOUNDS).
+; Its methods come from the CLR (II.14.2): .ctor takes one int32 per dimension (zero lower
+; bounds) or a (lowerbound, size) int32 pair per dimension, Get returns ELEM, Set takes the
+; indices and an ELEM, and Address returns a managed pointer to ELEM. The source signature must
+; match one of these exactly.
 (define (array-owner? owner)
   (match owner
-    [(list 'array _ (? exact-positive-integer?)) #t]
+    [(list* 'array _ (? exact-positive-integer?) _) #t]
     [_ #f]))
 
 (define (check-array-member! node owner name ret params)
-  (match-define (list 'array elem rank) owner)
+  (match-define (list* 'array elem rank _) owner)
   (define indices (make-list rank 'int32))
+  (define pairs (apply append (make-list rank (list 'int32 'int32))))
   (define-values (want-ret want-params)
     (case name
-      [(Get) (values elem indices)]
-      [(Set) (values 'void (append indices (list elem)))]
-      [(Address) (values (list 'byref elem) indices)]
-      [(.ctor) (values 'void indices)]
+      [(Get) (values elem (list indices))]
+      [(Set) (values 'void (list (append indices (list elem))))]
+      [(Address) (values (list 'byref elem) (list indices))]
+      [(.ctor) (values 'void (list indices pairs))]
       [else (error 'rangi "array type ~s has no method ~a; use Get, Set, Address, or .ctor in ~s"
                    owner name node)]))
-  (unless (and (equal? ret want-ret) (equal? params want-params))
+  (unless (and (equal? ret want-ret) (member params want-params))
     (error 'rangi "~a on ~s must have return ~s and parameters ~s, but ~s has return ~s and parameters ~s"
            name owner want-ret want-params node ret params)))
 

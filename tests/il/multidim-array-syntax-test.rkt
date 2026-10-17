@@ -49,9 +49,25 @@
              (λ () (parse-il (program (method 'void '((array typedref 2)) entry-il))))))
 
 (test-case "a rank of zero is rejected"
-  (check-exn #rx"positive rank"
+  (check-exn #rx"array type must be"
              (λ () (parse-il (program (method 'void '((array int32 0)) entry-il))))))
 
-(test-case "a bounded array form is rejected with a clear error"
-  (check-exn #rx"bounded arrays are not supported"
+(test-case "a bounded array with sizes and lower bounds parses"
+  (define m (parse-il (program (method 'void '((array int32 2 (2 3) (5 3))) entry-il))))
+  (check-equal? (method-decl-params (method-named m 'main)) '((array int32 2 (2 3) (5 3)))))
+
+(test-case "a bounded array with sizes but no lower bounds parses"
+  (define m (parse-il (program (method 'void '((array int32 2 (2 3) ())) entry-il))))
+  (check-equal? (method-decl-params (method-named m 'main)) '((array int32 2 (2 3) ()))))
+
+(test-case "a bounded array with sizes that do not match the rank is rejected"
+  (check-exn #rx"empty or one per dimension"
              (λ () (parse-il (program (method 'void '((array int32 2 (1) (0))) entry-il))))))
+
+(test-case "a bounded array with a negative size is rejected"
+  (check-exn #rx"array size must be a non-negative integer"
+             (λ () (parse-il (program (method 'void '((array int32 1 (-1) ())) entry-il))))))
+
+(test-case "a bounded array with an out-of-range lower bound is rejected"
+  (check-exn #rx"lower bound must be an integer"
+             (λ () (parse-il (program (method 'void '((array int32 1 () (268435456))) entry-il))))))

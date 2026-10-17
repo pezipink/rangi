@@ -10,6 +10,7 @@
 ;   (var n) (mvar n)                  generic parameter by number (!n and !!n)
 ;   (szarray t) (byref t) (ptr t)
 ;   (array t rank)                    multi-dimensional, zero lower bounds and no sizes (II.23.2.13)
+;   (array t rank sizes lobounds)     bounded: sizes and lower bounds, each empty or one per dimension
 ;   (pinned t)                        only as a top-level local in a LocalVarSig
 ;
 ; Custom modifiers (II.23.2.7) are (modreq tok) or (modopt tok), with tok as above.
@@ -20,6 +21,7 @@
          primitive-names
          encode-type
          encode-typespec
+         compress-signed
          encode-method-sig
          encode-property-sig
          encode-localvar-sig
@@ -60,14 +62,35 @@
 
 (define (callconv-code name) (cdr (assq name callconv-codes)))
 
+; II.23.2 signed compressed integer. The value is a two's complement number of 7, 14 or 29 bits,
+; rotated one bit left so the sign bit lands in bit 0. Range is -2^28 to 2^28-1.
+(define (compress-signed v)
+  (define bits
+    (cond
+      [(<= -64 v 63) 7]
+      [(<= -8192 v 8191) 14]
+      [(<= -268435456 v 268435455) 29]
+      [else (error 'sigs "signed ARRAY bound out of range: ~a" v)]))
+  (define mask (sub1 (arithmetic-shift 1 bits)))
+  (define u (bitwise-and v mask))
+  (define r (bitwise-ior (bitwise-and (arithmetic-shift u 1) mask)
+                         (arithmetic-shift u (- 1 bits))))
+  (case bits
+    [(7) (bytes r)]
+    [(14) (bytes (bitwise-ior #x80 (arithmetic-shift r -8)) (bitwise-and r #xFF))]
+    [else (bytes (bitwise-ior #xC0 (arithmetic-shift r -24))
+                 (bitwise-and (arithmetic-shift r -16) #xFF)
+                 (bitwise-and (arithmetic-shift r -8) #xFF)
+                 (bitwise-and r #xFF))]))
+
 ; A class or valuetype token is TypeDefOrRefOrSpecEncoded, a compressed integer (II.23.2.8)
 (define (typedeforref-bytes tok)
   (unless (and (pair? tok) (exact-nonnegative-integer? (cdr tok)))
     (error 'sigs "bad type token ~s" tok))
   (compress-unsigned (coded-encode 'typedeforref (car tok) (cdr tok))))
 
-; Encodes one Type (II.23.2.12). Custom modifiers and bounded ARRAY (sizes, lower bounds) are not
-; supported; SZARRAY and zero-based multi-dimensional ARRAY are.
+; Encodes one Type (II.23.2.12). Custom modifiers are not supported. SZARRAY and ARRAY, with or
+; without sizes and lower bounds, are.
 (define (encode-type t)
   (cond
     [(memq t primitive-names) (bytes (element-code t))]
@@ -94,15 +117,32 @@
           (error 'sigs "SZARRAY element type cannot be ~a" (cadr t)))
         (bytes-append (bytes (element-code 'szarray)) (encode-type (cadr t)))]
        [(array)
+        (unless (memv (length t) '(3 5))
+          (error 'sigs "ARRAY must be (array ELEM RANK) or (array ELEM RANK SIZES LOBOUNDS): ~s" t))
         (define elem (cadr t))
         (define rank (caddr t))
+        (define sizes (if (= (length t) 5) (list-ref t 3) '()))
+        (define lobounds (if (= (length t) 5) (list-ref t 4) '()))
         (when (memq elem '(void typedref))
           (error 'sigs "ARRAY element type cannot be ~a" elem))
         (unless (and (exact-integer? rank) (>= rank 1))
           (error 'sigs "ARRAY rank must be a positive integer: ~s" rank))
-        ; II.23.2.13 ArrayShape: Rank, NumSizes = 0, NumLoBounds = 0
+        (for ([s (in-list sizes)])
+          (unless (and (exact-nonnegative-integer? s) (<= s #x1FFFFFFF))
+            (error 'sigs "ARRAY size must be a non-negative integer: ~s" s)))
+        (for ([l (in-list lobounds)])
+          (unless (exact-integer? l)
+            (error 'sigs "ARRAY lower bound must be an integer: ~s" l)))
+        (for ([l (in-list (list sizes lobounds))])
+          (unless (memv (length l) (list 0 rank))
+            (error 'sigs "ARRAY sizes and lower bounds must be empty or one per dimension: ~s" t)))
+        ; II.23.2.13 ArrayShape: Rank, NumSizes, Sizes, NumLoBounds, LoBounds
         (bytes-append (bytes (element-code 'array)) (encode-type elem)
-                      (compress-unsigned rank) (compress-unsigned 0) (compress-unsigned 0))]
+                      (compress-unsigned rank)
+                      (compress-unsigned (length sizes))
+                      (apply bytes-append (map compress-unsigned sizes))
+                      (compress-unsigned (length lobounds))
+                      (apply bytes-append (map compress-signed lobounds)))]
        [(byref ptr)
         (bytes-append (bytes (element-code (car t))) (encode-type (cadr t)))]
        [else (error 'sigs "bad type descriptor ~s" t)])]))
@@ -201,6 +241,23 @@
        (+ (* (bitwise-and b0 #x1F) 16777216) (* b1 65536) (* b2 256) b3))]
     [else (error who "invalid compressed integer lead byte 0x~a" (number->string b0 16))]))
 
+; II.23.2 signed compressed integer, the inverse of compress-signed
+(define (sig-signed who port)
+  (define b0 (sig-byte who port))
+  (define-values (bits r)
+    (cond
+      [(zero? (bitwise-and b0 #x80)) (values 7 b0)]
+      [(= (bitwise-and b0 #xC0) #x80)
+       (values 14 (+ (* (bitwise-and b0 #x3F) 256) (sig-byte who port)))]
+      [(= (bitwise-and b0 #xE0) #xC0)
+       (let* ([b1 (sig-byte who port)]
+              [b2 (sig-byte who port)]
+              [b3 (sig-byte who port)])
+         (values 29 (+ (* (bitwise-and b0 #x1F) 16777216) (* b1 65536) (* b2 256) b3)))]
+      [else (error who "invalid signed integer lead byte 0x~a" (number->string b0 16))]))
+  (define u (bitwise-ior (arithmetic-shift r -1) (arithmetic-shift (bitwise-and r 1) (sub1 bits))))
+  (if (>= u (arithmetic-shift 1 (sub1 bits))) (- u (arithmetic-shift 1 bits)) u))
+
 (define (sig-element-name who code)
   (or (for/first ([e (in-list element-codes)] #:when (= (cdr e) code)) (car e))
       (error who "unknown element type 0x~a" (number->string code 16))))
@@ -238,14 +295,18 @@
         (when (memq elem '(void typedref)) (error who "ARRAY element type cannot be ~a" elem))
         (define rank (sig-compressed who port))
         (when (zero? rank) (error who "ARRAY rank must be positive"))
-        ; II.23.2.13: sizes and lower bounds are not supported; only the zero-based form decodes
+        ; II.23.2.13 ArrayShape. Sizes and lower bounds are each empty or one per dimension, as the
+        ; encoder writes them.
         (define nsizes (sig-compressed who port))
         (define sizes (for/list ([i (in-range nsizes)]) (sig-compressed who port)))
         (define nlobounds (sig-compressed who port))
-        (define lobounds (for/list ([i (in-range nlobounds)]) (sig-compressed who port)))
-        (unless (and (null? sizes) (null? lobounds))
-          (error who "bounded ARRAY (sizes or lower bounds) is not supported"))
-        (list 'array elem rank)]
+        (define lobounds (for/list ([i (in-range nlobounds)]) (sig-signed who port)))
+        (for ([l (in-list (list sizes lobounds))])
+          (unless (memv (length l) (list 0 rank))
+            (error who "ARRAY sizes and lower bounds must be empty or one per dimension")))
+        (if (and (null? sizes) (null? lobounds))
+            (list 'array elem rank)
+            (list 'array elem rank sizes lobounds))]
        [else (error who "unsupported element type ~a" name)])]))
 
 ; II.23.2.7 CustomMod*, as (modreq tok) and (modopt tok) pairs in blob order

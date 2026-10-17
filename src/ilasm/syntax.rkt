@@ -147,8 +147,23 @@
      (when (memq elem '(void typedref))
        (error 'rangi "~a: array element type cannot be ~a" who elem))
      (check-type who elem ncls nmth)]
+    ; Bounded ARRAY (II.23.2.13): sizes and lower bounds, each empty or one per dimension.
+    ; The spec allows fewer entries than the rank; this assembler requires none or all.
+    [(list 'array elem (? exact-positive-integer? rank) (? list? sizes) (? list? lobounds))
+     (when (memq elem '(void typedref))
+       (error 'rangi "~a: array element type cannot be ~a" who elem))
+     (for ([l (in-list (list sizes lobounds))])
+       (unless (memv (length l) (list 0 rank))
+         (error 'rangi "~a: bounded array needs sizes and lower bounds each empty or one per dimension (rank ~a), got ~s" who rank t)))
+     (for ([s (in-list sizes)])
+       (unless (and (exact-nonnegative-integer? s) (<= s #x1FFFFFFF))
+         (error 'rangi "~a: array size must be a non-negative integer, got ~s" who s)))
+     (for ([l (in-list lobounds)])
+       (unless (and (exact-integer? l) (<= -268435456 l 268435455))
+         (error 'rangi "~a: array lower bound must be an integer in -2^28..2^28-1, got ~s" who l)))
+     (check-type who elem ncls nmth)]
     [(cons 'array _)
-     (error 'rangi "~a: array type must be (array ELEM RANK) with a positive rank, got ~s (bounded arrays are not supported)" who t)]
+     (error 'rangi "~a: array type must be (array ELEM RANK) or (array ELEM RANK (SIZES ...) (LOWER-BOUNDS ...)), got ~s" who t)]
     [_ (error 'rangi "~a: malformed type ~s" who t)]))
 
 (define gp-special-keywords '(class valuetype .ctor))
