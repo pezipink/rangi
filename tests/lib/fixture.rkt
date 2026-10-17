@@ -4,7 +4,7 @@
 (require racket/file racket/port racket/runtime-path racket/string file/sha1
          "../../src/ilasm/syntax.rkt" "../../src/image.rkt")
 (provide fixture-names unverified-fixtures
-         with-built-image sha256-hex run-image normalize-newlines)
+         with-built-image library-of sha256-hex run-image normalize-newlines)
 
 ; Fixtures that neither IL verifier can check. il-unverifiable-opcodes is unverifiable on purpose
 ; (II.1.7.5). il-runtime-only-opcodes uses TypedReference and calli, which ILVerify does not implement
@@ -36,7 +36,9 @@
        (error 'fixture-names "RANGI_FIXTURES names unknown fixtures: ~a" unknown))
      (filter (λ (f) (member f wanted)) all)]))
 
-; calls (proc fixture-dir exe-path) with the program assembled into a temp directory
+; calls (proc fixture-dir exe-path) with the program assembled into a temp directory. A fixture
+; with a library.rktd also gets library.dll built beside the image, so the host finds it at
+; runtime. proc runs with the temp directory as cwd, so .assembly extern "library.dll" resolves.
 (define (with-built-image name proc)
   (define dir (build-path fixtures-dir name))
   (define work (make-temporary-file "rangi-fixture-~a" 'directory))
@@ -44,10 +46,19 @@
    void
    (λ ()
      (define exe (build-path work "image.exe"))
-     (define program (call-with-input-file (build-path dir "program.rktd") read))
-     (assemble (parse-il program) exe)
-     (proc dir exe))
+     (define library (build-path dir "library.rktd"))
+     (when (file-exists? library)
+       (assemble (parse-il (call-with-input-file library read)) (library-of exe)))
+     (parameterize ([current-directory work])
+       (define program (call-with-input-file (build-path dir "program.rktd") read))
+       (assemble (parse-il program) exe)
+       (proc dir exe)))
    (λ () (delete-directory/files work #:must-exist? #f))))
+
+; the library.dll that with-built-image places beside the image exe
+(define (library-of exe)
+  (define-values (base name must-be-dir?) (split-path exe))
+  (build-path base "library.dll"))
 
 (define (sha256-hex path)
   (call-with-input-file path

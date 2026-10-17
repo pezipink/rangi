@@ -17,7 +17,7 @@
 
 ; The front end's output. It holds names and instructions as written, with no tokens,
 ; heap indexes, or flag bits. cli/lower.rkt resolves those.
-(struct module-model (asm-refs classes module-name format))
+(struct module-model (asm-refs classes module-name format dll?))
 ; extends is the base type as written: a bare symbol for a class in this module, (asm ty) for an
 ; external class, or #f for the default System.Object (II.22.37).
 (struct class-decl (flags name gparams extends methods fields))
@@ -217,6 +217,7 @@
   (define asm-def? #f)
   (define mod-name #f)
   (define fmt #f)
+  (define dll? #f)
   (define raw-classes
     (for/fold ([acc '()] #:result (reverse acc)) ([node (in-list program)])
       (match node
@@ -234,10 +235,12 @@
          (when mod-name (error 'rangi "only one .module directive is allowed"))
          (set! mod-name (symbol->string name))
          acc]
-        [(list '.format f)
+        [(list '.format f more ...)
          (when fmt (error 'rangi "only one .format directive is allowed"))
          (unless (memq f '(pe32 pe32+)) (error 'rangi "unknown .format ~a, expected pe32 or pe32+" f))
+         (unless (member more '(() (dll))) (error 'rangi "unknown .format option ~s, expected dll" more))
          (set! fmt f)
+         (set! dll? (pair? more))
          acc]
         [(list '.class flags name clause ... body)
          (define-values (tp ext) (class-clauses name clause))
@@ -281,7 +284,8 @@
   (define entries
     (for*/list ([c (in-list classes)] [m (in-list (class-decl-methods c))] #:when (method-decl-entry? m))
       m))
-  (unless (= (length entries) 1)
+  ; a DLL may have no entry point (its _CorDllMain stub is the image entry); an EXE needs one
+  (unless (or (= (length entries) 1) (and dll? (null? entries)))
     (error 'rangi "exactly one .entrypoint is required, found ~a" (length entries)))
 
-  (module-model (reverse asm-refs) classes mod-name (or fmt 'pe32)))
+  (module-model (reverse asm-refs) classes mod-name (or fmt 'pe32) dll?))

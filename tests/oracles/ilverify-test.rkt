@@ -23,6 +23,14 @@
                       (list "run" "--no-build" "--project" project
                             "--" (path->string exe) reference-dir)
                       exe))
-          (check-equal? code 0 (string-append "ILVerify reported errors:\n" out))))))]
+          (check-equal? code 0 (string-append "ILVerify reported errors:\n" out))
+          (define library (library-of exe))
+          (when (file-exists? library)
+            (define-values (lcode lout)
+              (run-tool dotnet
+                        (list "run" "--no-build" "--project" project
+                              "--" (path->string library) reference-dir)
+                        library))
+            (check-equal? lcode 0 (string-append "ILVerify reported errors for library.dll:\n" lout)))))))]
   [(not dotnet) (oracle-missing "dotnet")]
   [else (oracle-missing ".NET Framework 4.7.1 reference assemblies")])

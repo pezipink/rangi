@@ -37,7 +37,7 @@ namespace ILVerifyOracle
         private static int Verify(string imagePath, string referenceDir)
         {
             using (PEReader image = new PEReader(File.OpenRead(imagePath)))
-            using (DirectoryResolver resolver = new DirectoryResolver(referenceDir))
+            using (DirectoryResolver resolver = new DirectoryResolver(Path.GetDirectoryName(Path.GetFullPath(imagePath)), referenceDir))
             {
                 MetadataReader metadata = image.GetMetadataReader();
                 Verifier verifier = new Verifier(resolver);
@@ -72,16 +72,19 @@ namespace ILVerifyOracle
             return "module";
         }
 
-        // Resolves references by simple name from one directory, as the reference assemblies are laid out.
+        // Resolves references by simple name. The image's own directory is searched first, so a
+        // fixture's sibling DLLs resolve; then the reference assemblies directory.
         private sealed class DirectoryResolver : IResolver, IDisposable
         {
-            private readonly string _directory;
+            private readonly string _imageDirectory;
+            private readonly string _referenceDirectory;
             private readonly Dictionary<string, PEReader> _readers =
                 new Dictionary<string, PEReader>(StringComparer.OrdinalIgnoreCase);
 
-            public DirectoryResolver(string directory)
+            public DirectoryResolver(string imageDirectory, string referenceDirectory)
             {
-                _directory = directory;
+                _imageDirectory = imageDirectory;
+                _referenceDirectory = referenceDirectory;
             }
 
             public PEReader ResolveAssembly(AssemblyNameInfo assemblyName)
@@ -96,7 +99,11 @@ namespace ILVerifyOracle
 
             private PEReader Open(string fileName)
             {
-                string path = Path.Combine(_directory, fileName);
+                string path = Path.Combine(_imageDirectory, fileName);
+                if (!File.Exists(path))
+                {
+                    path = Path.Combine(_referenceDirectory, fileName);
+                }
                 if (!_readers.TryGetValue(path, out PEReader reader))
                 {
                     reader = new PEReader(File.OpenRead(path));
