@@ -1,7 +1,8 @@
 #lang racket/base
-; Signature blob encoders (ECMA-335 II.23.2). Pure functions from type descriptors to bytes.
+; Signature blob encoders and decoders (ECMA-335 II.23.2). The encoders are pure functions
+; from type descriptors to bytes; the decoders invert them and share the same descriptors.
 ;
-; Type descriptors (shared with the reader, which decodes into the same shapes):
+; Type descriptors (the decoders produce the same shapes):
 ;   'void 'boolean 'char 'int8 'uint8 'int16 'uint16 'int32 'uint32 'int64 'uint64
 ;   'float32 'float64 'string 'object 'intptr 'uintptr 'typedref  primitives
 ;   (class tok) (valuetype tok)       tok is (cons table rid), table is typedef, typeref or typespec
@@ -9,6 +10,8 @@
 ;   (var n) (mvar n)                  generic parameter by number (!n and !!n)
 ;   (szarray t) (byref t) (ptr t)
 ;   (pinned t)                        only as a top-level local in a LocalVarSig
+;
+; Custom modifiers (II.23.2.7) are (modreq tok) or (modopt tok), with tok as above.
 (require "schema.rkt"
          "../private/binary.rkt")
 (provide element-codes
@@ -18,7 +21,15 @@
          encode-typespec
          encode-method-sig
          encode-localvar-sig
-         encode-method-instantiation)
+         encode-method-instantiation
+         encode-field-sig
+         (struct-out field-signature)
+         (struct-out method-signature)
+         decode-typespec
+         decode-method-sig
+         decode-localvar-sig
+         decode-method-instantiation
+         decode-field-sig)
 
 ; II.23.1.16 element types, and the composite element types from II.23.2
 (define element-codes
@@ -27,11 +38,13 @@
     (uint64 . #x0B) (float32 . #x0C) (float64 . #x0D) (string . #x0E)
     (ptr . #x0F) (byref . #x10) (valuetype . #x11) (class . #x12) (var . #x13)
     (genericinst . #x15) (typedref . #x16) (intptr . #x18) (uintptr . #x19)
-    (object . #x1C) (szarray . #x1D) (mvar . #x1E) (pinned . #x45)))
+    (object . #x1C) (szarray . #x1D) (mvar . #x1E) (pinned . #x45)
+    ; II.23.1.16 custom modifier markers (II.23.2.7)
+    (cmod-reqd . #x1F) (cmod-opt . #x20)))
 
-; II.23.2.1 and II.23.2.6 calling convention bits and signature kinds
+; II.23.2.1, II.23.2.4, II.23.2.6 and II.23.2.15 calling convention bits and signature kinds
 (define callconv-codes
-  '((default . #x00) (vararg . #x05) (generic . #x10) (localsig . #x07)
+  '((default . #x00) (vararg . #x05) (generic . #x10) (localsig . #x07) (field . #x06)
     (hasthis . #x20) (explicitthis . #x40) (genericinst . #x0A)))
 
 (define primitive-names
@@ -126,3 +139,178 @@
          (bytes (callconv-code 'genericinst))
          (compress-unsigned (length args))
          (map encode-type args)))
+
+; II.23.2.4 FieldSig: FIELD, CustomMod*, Type. Void is not a field type.
+(struct field-signature (custom-mods type) #:transparent)
+
+(define (encode-field-sig t #:custom-mods [mods '()])
+  (when (eq? t 'void) (error 'sigs "void is not a field type"))
+  (apply bytes-append
+         (bytes (callconv-code 'field))
+         (append (map encode-custom-mod mods) (list (encode-type t)))))
+
+; II.23.2.7 CustomMod: CMOD_REQD or CMOD_OPT, then a TypeDefOrRef token
+(define (encode-custom-mod m)
+  (unless (and (pair? m) (memq (car m) '(modreq modopt)))
+    (error 'sigs "bad custom modifier ~s" m))
+  (bytes-append (bytes (element-code (if (eq? (car m) 'modreq) 'cmod-reqd 'cmod-opt)))
+                (typedeforref-bytes (cadr m))))
+
+; Decoders (II.23.2). They mirror the encoders above and reject anything the encoders never
+; produce. Each decoder consumes the whole blob, so trailing bytes are an error.
+(struct method-signature (hasthis? explicitthis? generic-arity ret params) #:transparent)
+
+(define (sig-byte who port)
+  (define b (read-byte port))
+  (when (eof-object? b) (error who "truncated signature"))
+  b)
+
+; II.23.2 compressed unsigned integer: one, two or four bytes
+(define (sig-compressed who port)
+  (define b0 (sig-byte who port))
+  (cond
+    [(zero? (bitwise-and b0 #x80)) b0]
+    [(= (bitwise-and b0 #xC0) #x80)
+     (+ (* (bitwise-and b0 #x3F) 256) (sig-byte who port))]
+    [(= (bitwise-and b0 #xE0) #xC0)
+     (let* ([b1 (sig-byte who port)]
+            [b2 (sig-byte who port)]
+            [b3 (sig-byte who port)])
+       (+ (* (bitwise-and b0 #x1F) 16777216) (* b1 65536) (* b2 256) b3))]
+    [else (error who "invalid compressed integer lead byte 0x~a" (number->string b0 16))]))
+
+(define (sig-element-name who code)
+  (or (for/first ([e (in-list element-codes)] #:when (= (cdr e) code)) (car e))
+      (error who "unknown element type 0x~a" (number->string code 16))))
+
+; II.23.2.8 TypeDefOrRefOrSpecEncoded
+(define (sig-typedeforref who port)
+  (define v (sig-compressed who port))
+  (define-values (target rid) (coded-decode (coded-kind-by-name 'typedeforref) v))
+  (unless target (error who "unused TypeDefOrRef tag for ~a" v))
+  (cons target rid))
+
+; II.23.2.12 Type
+(define (sig-type who port)
+  (define name (sig-element-name who (sig-byte who port)))
+  (cond
+    [(memq name primitive-names) name]
+    [else
+     (case name
+       [(class valuetype) (list name (sig-typedeforref who port))]
+       [(genericinst)
+        (define base (sig-type who port))
+        (unless (and (pair? base) (memq (car base) '(class valuetype)))
+          (error who "GENERICINST base must be a class or valuetype"))
+        (define n (sig-compressed who port))
+        (when (zero? n) (error who "GENERICINST with no arguments"))
+        (list 'genericinst base
+              (for/list ([i (in-range n)])
+                (define t (sig-type who port))
+                (when (eq? t 'void) (error who "void GENERICINST argument"))
+                t))]
+       [(var mvar) (list name (sig-compressed who port))]
+       [(szarray byref ptr) (list name (sig-type who port))]
+       [else (error who "unsupported element type ~a" name)])]))
+
+; II.23.2.7 CustomMod*, as (modreq tok) and (modopt tok) pairs in blob order
+(define (sig-custom-mods who port)
+  (define reqd (cdr (assq 'cmod-reqd element-codes)))
+  (define opt (cdr (assq 'cmod-opt element-codes)))
+  (let loop ([acc '()])
+    (define b (peek-byte port))
+    (cond
+      [(or (eqv? b reqd) (eqv? b opt))
+       (read-byte port)
+       (define tok (sig-typedeforref who port))
+       (loop (cons (list (if (eqv? b reqd) 'modreq 'modopt) tok) acc))]
+      [else (reverse acc)])))
+
+(define (decode-whole who bs proc)
+  (define port (open-input-bytes bs))
+  (define v (proc port))
+  (unless (eof-object? (peek-byte port)) (error who "trailing bytes after signature"))
+  v)
+
+; II.23.2.14 TypeSpec blob: one Type
+(define (decode-typespec bs)
+  (decode-whole 'decode-typespec bs (λ (port) (sig-type 'decode-typespec port))))
+
+; II.23.2.4 FieldSig
+(define (decode-field-sig bs)
+  (define who 'decode-field-sig)
+  (decode-whole
+   who bs
+   (λ (port)
+     (define cc (sig-byte who port))
+     (unless (= cc (cdr (assq 'field callconv-codes)))
+       (error who "not a FieldSig: 0x~a" (number->string cc 16)))
+     (define mods (sig-custom-mods who port))
+     (define t (sig-type who port))
+     (when (eq? t 'void) (error who "void is not a field type"))
+     (field-signature mods t))))
+
+; II.23.2.1 MethodDefSig / MethodRefSig
+(define (decode-method-sig bs)
+  (define who 'decode-method-sig)
+  (decode-whole
+   who bs
+   (λ (port)
+     (define cc (sig-byte who port))
+     ; only HASTHIS (0x20), EXPLICITTHIS (0x40) and GENERIC (0x10) are supported; the kind is default
+     (unless (zero? (bitwise-and cc #x8F))
+       (error who "unsupported calling convention 0x~a" (number->string cc 16)))
+     (define generic? (positive? (bitwise-and cc #x10)))
+     (define arity
+       (cond
+         [generic?
+          (let ([a (sig-compressed who port)])
+            (when (zero? a) (error who "GENERIC signature with zero generic parameters"))
+            a)]
+         [else 0]))
+     (define nparams (sig-compressed who port))
+     (define ret (sig-type who port))
+     (define params
+       (for/list ([i (in-range nparams)])
+         (define t (sig-type who port))
+         (when (eq? t 'void) (error who "void is not a parameter type"))
+         t))
+     (method-signature (positive? (bitwise-and cc #x20))
+                       (positive? (bitwise-and cc #x40))
+                       arity ret params))))
+
+; II.23.2.6 LocalVarSig
+(define (decode-localvar-sig bs)
+  (define who 'decode-localvar-sig)
+  (decode-whole
+   who bs
+   (λ (port)
+     (define cc (sig-byte who port))
+     (unless (= cc (cdr (assq 'localsig callconv-codes)))
+       (error who "not a LocalVarSig: 0x~a" (number->string cc 16)))
+     (define n (sig-compressed who port))
+     (for/list ([i (in-range n)]) (sig-local who port)))))
+
+(define (sig-local who port)
+  (cond
+    [(eqv? (peek-byte port) (cdr (assq 'pinned element-codes)))
+     (read-byte port)
+     (list 'pinned (sig-local who port))]
+    [else
+     (define t (sig-type who port))
+     (when (eq? t 'void) (error who "void is not a local type"))
+     t]))
+
+; II.23.2.15 MethodSpec instantiation
+(define (decode-method-instantiation bs)
+  (define who 'decode-method-instantiation)
+  (decode-whole
+   who bs
+   (λ (port)
+     (define cc (sig-byte who port))
+     (unless (= cc (cdr (assq 'genericinst callconv-codes)))
+       (error who "not a MethodSpec instantiation: 0x~a" (number->string cc 16)))
+     (define n (sig-compressed who port))
+     (when (zero? n) (error who "MethodSpec needs at least one type argument"))
+     (for/list ([i (in-range n)]) (sig-type who port)))))
+
