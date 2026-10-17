@@ -6,7 +6,7 @@ ms.date: 2026-10-17
 
 ## Current state
 
-`encode-il` in `src/cli/lower.rkt`, fed by `parse-il` (through `lower-module`), handles four forms: `ret` (0x2A), `add` (0x58), `ldc.i4` (0x20, always a 4-byte operand), and `call` to a `MemberRef` or `MethodDef` (0x28). Any other instruction raises `unsupported IL instruction`, so nothing is skipped silently. `.locals`, labels, and exception handling are not supported yet.
+`encode-il` in `src/cli/lower.rkt`, fed by `parse-il` (through `lower-module`), handles four forms: `ret` (0x2A), `add` (0x58), `ldc.i4` (0x20, always a 4-byte operand), and `call` to a `MemberRef` (0x28) or a same-module `MethodDef` (0x28, token `0x06000000 | rid`, written as `(call ret (Class) name (params))`). `callvirt` on a same-module method is rejected, because all local methods are static. Any other instruction raises `unsupported IL instruction`, so nothing is skipped silently. `.locals` and labels are supported. Exception handling supports `catch`, `finally`, and `fault` clauses (see below). `filter` is not supported yet.
 
 ## Target size
 
@@ -65,7 +65,11 @@ Status: label resolution and fixed-point relaxation in `src/il/labels.rkt` (stre
 
 * [x] Tiny header when code is under 64 bytes, maxstack is at most 8, there are no locals, and there are no exception handlers. Otherwise use a fat header: flags `0x3003` with `InitLocals` as needed, maxstack, code size, and a `LocalVarSigTok`. Fat headers without locals are covered by `text-over-400` and `text-over-2000`; `InitLocals` and `LocalVarSigTok` are covered by `ops-locals-args` and `ops-branch`.
 * [x] `.locals` -> local variable signature blob (`0x07`) -> StandAloneSig row -> token.
-* [ ] Exception handling sections (`.try`, `catch`, `finally`, `fault`, `filter`) with small (12-byte) or fat (24-byte) clause encoding chosen by offset sizes. Each section is 4-byte aligned after the code.
+* [~] Exception handling sections (`.try`, `catch`, `finally`, `fault`, `filter`) with small (12-byte) or fat (24-byte) clause encoding chosen by offset sizes. Each section is 4-byte aligned after the code.
+  * [x] Syntax: `(.try (catch (asm ty)) ts te hs he)`, `(.try (finally) ts te hs he)`, `(.try (fault) ts te hs he)`. Clauses are written in source order, so inner clauses come before enclosing ones. The form mirrors the existing `catch` form. `endfault` is accepted as an alias for `endfinally` (both are 0xDC, III.4.5 and III.4.6).
+  * [x] Flags: catch 0x0000, finally 0x0002, fault 0x0004 (II.25.4.6). The class token is 0 for finally and fault.
+  * [x] Handler entry stack depth (III.1.7.5): catch 1 (the exception object), finally and fault 0. This feeds `compute-max-stack`.
+  * [ ] `filter` (0x0001) is rejected at parse time. Clause nesting and order are not validated.
 * [x] Compute maxstack by abstract interpretation over the opcode table's stack behaviour and the control flow graph, unless `.maxstack` is given. Report stack underflow and inconsistent depths at merge points as assembly errors. An explicit `.maxstack` must be at least the computed depth (`tests/il/stack-test.rkt`).
 * [ ] Prefix validation: `unaligned.`, `volatile.`, `tail.`, `constrained.`, `readonly.`, and `no.` must precede an instruction they apply to.
 

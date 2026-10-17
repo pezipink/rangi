@@ -51,7 +51,8 @@
     (error 'sigs "bad type token ~s" tok))
   (compress-unsigned (coded-encode 'typedeforref (car tok) (cdr tok))))
 
-; Encodes one Type (II.23.2.12). Custom modifiers and ARRAY are not supported yet.
+; Encodes one Type (II.23.2.12). Custom modifiers and multi-dimensional ARRAY are not
+; supported yet; SZARRAY (a zero-based vector) is.
 (define (encode-type t)
   (cond
     [(memq t primitive-names) (bytes (element-code t))]
@@ -73,7 +74,11 @@
                (map encode-type args))]
        [(var mvar)
         (bytes-append (bytes (element-code (car t))) (compress-unsigned (cadr t)))]
-       [(szarray byref ptr)
+       [(szarray)
+        (when (memq (cadr t) '(void typedref))
+          (error 'sigs "SZARRAY element type cannot be ~a" (cadr t)))
+        (bytes-append (bytes (element-code 'szarray)) (encode-type (cadr t)))]
+       [(byref ptr)
         (bytes-append (bytes (element-code (car t))) (encode-type (cadr t)))]
        [else (error 'sigs "bad type descriptor ~s" t)])]))
 

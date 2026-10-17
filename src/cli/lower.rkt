@@ -93,6 +93,7 @@
 (define (lower-type cx scope t)
   (cond
     [(memq t primitive-names) t]
+    [(and (pair? t) (eq? (car t) 'szarray)) (list 'szarray (lower-type cx scope (cadr t)))]
     [(and (symbol? t) (tyvar-ref t))
      => (lambda (ref)
           (define mvar? (equal? (car ref) "!!"))
@@ -117,6 +118,15 @@
 
 (define (lower-args cx scope args)
   (for/list ([a (in-list args)]) (lower-type cx scope a)))
+
+; Primitive or array types, the subset that main's array lowering accepts as an element or
+; a local.
+(define (lowerable-type? t)
+  (cond
+    [(symbol? t) (and (memq t primitive-names) #t)]
+    [(and (pair? t) (eq? (car t) 'szarray))
+     (and (not (memq (cadr t) '(void typedref))) (lowerable-type? (cadr t)))]
+    [else #f]))
 
 (define (module-class-rid cx name)
   (or (hash-ref (ctx-class-rids cx) name #f)
@@ -203,7 +213,43 @@
   '(InlineNone ShortInlineI InlineI InlineI8 ShortInlineR InlineR
     ShortInlineVar InlineVar ShortInlineBrTarget InlineBrTarget InlineSwitch))
 
-(define token-instructions '(call callvirt newobj ldfld stfld ldstr))
+(define token-instructions '(call callvirt newobj ldfld stfld ldstr newarr ldelem ldelema stelem))
+
+; Element types for newarr, ldelem, ldelema, and stelem. A primitive name maps to its
+; mscorlib System type explicitly. Void, typedref, and array element types are rejected.
+(define primitive-element-types
+  '((boolean . "System.Boolean") (char . "System.Char")
+    (int8 . "System.SByte") (uint8 . "System.Byte")
+    (int16 . "System.Int16") (uint16 . "System.UInt16")
+    (int32 . "System.Int32") (uint32 . "System.UInt32")
+    (int64 . "System.Int64") (uint64 . "System.UInt64")
+    (float32 . "System.Single") (float64 . "System.Double")
+    (intptr . "System.IntPtr") (uintptr . "System.UIntPtr")
+    (object . "System.Object") (string . "System.String")))
+
+(define (element-type-token! cx elem)
+  (match elem
+    [(? symbol?)
+     (define entry (assq elem primitive-element-types))
+     (unless entry (error 'rangi "array element type ~a is not supported" elem))
+     (bitwise-ior #x01000000 (typeref-rid! cx 'mscorlib (string->symbol (cdr entry)) 0))]
+    [(list (? symbol? asm) (? symbol? ty))
+     #:when (not (memq asm '(szarray class valuetype)))
+     (bitwise-ior #x01000000 (typeref-rid! cx asm ty 0))]
+    [_ (error 'rangi "array element type ~s is not supported" elem)]))
+
+; II.25.4.6: a catch handler starts with the exception object on the stack. finally and fault
+; handlers start with an empty stack (III.1.7.5).
+(define (handler-depth clause)
+  (if (eq? (eh-clause-kind clause) 'catch) 1 0))
+
+; endfault has the same encoding as endfinally, 0xDC (III.4.5, III.4.6), so the front end
+; accepts both and lowering sees only endfinally.
+(define (canonical-node node)
+  (match node
+    ['endfault 'endfinally]
+    [(list 'endfault) 'endfinally]
+    [_ node]))
 
 (define (check-passable name)
   (define op (find-opcode name))
@@ -247,6 +293,8 @@
     [(list (and op (or 'ldfld 'stfld)) (list asm ty) (? symbol? name) type)
      (list op (field-token! cx asm ty name type))]
     [(list 'ldstr s) (list 'ldstr (string-token cx s))]
+    [(list (and op (or 'newarr 'ldelem 'ldelema 'stelem)) elem)
+     (list op (element-type-token! cx elem))]
     [(list (? symbol? op) _ ...)
      (when (memq op token-instructions) (error 'rangi "malformed IL instruction ~s" node))
      (check-passable op)
@@ -280,18 +328,19 @@
      (define inst (inst-arg more node))
      (define callvirt? (eq? op 'callvirt))
      (cond
-       [(symbol? owner)
+       [(and (pair? owner) (null? (cdr owner)) (symbol? (car owner)))
         (when callvirt?
-          (error 'rangi "callvirt to module method ~a.~a is not supported; use call" owner name))
-        (define hit (hash-ref (ctx-method-rids cx) (list owner name ret params) #f))
+          (error 'rangi "callvirt to same-module method ~a is not supported; only static methods are lowered" name))
+        (define cls (car owner))
+        (define hit (hash-ref (ctx-method-rids cx) (list cls name ret params) #f))
         (unless hit
-          (error 'rangi "unknown method ~a.~a returning ~s with parameters ~s" owner name ret params))
+          (error 'rangi "no method ~a in ~a with return ~a and parameters ~s" name cls ret params))
         (define rid (car hit))
         (define arity (cdr hit))
         (define ninst (if inst (length inst) 0))
         (unless (= ninst arity)
           (error 'rangi "~a.~a takes ~a type arguments, but the call gives ~a"
-                 owner name arity ninst))
+                 cls name arity ninst))
         (list op
               (if inst
                   (token #x2B000000
@@ -351,7 +400,8 @@
 ; Lowers the instruction list to labels.rkt items and assembles them. Returns the assembly
 ; (code bytes and label offsets) and the maximum stack depth computed from the control-flow
 ; graph. Each catch handler starts with one item, the exception object (III.1.7.5, II.25.4.6).
-(define (encode-il cx scope code nparams nlocals ret-void? handlers)
+(define (encode-il cx scope code0 nparams nlocals ret-void? handlers)
+  (define code (map canonical-node code0))
   (define items
     (for/list ([node (in-list code)]) (lower-instruction cx scope node nparams nlocals)))
   (define effects
@@ -360,7 +410,7 @@
   (values (assemble-items items)
           (compute-max-stack effects
                              #:handlers (for/list ([h (in-list handlers)])
-                                          (cons (eh-clause-handler-start h) 1)))))
+                                          (cons (eh-clause-handler-start h) (handler-depth h))))))
 
 ; .maxstack given: it is an explicit override and must be at least the computed depth.
 ; Otherwise the default of 8 is kept unless the code needs more.
@@ -392,22 +442,34 @@
                    (make-bytes pad 0)
                    (or eh #""))]))
 
+; II.25.4.6 Flags: catch 0x0000, finally 0x0002, fault 0x0004. ClassToken is the exception
+; type for a catch and 0 otherwise.
+(define (clause-flags c)
+  (case (eh-clause-kind c)
+    [(catch) #x0000]
+    [(finally) #x0002]
+    [(fault) #x0004]))
+
+(define (clause-class-token cx c)
+  (define class (eh-clause-class c))
+  (if class
+      (bitwise-ior #x01000000 (typeref-rid! cx (car class) (cadr class) 0))
+      0))
+
 ; II.25.4.5, II.25.4.6: one fat EHTable section (Kind 0x01 | FatFormat 0x40, 3-byte DataSize)
-; with a 24-byte clause per catch. Offsets come from the assembled labels.
+; with a 24-byte clause per handler. Offsets come from the assembled labels.
 (define (eh-section cx asm clauses)
   (define (at l) (assembly-label-offset asm l))
   (define clause-bytes
     (for/list ([c (in-list clauses)])
       (define ts (at (eh-clause-try-start c)))
       (define hs (at (eh-clause-handler-start c)))
-      (define class (eh-clause-class c))
-      (define tok (bitwise-ior #x01000000 (typeref-rid! cx (car class) (cadr class) 0)))
-      (bytes-append (le 0 4)                                   ; Flags: catch
+      (bytes-append (le (clause-flags c) 4)
                     (le ts 4)
                     (le (- (at (eh-clause-try-end c)) ts) 4)
                     (le hs 4)
                     (le (- (at (eh-clause-handler-end c)) hs) 4)
-                    (le tok 4))))
+                    (le (clause-class-token cx c) 4))))
   (define body (apply bytes-append clause-bytes))
   (bytes-append (bytes #x41) (le (+ 4 (bytes-length body)) 3) body))
 

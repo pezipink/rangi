@@ -88,8 +88,25 @@
 (test-case "static method with no parameters returning object"
   (check-equal? (encode-method-sig 'object '()) (bytes #x00 #x00 #x1C)))
 
+(test-case "static method taking and returning int32[]"
+  ; DEFAULT 0x00, ParamCount 1, RetType SZARRAY I4, Param SZARRAY I4
+  (check-equal? (encode-method-sig '(szarray int32) '((szarray int32)))
+                (bytes #x00 #x01 #x1D #x08 #x1D #x08)))
+
+(test-case "a jagged array element nests SZARRAY: int32[][] is 1D 1D 08"
+  (check-equal? (encode-type '(szarray (szarray int32))) (bytes #x1D #x1D #x08)))
+
+(test-case "a szarray of void or typedref is rejected"
+  (check-exn exn:fail? (λ () (encode-type '(szarray void))))
+  (check-exn exn:fail? (λ () (encode-type '(szarray typedref)))))
+
 ; ---------------------------------------------------------------------------
 ; LocalVarSig (II.23.2.6)
+
+(test-case "LocalVarSig with int32[] and int64[] locals"
+  ; LOCAL_SIG 0x07, count 2, SZARRAY I4, SZARRAY I8
+  (check-equal? (encode-localvar-sig '((szarray int32) (szarray int64)))
+                (bytes #x07 #x02 #x1D #x08 #x1D #x0A)))
 
 (test-case "LocalVarSig for (int32 object)"
   ; LOCAL_SIG 0x07, count 2, I4, OBJECT

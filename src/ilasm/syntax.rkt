@@ -20,9 +20,10 @@
 (struct class-decl (flags name gparams methods))
 ; handlers: list of eh-clause in source order. maxstack is #f when there is no .maxstack.
 (struct method-decl (flags ret name gparams params code maxstack entry? locals handlers))
-; catch clause (II.25.4.6): class is (asm ty); the four labels are names without the colon.
+; exception clause (II.25.4.6): kind is catch, finally or fault. class is (asm ty) for a catch
+; and #f otherwise; the four labels are names without the colon.
 ; try is [try-start, try-end), handler is [handler-start, handler-end).
-(struct eh-clause (class try-start try-end handler-start handler-end))
+(struct eh-clause (kind class try-start try-end handler-start handler-end))
 ; A generic parameter (II.22.20). specials are class, valuetype or .ctor.
 ; constraints are type forms (II.22.21).
 (struct generic-param (name specials constraints) #:transparent)
@@ -59,6 +60,11 @@
      (error 'rangi "~a: empty generic argument list in ~s" who t)]
     [(list (or 'class 'valuetype) (or (? symbol?) (list (? symbol?) (? symbol?))) (? list? args))
      (for ([a (in-list args)]) (check-type who a ncls nmth))]
+    ; SZARRAY (II.23.2.12): the element type follows the ARRAY marker
+    [(list 'szarray elem)
+     (when (memq elem '(void typedref))
+       (error 'rangi "~a: array element type cannot be ~a" who elem))
+     (check-type who elem ncls nmth)]
     [_ (error 'rangi "~a: malformed type ~s" who t)]))
 
 (define gp-special-keywords '(class valuetype .ctor))
@@ -97,10 +103,11 @@
      params]))
 
 ; .locals init (...) and .locals (...) are both accepted. An entry is a type, or (TYPE NAME).
-; A (class ...) or (valuetype ...) entry is always a bare type, so it is never read as a name.
+; A (class ...), (valuetype ...) or (szarray ...) entry is always a bare type, so it is never
+; read as a name.
 (define (parse-local-var who node ncls nmth)
   (cond
-    [(and (pair? node) (memq (car node) '(class valuetype)))
+    [(and (pair? node) (memq (car node) '(class valuetype szarray)))
      (check-type who node ncls nmth)
      (local-var node #f)]
     [(and (list? node) (= (length node) 2) (symbol? (cadr node)))
@@ -143,9 +150,13 @@
       [(list '.try (list 'catch (list (? symbol? asm) (? symbol? ty)))
              (? symbol? ts) (? symbol? te) (? symbol? hs) (? symbol? he))
        (values code maxstack entry? raw-locals
-               (cons (eh-clause (list asm ty) ts te hs he) handlers))]
+               (cons (eh-clause 'catch (list asm ty) ts te hs he) handlers))]
+      [(list '.try (list (and kind (or 'finally 'fault)))
+             (? symbol? ts) (? symbol? te) (? symbol? hs) (? symbol? he))
+       (values code maxstack entry? raw-locals
+               (cons (eh-clause kind #f ts te hs he) handlers))]
       [(list '.try _ ...)
-       (error 'rangi "malformed .try ~s (expected (.try (catch (asm ty)) try-start try-end handler-start handler-end))" node)]
+       (error 'rangi "malformed .try ~s (expected (.try (catch (asm ty)) try-start try-end handler-start handler-end), (.try (finally) ...) or (.try (fault) ...))" node)]
       [_ (values (cons node code) maxstack entry? raw-locals handlers)])))
 
 ; The 7-element form has no generic parameters. The 8-element form has a (.typarams ...)
