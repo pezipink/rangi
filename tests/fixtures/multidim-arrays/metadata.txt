@@ -1,0 +1,27 @@
+Module rows=1
+  Module[1] Name="multidim-arrays.exe" Mvid=bb6dca3c8ca34a4bdf49b38fec73b112
+TypeRef rows=3
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+  TypeRef[3] ResolutionScope=0x23000001 Name="Array" Namespace="System"
+TypeDef rows=2
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+MethodDef rows=1
+  MethodDef[1] Rva=8824 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1819730100000a0a160b07182f21160c08192f1506070807195a08581758280200000a0817580c2be70717580b2bdb160d160b07182f1d160c08192f1109060708280300000a580d0817580c2beb0717580b2bdf09280400000a061617280500000a1f2a54061617280300000a280400000a06280600000a280400000a0617280700000a280400000a2a
+MemberRef rows=7
+  MemberRef[1] Parent=0x1b000001 Name=".ctor" Signature=2002010808
+  MemberRef[2] Parent=0x1b000001 Name="Set" Signature=200301080808
+  MemberRef[3] Parent=0x1b000001 Name="Get" Signature=2002080808
+  MemberRef[4] Parent=0x01000002 Name="WriteLine" Signature=00010108
+  MemberRef[5] Parent=0x1b000001 Name="Address" Signature=200210080808
+  MemberRef[6] Parent=0x01000003 Name="get_Rank" Signature=200008
+  MemberRef[7] Parent=0x01000003 Name="GetLength" Signature=20010808
+StandAloneSig rows=1
+  StandAloneSig[1] Signature=07041408020000080808
+TypeSpec rows=1
+  TypeSpec[1] Signature=1408020000
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

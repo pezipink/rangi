@@ -90,6 +90,13 @@
      (when (memq elem '(void typedref))
        (error 'rangi "~a: array element type cannot be ~a" who elem))
      (check-type who elem ncls nmth)]
+    ; ARRAY (II.23.2.13) with zero lower bounds and no sizes: (array ELEM RANK)
+    [(list 'array elem (? exact-positive-integer? rank))
+     (when (memq elem '(void typedref))
+       (error 'rangi "~a: array element type cannot be ~a" who elem))
+     (check-type who elem ncls nmth)]
+    [(cons 'array _)
+     (error 'rangi "~a: array type must be (array ELEM RANK) with a positive rank, got ~s (bounded arrays are not supported)" who t)]
     [_ (error 'rangi "~a: malformed type ~s" who t)]))
 
 (define gp-special-keywords '(class valuetype .ctor))
@@ -128,11 +135,11 @@
      params]))
 
 ; .locals init (...) and .locals (...) are both accepted. An entry is a type, or (TYPE NAME).
-; A (class ...), (valuetype ...) or (szarray ...) entry is always a bare type, so it is never
-; read as a name.
+; A (class ...), (valuetype ...), (szarray ...) or (array ...) entry is always a bare type, so it
+; is never read as a name.
 (define (parse-local-var who node ncls nmth)
   (cond
-    [(and (pair? node) (memq (car node) '(class valuetype szarray)))
+    [(and (pair? node) (memq (car node) '(class valuetype szarray array)))
      (check-type who node ncls nmth)
      (local-var node #f)]
     [(and (list? node) (= (length node) 2) (symbol? (cadr node)))

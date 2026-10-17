@@ -153,6 +153,9 @@
   (cond
     [(memq t primitive-names) t]
     [(and (pair? t) (eq? (car t) 'szarray)) (list 'szarray (lower-type cx scope (cadr t)))]
+    [(and (pair? t) (eq? (car t) 'array))
+     (list 'array (lower-type cx scope (cadr t)) (caddr t))]
+    [(and (pair? t) (eq? (car t) 'byref)) (list 'byref (lower-type cx scope (cadr t)))]
     [(and (symbol? t) (tyvar-ref t))
      => (lambda (ref)
           (define mvar? (equal? (car ref) "!!"))
@@ -424,6 +427,34 @@
      node]
     [_ (error 'rangi "unsupported IL item ~s" node)]))
 
+; The MemberRef parent for a multi-dimensional array owner: a TypeSpec whose blob is the
+; ARRAY type (II.22.25, II.22.39), lowered in the caller's scope.
+(define (array-parent! cx owner scope)
+  (cons 'typespec (typespec-rid! cx (encode-typespec (lower-type cx scope owner)))))
+
+; A multi-dimensional array type is (array ELEM RANK). Its methods come from the CLR (II.14.2):
+; .ctor takes one int32 per dimension, Get returns ELEM, Set takes the indices and an ELEM, and
+; Address returns a managed pointer to ELEM. The source signature must match these exactly.
+(define (array-owner? owner)
+  (match owner
+    [(list 'array _ (? exact-positive-integer?)) #t]
+    [_ #f]))
+
+(define (check-array-member! node owner name ret params)
+  (match-define (list 'array elem rank) owner)
+  (define indices (make-list rank 'int32))
+  (define-values (want-ret want-params)
+    (case name
+      [(Get) (values elem indices)]
+      [(Set) (values 'void (append indices (list elem)))]
+      [(Address) (values (list 'byref elem) indices)]
+      [(.ctor) (values 'void indices)]
+      [else (error 'rangi "array type ~s has no method ~a; use Get, Set, Address, or .ctor in ~s"
+                   owner name node)]))
+  (unless (and (equal? ret want-ret) (equal? params want-params))
+    (error 'rangi "~a on ~s must have return ~s and parameters ~s, but ~s has return ~s and parameters ~s"
+           name owner want-ret want-params node ret params)))
+
 ; The owner of an external member: (asm ty), or (class (asm ty) (arg ...)) for a generic
 ; instantiation. Returns asm, ty, and the argument list (empty when not generic).
 (define (external-owner owner node)
@@ -493,6 +524,15 @@
                   (token #x2B000000
                          (methodspec-rid! cx (cons 'methoddef rid) (lower-args cx scope inst)))
                   (token #x06000000 rid)))]
+       [(array-owner? owner)
+        (unless (memq op '(call callvirt))
+          (error 'rangi "~a is not allowed on an array method in ~s" op node))
+        (check-array-member! node owner name ret params)
+        (when inst (error 'rangi "array method ~a takes no type arguments in ~s" name node))
+        (unless this? (error 'rangi "array method ~a needs the instance keyword in ~s" name node))
+        (define mref (member-ref! cx (array-parent! cx owner scope) name
+                                  (method-sig cx scope ret params #:hasthis? #t)))
+        (list op (token #x0A000000 mref))]
        [else
         (define-values (asm ty args) (external-owner owner node))
         (define ninst (if inst (length inst) 0))
@@ -523,6 +563,11 @@
         (unless (vector-ref hit 2)
           (error 'rangi "newobj of ~a: its .ctor must be an instance method" cls))
         (list 'newobj (token #x06000000 (vector-ref hit 0)))]
+       [(array-owner? owner)
+        (check-array-member! node owner '.ctor 'void params)
+        (define mref (member-ref! cx (array-parent! cx owner scope) '.ctor
+                                  (method-sig cx scope 'void params #:hasthis? #t)))
+        (list 'newobj (token #x0A000000 mref))]
        [else
         (define-values (asm ty args) (external-owner owner node))
         (define parent (owner-parent! cx asm ty args scope))
