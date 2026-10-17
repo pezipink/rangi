@@ -73,9 +73,13 @@
 (define scn-mem-discardable #x02000000)
 (define scn-mem-execute #x20000000)
 (define scn-mem-read #x40000000)
+(define scn-mem-write #x80000000)
 (define section-chars-text (bitwise-ior scn-cnt-code scn-mem-execute scn-mem-read))
 (define section-chars-reloc
   (bitwise-ior scn-cnt-initialized-data scn-mem-discardable scn-mem-read))
+; read-write initialized data, for static data (II.16)
+(define section-chars-sdata
+  (bitwise-ior scn-cnt-initialized-data scn-mem-read scn-mem-write))
 
 ; ---------------------------------------------------------------------------
 ; defaults for the images the writer emits

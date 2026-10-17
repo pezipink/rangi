@@ -1,0 +1,26 @@
+Module rows=1
+  Module[1] Name="static-data.exe" Mvid=6bb55267857f6fadc44857ffe5da361d
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=3
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Table" Namespace="" Extends=0x01000001 Fields=[1..4] Methods=[]
+Field rows=4
+  Field[1] Flags=278 Name="First" Signature=0608
+  Field[2] Flags=22 Name="Plain" Signature=0608
+  Field[3] Flags=278 Name="Second" Signature=0608
+  Field[4] Flags=278 Name="Third" Signature=0608
+MethodDef rows=1
+  MethodDef[1] Rva=8764 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=7e01000004280100000a7e02000004280100000a7e03000004280100000a7e04000004280100000a2a
+MemberRef rows=1
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+FieldRva rows=3
+  FieldRva[1] Rva=16384 Field=1
+  FieldRva[2] Rva=16388 Field=3
+  FieldRva[3] Rva=16392 Field=4
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

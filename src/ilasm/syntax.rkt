@@ -10,6 +10,7 @@
          (struct-out asm-ref)
          (struct-out class-decl)
          (struct-out field-decl)
+         (struct-out data-decl)
          (struct-out method-decl)
          (struct-out generic-param)
          (struct-out locals-decl)
@@ -20,7 +21,8 @@
 ; heap indexes, or flag bits. cli/lower.rkt resolves those.
 ; subsystem is 'console (the default) or 'windows (.subsystem). platform is 'anycpu (the default),
 ; 'x86, or '32bitpreferred (.platform). Both are names here; lower and image map them to flags.
-(struct module-model (asm-refs classes module-name format dll? subsystem platform))
+; data is the list of data-decl blocks (.data, II.16) in source order.
+(struct module-model (asm-refs classes module-name format dll? subsystem platform data))
 ; An .assembly extern (II.22.5 AssemblyRef). name comes from the referenced file. version is four
 ; 16-bit parts, and token is the 8-byte public key token or #"" when none is given.
 (struct asm-ref (name version token) #:transparent)
@@ -31,7 +33,10 @@
 (struct class-decl (flags name gparams extends methods fields enclosing))
 ; A field (II.22.15). flags are FieldAttributes keywords; type is a type form (II.22.15).
 ; init is #f, or (prim . value) for a literal field: an integral primitive and its integer value.
-(struct field-decl (flags type name init) #:transparent)
+; at is #f, or the name of a data-decl whose bytes are the field's initial value (FieldRVA, II.22.18).
+(struct field-decl (flags type name init at) #:transparent)
+; A data block (II.16): name is the symbol a field's `at` refers to, bytes its initial value.
+(struct data-decl (name bytes) #:transparent)
 ; handlers: list of eh-clause in source order. maxstack is #f when there is no .maxstack.
 (struct method-decl (flags ret name gparams params code maxstack entry? locals handlers))
 ; exception clause (II.25.4.6): kind is catch, finally, fault or filter. class is (asm ty) for a
@@ -214,7 +219,7 @@
      (when (eq? type 'void) (error 'rangi "field ~a.~a cannot be void" class-name name))
      (when (memq 'literal flags)
        (error 'rangi "literal field ~a.~a needs a value" class-name name))
-     (field-decl flags type name #f)]
+     (field-decl flags type name #f #f)]
     [(list '.field (? list? flags) type (? symbol? name) '= (list (? symbol? prim) (? exact-integer? v)))
      (check-type name type ncls 0)
      (define range (assq prim integral-ranges))
@@ -224,8 +229,52 @@
        (error 'rangi "value ~a out of range for ~a in ~a.~a" v prim class-name name))
      (unless (and (memq 'literal flags) (memq 'static flags))
        (error 'rangi "a value needs a static literal field, ~a.~a is not" class-name name))
-     (field-decl flags type name (cons prim v))]
+     (field-decl flags type name (cons prim v) #f)]
+    ; FieldRVA (II.22.18): the field's initial value is the named .data block. The static check
+    ; is made in lower, where the FieldRVA row is built.
+    [(list '.field (? list? flags) type (? symbol? name) 'at (? symbol? dname))
+     (check-type name type ncls 0)
+     (when (eq? type 'void) (error 'rangi "field ~a.~a cannot be void" class-name name))
+     (when (memq 'literal flags)
+       (error 'rangi "literal field ~a.~a cannot have data at ~a" class-name name dname))
+     (unless (memq 'static flags)
+       (error 'rangi "FieldRVA field ~a.~a must be static" class-name name))
+     (field-decl flags type name #f dname)]
     [_ (error 'rangi "malformed .field in ~a: ~s" class-name node)]))
+
+; A .data byte is hex, as in ilasm. Racket reads 10 as the number ten, so each token is read back
+; from its printed digits and parsed as hex; 10 gives 16 and 1A stays a symbol.
+(define (parse-data-byte dname x)
+  (define s (format "~a" x))
+  (unless (regexp-match? #px"^[0-9A-Fa-f]{1,2}$" s)
+    (error 'rangi "data ~a: ~a is not a hex byte" dname s))
+  (string->number s 16))
+
+; .data NAME = bytearray (HEX ...) (II.16): one initialised data block, spelled as ilasm spells it.
+; Its length is checked against the field type in check-field-data.
+(define (parse-data-decl node)
+  (match node
+    [(list '.data (? symbol? name) '= (list 'bytearray (? list? items)))
+     (data-decl name (apply bytes (for/list ([x (in-list items)]) (parse-data-byte name x))))]
+    [_ (error 'rangi "malformed .data: ~s" node)]))
+
+; Byte size of a fixed-size primitive, for checking FieldRVA data (II.23.1.16).
+(define primitive-sizes
+  '((boolean . 1) (int8 . 1) (uint8 . 1) (char . 2) (int16 . 2) (uint16 . 2)
+    (int32 . 4) (uint32 . 4) (float32 . 4) (int64 . 8) (uint64 . 8) (float64 . 8)))
+
+; Each FieldRVA field names a .data block that exists, and a block belongs to one field only.
+; A primitive's data must be exactly its size. Valuetype sizes are not known here, so they are
+; not checked.
+(define (check-field-data f data-decls)
+  (define name (field-decl-name f))
+  (define dname (field-decl-at f))
+  (define d (findf (λ (d) (eq? (data-decl-name d) dname)) data-decls))
+  (unless d (error 'rangi "field ~a uses undefined data ~a" name dname))
+  (define size (cond [(assq (field-decl-type f) primitive-sizes) => cdr] [else #f]))
+  (when (and size (not (= size (bytes-length (data-decl-bytes d)))))
+    (error 'rangi "data ~a for field ~a has ~a bytes, ~a needs ~a"
+           dname name (bytes-length (data-decl-bytes d)) (field-decl-type f) size)))
 
 ; Class clauses between the name and the body: .typarams declares generic parameters, and
 ; .extends names the base class (II.22.37). Each may appear at most once.
@@ -319,6 +368,7 @@
   (define dll? #f)
   (define subsystem #f)
   (define platform #f)
+  (define data-decls '())
   (define (add-asm-extern! filename body)
     (define name (read-assembly-meta (read-file filename)))
     (when (findf (λ (r) (equal? (asm-ref-name r) name)) asm-refs)
@@ -366,6 +416,9 @@
            (error 'rangi "class name ~a may not contain /" name))
          (define-values (tp ext) (class-clauses name clause))
          (cons (list flags name tp ext body) acc)]
+        [(list '.data _ '= _)
+         (set! data-decls (cons (parse-data-decl node) data-decls))
+         acc]
         [_ (error 'rangi "unsupported top-level directive ~s" node)])))
 
   (when (check-duplicates (map cadr raw-classes))
@@ -393,6 +446,19 @@
   (when (check-duplicates (map class-decl-name classes))
     (error 'rangi "duplicate class name ~a" (check-duplicates (map class-decl-name classes))))
 
+  (define data-fields
+    (for*/list ([c (in-list classes)] [f (in-list (class-decl-fields c))] #:when (field-decl-at f))
+      f))
+  (when (check-duplicates (map data-decl-name data-decls))
+    (error 'rangi "duplicate data ~a" (check-duplicates (map data-decl-name data-decls))))
+  (for ([f (in-list data-fields)]) (check-field-data f data-decls))
+  (when (check-duplicates (map field-decl-at data-fields))
+    (error 'rangi "data ~a is used by more than one field"
+           (check-duplicates (map field-decl-at data-fields))))
+  (for ([d (in-list data-decls)]
+        #:unless (findf (λ (f) (eq? (field-decl-at f) (data-decl-name d))) data-fields))
+    (error 'rangi "data ~a is not used by any field" (data-decl-name d)))
+
   (define entries
     (for*/list ([c (in-list classes)] [m (in-list (class-decl-methods c))] #:when (method-decl-entry? m))
       m))
@@ -401,4 +467,4 @@
     (error 'rangi "exactly one .entrypoint is required, found ~a" (length entries)))
 
   (module-model (reverse asm-refs) classes mod-name (or fmt 'pe32) dll?
-                (or subsystem 'console) (or platform 'anycpu)))
+                (or subsystem 'console) (or platform 'anycpu) (reverse data-decls)))
