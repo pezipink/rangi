@@ -77,10 +77,10 @@ Each oracle is a script under `tests/oracles/` and is skipped when the tool is m
 |--------------------------------------|-------------------------------------------------------------|-----------------------------------------------------------------|
 | PEVerify (.NET Framework SDK)        | Metadata validation (`/md`) and IL type safety (`/il`)      | `PEVerify.exe /md /il /nologo <image>`                          |
 | ildasm                               | Readable disassembly; snapshot as `ildasm.il` after scrubbing timestamp, MVID, and image base comments | `ildasm.exe /all /text /nobar <image>` |
-| System.Reflection.Metadata dumper    | Independent table decoder; diff against L3                  | `dotnet run --project tests/oracles/srm-dump -- <image>`        |
+| System.Reflection.Metadata dumper    | Independent table decoder; diff against L3                  | `dotnet run --project tests/oracles/srm-dump/srm-dump.csproj -- <image>` |
 | ILVerify (`Microsoft.ILVerification`) | IL verification that also works for .NET (Core) targets    | `dotnet run --project tests/oracles/ilverify -- <image>`        |
 
-PEVerify already finds one issue in today's baseline (`0x8013129d` on `MethodDef` 1), so the first V2 task is to triage and fix it.
+PEVerify already finds one issue in today's baseline (`0x8013129d` on `MethodDef` 1). Triage: `main` sits on the `<Module>` type, and ilasm assembles the same code with no warning when `main` is inside a class. The fix changes emitted bytes, so it is deferred to a separate reviewed snapshot change. The current `pe-verify.txt` records the warning as the approved baseline.
 
 ### L7 Execution
 
@@ -99,9 +99,16 @@ For fixtures that have an equivalent `program.il`, assemble it with `ilasm.exe` 
 ## Milestones
 
 * [ ] V0 Determinism: ordered collections, timestamp option, content-derived MVID
-* [ ] V1 Harness skeleton: `tests/` tree, fixture runner, L4 hash and L7 execution for the current `42` program (`experiments/nano.rkt`, SHA-256 `D0CB3275...`)
-* [ ] V2 External oracles: PEVerify and ildasm scripts, triage the `0x8013129d` warning
-* [ ] V3 SRM dumper (small .NET console project) and L3 dump from Rangi's reader, diffed against each other
+* [x] V1 Harness skeleton: `tests/` tree, fixture runner, L4 hash and L7 execution for the current `42` program (`experiments/nano.rkt`, SHA-256 `D0CB3275...`)
+* [x] V2 External oracles: PEVerify and ildasm scripts; `0x8013129d` triaged, fix deferred (see L6)
+* [x] V3 SRM dumper (small .NET console project) and L3 dump from Rangi's reader, diffed against each other
+
+Deviations recorded for P1:
+
+* L3 covers table rows only. Heap entries and decoded signatures are not yet checked.
+* The diff is a `check-equal?` failure rather than a unified diff printer.
+* The row decoder lives in `tests/lib/metadata-dump.rkt` until P2 moves it into `cli/schema`.
+* `src/cli-reader.rkt` gains read-only accessors and stores the encoding sizes it already computes. It does not change the lazy lookup path.
 * [ ] V4 L5 invariant checker
 * [ ] V5 L2 layout map (lands with restructure R3, when the layout engine exists)
 * [ ] V6 L8 ilasm differential fixtures for every feature in [cli-coverage.md](cli-coverage.md)

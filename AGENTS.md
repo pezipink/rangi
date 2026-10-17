@@ -35,15 +35,21 @@ Work is driven by the plans in [docs/plans/](docs/plans/). Start with [roadmap.m
 
 ## Build and test
 
-Racket 8.16 CS is installed at `C:\Program Files\Racket`. There is no test suite yet. The current smoke test is:
+Racket 8.16 CS is installed at `C:\Program Files\Racket`. Run the test suite with:
+
+```powershell
+raco test tests/
+```
+
+It runs the fixture checks (image hash, stdout, exit code) and the external oracles. Oracles are skipped when their tool is missing. `RANGI_UPDATE_SNAPSHOTS=1 raco test tests/` rewrites reviewed snapshots; only do that when the change to emitted bytes is intended and explained in the commit.
+
+The smoke test is still:
 
 ```powershell
 racket experiments/nano.rkt   # assembles nano and nano2 into the temp dir, runs them; prints 42 and 84
 ```
 
 Library code logs debug and warning output through the `rangi` logger (`src/log.rkt`), so it is silent by default. To see it on stderr, set `PLTSTDERR="warning@rangi"` (or `debug@rangi`).
-
-Once [verification.md](docs/plans/verification.md) phase V1 lands, use `raco test tests/` instead.
 
 External oracles available on this machine:
 
