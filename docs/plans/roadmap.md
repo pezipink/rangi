@@ -14,7 +14,7 @@ ms.date: 2026-10-17
 
 | Phase | Plan                                                    | Outcome                                                                                 | Gate to leave the phase                                                    |
 |-------|---------------------------------------------------------|-----------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
-| P0    | this file                                               | Commit or shelve the current WIP; add `info.rkt`; move experiments out of `src/`        | `racket experiments/typed-il.rkt` still prints `203`                        |
+| P0    | this file                                               | Shelve the WIP (done: `stash@{0}`); add `info.rkt`; move experiments out of `src/`; route output through a logger; parameterise the output path | `racket experiments/nano.rkt` prints `42` and `84`, and the image is byte-identical to the baseline |
 | P1    | [verification.md](verification.md) V1-V3               | Characterisation snapshots of today's output; PEVerify, ildasm, and SRM dumps run       | `raco test tests/` green on the baseline image                              |
 | P2    | [restructure.md](restructure.md) R1-R2                 | `private/binary.rkt` and `cli/schema.rkt` shared by reader and writer                    | Reader and writer produce identical bytes and parse results to P1 snapshots |
 | P3    | [restructure.md](restructure.md) R3-R5                 | PE layer with a layout engine; CLI layer emits chunks; hardcodes removed                 | Layout map snapshot reviewed; PEVerify clean; `.text` larger than 0x400     |
@@ -26,11 +26,11 @@ P4 and P5 can interleave once P3 lands. P6 can start any time after P2, because 
 
 ## P0 checklist
 
-* [ ] Decide what to do with the uncommitted changes to `src/cli-writer.rkt` and `src/cli-writer-test.rkt` (commit as WIP is the default).
-* [ ] Add `info.rkt` declaring a `rangi` collection with `rackunit-lib` as a build dependency.
-* [ ] Move `src/cli-writer-test.rkt` to `experiments/typed-il.rkt` and `src/cli-test.rkt` to `experiments/phase1-load.rkt`.
-* [ ] Make the output path a parameter of `assemble` (default to a temp file) so tests and experiments stop sharing `c:\temp\rangi.exe`.
-* [ ] Route debug output through a `rangi-log` logger instead of `writeln`.
+* [x] Shelve the uncommitted changes to `src/cli-writer.rkt` and `src/cli-writer-test.rkt` in `stash@{0}` ("typed-expr experiment and debug edits"). Restore with `git stash pop` when the experiment is needed. Its test file moved, so pop it into `experiments/typed-il.rkt` and fix the paths.
+* [x] Add `info.rkt` declaring a `rangi` collection with `rackunit-lib` as a build dependency.
+* [x] Move `src/cli-writer-test.rkt` to `experiments/nano.rkt` and `src/cli-test.rkt` to `experiments/phase1-load.rkt`. The committed test prints `42` and `84`, not `203`; the `203` figure came from the WIP experiment.
+* [x] Make the output path a parameter of `assemble` (default to a temp file) so tests and experiments stop sharing `c:\temp\rangi.exe`.
+* [x] Route debug output through a `rangi` logger (`src/log.rkt`) instead of `writeln`. Remove the module-level `nano2` run from the library.
 
 ## Open questions
 

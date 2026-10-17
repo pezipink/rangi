@@ -99,7 +99,7 @@ For fixtures that have an equivalent `program.il`, assemble it with `ilasm.exe` 
 ## Milestones
 
 * [ ] V0 Determinism: ordered collections, timestamp option, content-derived MVID
-* [ ] V1 Harness skeleton: `tests/` tree, fixture runner, L4 hash and L7 execution for the current `203` program
+* [ ] V1 Harness skeleton: `tests/` tree, fixture runner, L4 hash and L7 execution for the current `42` program (`experiments/nano.rkt`, SHA-256 `D0CB3275...`)
 * [ ] V2 External oracles: PEVerify and ildasm scripts, triage the `0x8013129d` warning
 * [ ] V3 SRM dumper (small .NET console project) and L3 dump from Rangi's reader, diffed against each other
 * [ ] V4 L5 invariant checker

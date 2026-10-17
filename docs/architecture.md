@@ -6,16 +6,17 @@ ms.date: 2026-10-17
 
 ## Current state (October 2026)
 
-All code lives in `src/` as four Racket files. Five commits exist; the latest (`c29eb32`) makes the writer compute the `.text` size. The working tree has uncommitted changes to `cli-writer.rkt` and `cli-writer-test.rkt`.
+All code lives in `src/`, with the experiments in `experiments/`. The root `info.rkt` declares the `rangi` package. The working tree has no uncommitted code. The WIP typed-expression experiment and its writer edits are in `stash@{0}` ("typed-expr experiment and debug edits").
 
-| File                      | Role today                                                                                                   |
-|---------------------------|--------------------------------------------------------------------------------------------------------------|
-| `src/cli-reader.rkt`      | Lazy PE + CLI metadata reader. Exports `read-file`, `get-public-typedefs`, `read-assembly-meta`.             |
-| `src/cli-writer.rkt`      | s-expression ilasm front end (`parse-il`) and a monolithic `assemble` that writes `c:\temp\rangi.exe`.       |
-| `src/cli-writer-test.rkt` | Not a test. A typed mini-compiler experiment (`il-module`, `compute-t`, `fancy-add`) that drives the writer. |
-| `src/cli-test.rkt`        | Experiment that loads `mscorlib.dll` at phase 1 with `add-ref`.                                              |
+| File                           | Role today                                                                                                   |
+|--------------------------------|--------------------------------------------------------------------------------------------------------------|
+| `src/cli-reader.rkt`           | Lazy PE + CLI metadata reader. Exports `read-file`, `get-public-typedefs`, `read-assembly-meta`.             |
+| `src/cli-writer.rkt`           | s-expression ilasm front end (`parse-il`) and a monolithic `assemble`. Takes an optional output path (default a temp file). |
+| `src/log.rkt`                  | The `rangi` logger used by the reader and writer for debug and warning output.                               |
+| `experiments/nano.rkt`         | Assembles `nano` and `nano2` into the temp dir and runs them. Prints `42` and `84`.                          |
+| `experiments/phase1-load.rkt`  | Experiment that loads `mscorlib.dll` at phase 1 with `add-ref`.                                              |
 
-Baseline behaviour: `racket src/cli-writer-test.rkt` writes a 2048-byte image that runs and prints `203`. `PEVerify /md /il` reports one metadata warning: `Internal error: 0x8013129d [token:0x06000001]`.
+Baseline behaviour: `racket experiments/nano.rkt` writes a 2048-byte image that runs and prints `42`. The image's SHA-256 is `D0CB3275AD6F50F372DE5CB1B8B49D52A94B3E544645C5948903FD847F9C95D2`. `PEVerify /md /il` reports one metadata warning: `Internal error: 0x8013129d [token:0x06000001]`.
 
 ### Reader
 

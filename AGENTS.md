@@ -35,12 +35,13 @@ Work is driven by the plans in [docs/plans/](docs/plans/). Start with [roadmap.m
 
 ## Build and test
 
-Racket 8.16 CS is installed at `C:\Program Files\Racket`. Today there is no package or test suite. The current smoke test is:
+Racket 8.16 CS is installed at `C:\Program Files\Racket`. There is no test suite yet. The current smoke test is:
 
 ```powershell
-cd src
-racket cli-writer-test.rkt   # writes c:\temp\rangi.exe and runs it; prints 203
+racket experiments/nano.rkt   # assembles nano and nano2 into the temp dir, runs them; prints 42 and 84
 ```
+
+Library code logs debug and warning output through the `rangi` logger (`src/log.rkt`), so it is silent by default. To see it on stderr, set `PLTSTDERR="warning@rangi"` (or `debug@rangi`).
 
 Once [verification.md](docs/plans/verification.md) phase V1 lands, use `raco test tests/` instead.
 
@@ -53,6 +54,6 @@ External oracles available on this machine:
 
 ## Repo quirks
 
-* The repo directory is owned by a different Windows user. Run git with `git -c safe.directory=C:/repos/rangi ...` rather than changing global config.
+* The repo directory is owned by a different Windows user. `C:/repos/rangi` is in the global `safe.directory` list, so plain `git` commands work.
 * `*.bak` and `compiled/` are gitignored scratch files from DrRacket. Ignore them.
 * Racket files use `#lang racket` or `#lang racket/base`. Prefer `racket/base` plus explicit requires for library modules (the reader must load fast at phase 1).
