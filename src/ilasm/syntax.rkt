@@ -4,7 +4,7 @@
          racket/file
          "../cli-reader.rkt"
          (only-in "../cli/sigs.rkt" primitive-names)
-         (only-in "../cli/flags.rkt" native-type-code))
+         (only-in "../cli/flags.rkt" native-type-code assembly-attributes-flags))
 (provide parse-il
          tyvar-ref
          (struct-out module-model)
@@ -34,10 +34,11 @@
 ; resource-decl in source order (.mresource). customs is the list of custom-decl on the assembly
 ; (top-level .custom). win32-resources is the list of win32-resource-decl in source order (.win32resource).
 (struct module-model (asm-refs classes module-name format dll? subsystem platform data resources customs
-                               win32-resources))
+                               win32-resources asm-flags))
 ; An .assembly extern (II.22.5 AssemblyRef). name comes from the referenced file. version is four
-; 16-bit parts, and token is the 8-byte public key token or #"" when none is given.
-(struct asm-ref (name version token) #:transparent)
+; 16-bit parts, token is the 8-byte public key token or #"" when none is given, and flags is the
+; AssemblyFlags value (II.23.1.2).
+(struct asm-ref (name version token flags) #:transparent)
 ; extends is the base type as written: a bare symbol for a class in this module, (asm ty) for an
 ; external class, or #f for the default System.Object (II.22.37).
 ; name is the full name: Outer/Inner for a nested class (II.10.3). enclosing is the full name of
@@ -745,6 +746,13 @@
        (loop rest ver (parse-ref-token who hex))]
       [_ (error 'rangi "unsupported .assembly extern clause ~s in ~a" b who)])))
 
+; The leading keywords of an .assembly directive (II.23.1.2 AssemblyFlags), such as retargetable.
+(define (assembly-keywords-flags who kws)
+  (for ([k (in-list kws)])
+    (unless (memq k '(retargetable))
+      (error 'rangi "unsupported assembly flag ~a in ~a" k who)))
+  (assembly-attributes-flags kws))
+
 ; A nested class is a .class node inside a class body (II.10.3). Its simple name may not contain
 ; . (a namespace separator) or / (the separator of a full name such as Outer/Inner).
 (define (nested-class-node? node)
@@ -871,12 +879,13 @@
   (define data-decls '())
   (define resource-decls '())
   (define win32-decls '())
-  (define (add-asm-extern! filename body)
+  (define asm-flags 0)
+  (define (add-asm-extern! flags filename body)
     (define name (read-assembly-meta (read-file filename)))
     (when (findf (λ (r) (equal? (asm-ref-name r) name)) asm-refs)
       (error 'rangi "duplicate .assembly extern ~a" name))
     (define-values (version token) (parse-asm-extern-body name body))
-    (set! asm-refs (cons (asm-ref name version token) asm-refs)))
+    (set! asm-refs (cons (asm-ref name version token (assembly-keywords-flags name flags)) asm-refs)))
   (define asm-customs '())
   (define raw-classes
     (for/fold ([acc '()] #:result (reverse acc)) ([node (in-list program)])
@@ -884,15 +893,20 @@
         [(cons '.custom _)
          (set! asm-customs (cons (parse-custom 'assembly node) asm-customs))
          acc]
-        [(list '.assembly 'extern filename)
-         (add-asm-extern! filename '())
+        [(list* '.assembly 'extern more)
+         (define-values (flags rest) (splitf-at more symbol?))
+         (match rest
+           [(list (? string? filename)) (add-asm-extern! flags filename '())]
+           [(list (? string? filename) (? list? body)) (add-asm-extern! flags filename body)]
+           [_ (error 'rangi "malformed .assembly extern ~s" node)])
          acc]
-        [(list '.assembly 'extern filename body)
-         (add-asm-extern! filename body)
-         acc]
-        [(list '.assembly _ _)
+        [(list* '.assembly more)
          (when asm-def? (error 'rangi "only one .assembly directive is allowed"))
          (set! asm-def? #t)
+         (match more
+           [(list flag ... (? symbol?) (? list?))
+            (set! asm-flags (assembly-keywords-flags 'assembly flag))]
+           [_ (error 'rangi "malformed .assembly ~s" node)])
          acc]
         [(list '.module name)
          (when mod-name (error 'rangi "only one .module directive is allowed"))
@@ -991,4 +1005,4 @@
   (module-model (reverse asm-refs) classes mod-name (or fmt 'pe32) dll?
                 (or subsystem 'console) (or platform 'anycpu) (reverse data-decls)
                 (check-resources (reverse resource-decls)) (reverse asm-customs)
-                (check-win32-resources (reverse win32-decls))))
+                (check-win32-resources (reverse win32-decls)) asm-flags))

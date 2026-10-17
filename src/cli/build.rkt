@@ -180,13 +180,13 @@
     (define assoc (methodsem-association ms))
     (add-row! tb 'methodsemantics (methodsem-kind ms) (methodsem-method ms)
               (coded-encode 'hassemantics (car assoc) (cdr assoc))))
-  (add-row! tb 'assembly 0 0 0 0 0 0 0 (s asm-name) 0)
+  (add-row! tb 'assembly 0 0 0 0 0 (cli-program-asm-flags p) 0 (s asm-name) 0)
   (for ([r (in-list (cli-program-asm-refs p))])
-    (match-define (list n version token) r)
+    (match-define (list n version token flags) r)
     ; II.22.5 AssemblyRef: four u16 version parts, u32 Flags, PublicKeyOrToken blob index,
     ; then Name, Culture, and HashValue. An empty token is blob index 0, the same as before.
     (match-define (list major minor build revision) version)
-    (add-row! tb 'assemblyref major minor build revision 0
+    (add-row! tb 'assemblyref major minor build revision flags
               (if (zero? (bytes-length token)) 0 (b token))
               (s n) 0 0))
   ; CustomAttribute rows (II.22.10); sort-tables! orders them by their parent

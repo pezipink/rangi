@@ -35,8 +35,9 @@
          (struct-out classlayout))
 
 ; The CLI-level program: flags are bits, signatures and bodies are bytes, and
-; references are rids. asm-refs rows are (name version token), where version is four ints and
-; token is the public key token bytes or #"". typerefs, memberrefs, typespecs, methodspecs,
+; references are rids. asm-refs rows are (name version token flags), where version is four ints,
+; token is the public key token bytes or #"", and flags is the AssemblyFlags value. asm-flags is the
+; Assembly row's AssemblyFlags. typerefs, memberrefs, typespecs, methodspecs,
 ; genericparams, and standalone-sigs are in row order. us-heap holds the string literals
 ; used by ldstr. A memberref parent is a (cons 'typeref|'typespec rid); a methodspec method
 ; is (cons 'methoddef|'memberref rid); a genericparam owner is (cons 'methoddef rid).
@@ -50,7 +51,7 @@
 (struct cli-program (asm-refs typerefs memberrefs typespecs methodspecs genericparams
                      typedefs module-name entry-rid format standalone-sigs us-heap
                      subsystem platform methodimpls interfaceimpls resources customattrs
-                     propevents win32-resources))
+                     propevents win32-resources asm-flags))
 ; The property and event tables, in source order. propmaps and eventmaps are (cons parent first)
 ; for each class with properties or events, where parent is a TypeDef rid and first is the rid of
 ; its first Property or Event row (II.22.35, II.22.12). semantics are the MethodSemantics rows.
@@ -1519,7 +1520,7 @@
   (define propevents-rows (lower-propevents cx classes))
   (cli-program (for/list ([name (in-list (interner-keys asm-refs))])
                  (define r (findf (λ (r) (equal? (asm-ref-name r) name)) (module-model-asm-refs m)))
-                 (list name (asm-ref-version r) (asm-ref-token r)))
+                 (list name (asm-ref-version r) (asm-ref-token r) (asm-ref-flags r)))
                (interner-keys typerefs)
                (interner-keys memberrefs)
                (interner-keys typespecs)
@@ -1538,5 +1539,6 @@
                resources
                customattrs
                propevents-rows
-               (module-model-win32-resources m)))
+               (module-model-win32-resources m)
+               (module-model-asm-flags m)))
 

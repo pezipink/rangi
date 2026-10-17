@@ -56,7 +56,7 @@
 (define memberref-sig (encode-method-sig 'int32 '(string) #:generic-arity 1))
 
 (define program
-  (cli-program '(("mscorlib" (4 0 0 0) #""))
+  (cli-program '(("mscorlib" (4 0 0 0) #"" 0))
                (list (list 1 "System" "Object"))
                (list (list (cons 'typeref 1) "Foo" memberref-sig))
                '()
@@ -75,7 +75,8 @@
                '()
                '()
                (propevents '() '() '() '() '())
-               '()))
+               '()
+               0))
 
 (test-case "InterfaceImpl rows read back with the class and the typedeforref interface"
   (define p (struct-copy cli-program program

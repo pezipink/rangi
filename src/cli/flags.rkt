@@ -11,6 +11,7 @@
          field-attributes-flags
          param-attributes-flags
          native-type-code
+         assembly-attributes-flags
          pinvoke-attributes-flags
          generic-param-attributes-flags)
 
@@ -91,6 +92,16 @@
 (define (native-type-code name)
   (cond [(assq name native-type-codes) => cdr]
         [else #f]))
+
+; II.23.1.2 AssemblyFlags, the Flags column of the Assembly and AssemblyRef rows. Only
+; retargetable is written from source; the processor-architecture bits are left zero.
+(define af-retargetable #x0100)
+(define assembly-flag-keywords `((retargetable . ,af-retargetable)))
+
+(define (assembly-attributes-flags kws)
+  (for/fold ([acc 0]) ([k (in-list kws)])
+    (bitwise-ior acc (cond [(assq k assembly-flag-keywords) => cdr]
+                           [else (error 'flags "unsupported assembly flag ~a" k)]))))
 
 ; II.23.1.8 PInvokeAttributes, the MappingFlags column of an ImplMap row (II.22.22).
 ; charset is 'ansi, 'unicode, 'auto, or #f for NotSpecified. conv is the calling convention keyword.

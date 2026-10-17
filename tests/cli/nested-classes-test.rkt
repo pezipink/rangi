@@ -110,7 +110,8 @@
                            (module-model-data m)
                            (module-model-resources m)
                            '()
-                           '()))
+                           '()
+                           0))
   (check-exn #rx"nested class Inner has no enclosing class Missing"
              (λ () (lower-module bad))))
 
