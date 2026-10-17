@@ -29,7 +29,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x0E | DeclSecurity           | none    | none    | Out of scope for P5: needs permission-set blobs (XML or binary, II.22.11 and II.23.3)  |         |
 | 0x0F | ClassLayout            | done    | done    | Sorted; `.pack` (0,1,2,4,...,128) and `.size` on explicit or sequential classes (II.22.8) | class-layout |
 | 0x10 | FieldLayout            | done    | done    | Sorted; one row per field with `offset N` in an explicit class (II.22.16)  | class-layout |
-| 0x11 | StandAloneSig          | partial | partial | Reader parses it; row helper added; LocalVarSig blobs in `sigs.rkt`; `calli` pending | ops-locals-args |
+| 0x11 | StandAloneSig          | done    | done    | LocalVarSig blobs in `sigs.rkt`; `calli` with fnptr args (`calli-fnptr`) and runtime-only `calli void ()` (`il-runtime-only-opcodes`) | ops-locals-args, calli-fnptr, il-runtime-only-opcodes |
 | 0x12 | EventMap               | done    | done    | Sorted by parent                                         | props-events |
 | 0x13 | EventPtr               | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
 | 0x14 | Event                  | done    | done    | Sorted; type is a module delegate TypeDef or an external TypeRef | props-events, events-delegate |
@@ -41,13 +41,13 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x1A | ModuleRef              | partial | done    | One row per P/Invoke DLL, first-use order (II.22.31)     | pinvoke |
 | 0x1B | TypeSpec               | partial | partial | Row helper and `read-row`; blob via `sigs.rkt` and reader; generic instance types | generic-calls |
 | 0x1C | ImplMap                | partial | done    | Sorted by MemberForwarded; P/Invoke (II.22.22)           | pinvoke |
-| 0x1D | FieldRVA               | none    | done    | Sorted; RVA of the static field's `.data` chunk in `.sdata` (II.22.18) | static-data |
+| 0x1D | FieldRVA               | done    | done    | Sorted; RVA of the static field's `.data` chunk in `.sdata` (II.22.18); read side tested | static-data |
 | 0x1E | ENCLog                 | out of scope | n/a | Edit-and-continue table; we never emit edits | |
 | 0x1F | ENCMap                 | out of scope | n/a | Edit-and-continue table; we never emit edits | |
-| 0x20 | Assembly               | partial | partial | Version, flags, public key, and culture are zero         |         |
+| 0x20 | Assembly               | partial | partial | Version, flags (including retargetable), public key, and culture are zero; `retargetable` is emitted on AssemblyRef only | asm-refs-retargetable |
 | 0x21 | AssemblyProcessor      | out of scope | n/a | Obsolete; we never emit it, and readers ignore it | |
 | 0x22 | AssemblyOS             | out of scope | n/a | Obsolete; we never emit it, and readers ignore it | |
-| 0x23 | AssemblyRef            | partial | partial | Name, version, and public key token come from `.assembly extern` (II.22.5); Flags and HashValue are zero, and full public keys are not written | asm-refs-versioned |
+| 0x23 | AssemblyRef            | partial | partial | Name, version, and public key token come from `.assembly extern` (II.22.5); Flags (retargetable) are set, HashValue is zero, and full public keys are not written | asm-refs-versioned, asm-refs-retargetable |
 | 0x24 | AssemblyRefProcessor   | out of scope | n/a | Obsolete; we never emit it, and readers ignore it | |
 | 0x25 | AssemblyRefOS          | out of scope | n/a | Obsolete; we never emit it, and readers ignore it | |
 | 0x26 | File                   | none    | none    | Out of scope for P5: multi-module assemblies (needs `.file` and a second module)  |         |
@@ -101,7 +101,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | MethodAttributes and MethodImplAttributes       | partial (from keywords; `virtual`, `newslot`, `final`, `abstract` done, see `virtual-override`) | virtual-override |
 | FieldAttributes                                 | partial (`literal` and `static` keywords, `fdHasDefault` for literals, `fdHasFieldMarshal` and offsets for `.field` forms) | param-constants, class-layout |
 | ParamAttributes                                 | partial (`in`, `out`, `opt`, HasDefault, HasFieldMarshal; `(param ...)` syntax) | param-constants |
-| AssemblyFlags and AssemblyHashAlgorithm         | none         |         |
+| AssemblyFlags (retargetable) and AssemblyHashAlgorithm | partial | retargetable: asm-refs-retargetable; hash algorithm: none |
 | PInvokeAttributes                               | partial (calling convention, charset, SupportsLastError from `pinvokeimpl`; `flags.rkt`). Values verified against II.23.1.8 (cdecl 0x0200, stdcall 0x0300, winapi = CallConvPlatformapi 0x0100, thiscall 0x0400, fastcall 0x0500). BestFit and ThrowOnUnmappableChar are not in the 2012 spec and are not written | pinvoke |
 | GenericParamAttributes                          | partial (`class`, `valuetype`, `.ctor` specials; variance not). Values verified against II.23.1.7: class 0x0004, valuetype (NotNullableValueTypeConstraint) 0x0008, .ctor 0x0010. Covariant and contravariant are not written, and no GenericParamConstraint row is emitted for `valuetype` | generic-types |
 
@@ -153,7 +153,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | AnyCPU, `32BITREQUIRED`, and `32BITPREFERRED` (`.platform anycpu\|x86\|32bitpreferred`) | n/a | done | platform-x86 |
 | PE `IMAGE_FILE_32BIT_MACHINE` (0x0100) is set iff the CLI header has `COMIMAGE_FLAGS_32BITREQUIRED` (II.25.2.2.1). Verified: AnyCPU images have COFF 0x0022 and COR flags 0x9. `32BITPREFERRED` (0x20000) is not in the 2012 spec and is taken from the runtime headers | n/a | done | the PE32 fixtures (snapshots regenerated, e.g. arrays-sum, dll-output/library) |
 | Subsystem GUI versus console (`.subsystem console\|windows`) | n/a | done | subsystem-gui |
-| Multiple sections (`.text`, `.rsrc`, `.reloc`, `.sdata`) | partial | partial (`.text`, `.reloc`, `.sdata` when there is static data) | static-data |
+| Multiple sections (`.text`, `.rsrc`, `.reloc`, `.sdata`) | done | read side tested for `.text`, `.sdata`, `.reloc` (`static-data`) | static-data |
 | Sections of any size (no 0x400 limit)                | done    | done    | text-over-400, text-over-2000 |
 | Base relocations generated from fixups               | n/a     | done    | base-relocs. Block layout verified against II.25.3.2: one block per 4K page, dword-aligned blocks, 12-bit page offsets. A fixup's start address selects its block, so a 4-byte or 8-byte field may cross the page end. II.25.3.2 defines only HIGHLOW; DIR64 is PE/COFF and has no alignment rule there, so the import stub's unaligned DIR64 at offset 2 is allowed |
 | Deterministic timestamp and MVID                     | n/a     | done    | nano    |
