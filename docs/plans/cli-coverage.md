@@ -121,7 +121,8 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Static methods, same-module calls (forward and recursive), parameters | done | calls-multi |
 | Static fields (same module)                                | done    | `static-fields` |
 | Instance fields (same module: `ldfld`, `stfld`, `ldflda`), `.ctor` | done | instance-methods, il-all-opcodes |
-| Instance fields on external types, `.cctor`                | none    |         |
+| Instance fields on external types (`ldfld`, `stfld`, `ldflda` on a MemberRef FieldSig) | done | external-instance-field |
+| `.cctor` type initializer (static, specialname, rtspecialname; no beforefieldinit unless requested) | done | cctor-init |
 | Instance methods, `newobj`, virtual dispatch, `.override`  | partial (instance methods, `newobj`, `callvirt` done; `.override` and virtual dispatch not) | instance-methods |
 | Interfaces and implementation                              | none    |         |
 | Nested types                                               | none    |         |
@@ -158,7 +159,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 
 ## Suggested order
 
-1. Static fields are done (`static-fields`). Instance methods, `.ctor`, `newobj`, and same-module instance fields are done (`instance-methods`, `il-all-opcodes`). External instance calls use the `instance` keyword, as in ilasm: `(call instance int32 (mscorlib System.String) get_Length ())`. The keyword sets HASTHIS in the MemberRef signature. Without it, a non-virtual call to an external instance method is still lowered as static, so the runtime call fails; a same-module `instance` on a static method is rejected (`instance-external-call`). `.cctor` is next. Locals, fat bodies, branching, catch, finally, fault, and filter EH are done. The `ldstr` hello world and `switch` fixtures are done.
+1. Static fields are done (`static-fields`). Instance methods, `.ctor`, `newobj`, and same-module instance fields are done (`instance-methods`, `il-all-opcodes`). External instance calls use the `instance` keyword, as in ilasm: `(call instance int32 (mscorlib System.String) get_Length ())`. The keyword sets HASTHIS in the MemberRef signature. Without it, a non-virtual call to an external instance method is still lowered as static, so the runtime call fails; a same-module `instance` on a static method is rejected (`instance-external-call`). `.cctor` is done (`cctor-init`), and external instance fields are done (`external-instance-field`). Locals, fat bodies, branching, catch, finally, fault, and filter EH are done. The `ldstr` hello world and `switch` fixtures are done.
 3. Multiple types with namespaces, extends, interfaces, nested types.
 4. Value types, enums, static data. Single-dimension arrays are done (`arrays-sum`); multi-dimensional arrays are not.
 5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam are done. GenericParamConstraint and generic types are not.
