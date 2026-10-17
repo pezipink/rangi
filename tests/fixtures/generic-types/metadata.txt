@@ -1,0 +1,47 @@
+Module rows=1
+  Module[1] Name="generic-types.exe" Mvid=88910a050c4b073302ee25f51eb1278d
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=6
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=161 Name="IArea" Namespace="" Extends=0x00000000 Fields=[] Methods=[2..2]
+  TypeDef[4] Flags=1 Name="Square" Namespace="" Extends=0x01000001 Fields=[] Methods=[3..4]
+  TypeDef[5] Flags=1 Name="Box`1" Namespace="" Extends=0x01000001 Fields=[1..1] Methods=[5..6]
+  TypeDef[6] Flags=1 Name="Holder`1" Namespace="" Extends=0x01000001 Fields=[2..2] Methods=[7..8]
+Field rows=2
+  Field[1] Flags=6 Name="Value" Signature=061300
+  Field[2] Flags=6 Name="Value" Signature=061300
+MethodDef rows=8
+  MethodDef[1] Rva=9016 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1f29730100000a0a066f0200000a280300000a7303000006730400000a0b076f0500000a6f02000006280300000a2a
+  MethodDef[2] Rva=0 ImplFlags=0 Flags=1350 Name="Area" Signature=200008 Params=[]
+  MethodDef[3] Rva=9076 ImplFlags=0 Flags=6150 Name=".ctor" Signature=200001 Params=[] Il=02280600000a2a
+  MethodDef[4] Rva=9084 ImplFlags=0 Flags=326 Name="Area" Signature=200008 Params=[] Il=1a2a
+  MethodDef[5] Rva=9088 ImplFlags=0 Flags=6150 Name=".ctor" Signature=2001011300 Params=[] Il=02280600000a02037d010000042a
+  MethodDef[6] Rva=9104 ImplFlags=0 Flags=6 Name="Get" Signature=20001300 Params=[] Il=027b010000042a
+  MethodDef[7] Rva=9112 ImplFlags=0 Flags=6150 Name=".ctor" Signature=2001011300 Params=[] Il=02280600000a02037d020000042a
+  MethodDef[8] Rva=9128 ImplFlags=0 Flags=6 Name="Get" Signature=20001300 Params=[] Il=027b020000042a
+InterfaceImpl rows=1
+  InterfaceImpl[1] Class=4 Interface=0x02000003
+MemberRef rows=6
+  MemberRef[1] Parent=0x1b000001 Name=".ctor" Signature=2001011300
+  MemberRef[2] Parent=0x1b000001 Name="Get" Signature=20001300
+  MemberRef[3] Parent=0x01000002 Name="WriteLine" Signature=00010108
+  MemberRef[4] Parent=0x1b000002 Name=".ctor" Signature=2001011300
+  MemberRef[5] Parent=0x1b000002 Name="Get" Signature=20001300
+  MemberRef[6] Parent=0x01000001 Name=".ctor" Signature=200001
+StandAloneSig rows=1
+  StandAloneSig[1] Signature=07021512140108151218011210
+TypeSpec rows=2
+  TypeSpec[1] Signature=1512140108
+  TypeSpec[2] Signature=151218011210
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
+GenericParam rows=2
+  GenericParam[1] Number=0 Flags=0 Owner=0x02000005 Name="T"
+  GenericParam[2] Number=0 Flags=20 Owner=0x02000006 Name="T"
+GenericParamConstraint rows=1
+  GenericParamConstraint[1] Owner=2 Constraint=0x02000003

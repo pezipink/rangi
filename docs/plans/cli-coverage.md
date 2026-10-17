@@ -56,7 +56,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x29 | NestedClass            | partial | done    | Sorted by NestedClass; one row per nested type, from textual nested `.class`; read back via `read-row` only | nested-types |
 | 0x2A | GenericParam           | partial | partial | Sorted; written for module generic methods; secondary sort key unverified | generic-calls |
 | 0x2B | MethodSpec             | partial | partial | Generic method instantiation; written for `call` with `inst`. Rows match SRM on mscorlib (656) | generic-calls |
-| 0x2C | GenericParamConstraint | partial | partial | Sorted; row helper and read                              |         |
+| 0x2C | GenericParamConstraint | done | done | Sorted by Owner; written for generic type params (`class`, `valuetype`, `.ctor`, and class or interface constraints) | generic-types |
 
 ## Heaps and streams (II.24)
 
@@ -103,7 +103,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | ParamAttributes                                 | constants only (`flags.rkt`), not wired to ilasm | |
 | AssemblyFlags and AssemblyHashAlgorithm         | none         |         |
 | PInvokeAttributes                               | partial (calling convention, charset, SupportsLastError from `pinvokeimpl`; `flags.rkt`) | pinvoke |
-| GenericParamAttributes                          | none         |         |
+| GenericParamAttributes                          | partial (`class`, `valuetype`, `.ctor` specials; variance not) | generic-types |
 
 Parse ilasm keyword lists (`(public static hidebysig)`) into these flag values instead of writing literals.
 
@@ -130,6 +130,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Nested types (`nested public\|private\|assembly\|family\|famandassem\|famorassem` inside a class body; NestedClass rows; no namespace on the TypeDef) | done | nested-types |
 | Properties and events (`.property` with `getter`/`setter`, `.event` with `add`/`remove`, in a class body; event type is metadata-only, no delegate TypeDef) | partial | props-events |
 | Generic types and methods (generic instances, same-module generic calls) | partial | generic-calls |
+| Generic type definitions with type parameters and constraints (`class`, `valuetype`, `.ctor`, class or interface constraints), instantiated over int32 and a reference type | done | generic-types |
 | Single-dimension arrays (`newarr`, `ldelem`, `stelem`, `ldlen`; `ldelema` unit-tested only) | done | arrays-sum |
 | Multi-dimensional arrays `(array ELEM RANK)` with `.ctor`, `Get`, `Set`, `Address` as `call instance` on a TypeSpec parent (II.14.2, II.23.2.13); bounded form (sizes, lower bounds) rejected | done | multidim-arrays |
 | Value types and enums (enum `value__` and literal fields with Constant rows) | done | enum-literals, value-types |
@@ -165,7 +166,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 1. Static fields are done (`static-fields`). Instance methods, `.ctor`, `newobj`, and same-module instance fields are done (`instance-methods`, `il-all-opcodes`). External instance calls use the `instance` keyword, as in ilasm: `(call instance int32 (mscorlib System.String) get_Length ())`. The keyword sets HASTHIS in the MemberRef signature. Without it, a non-virtual call to an external instance method is still lowered as static, so the runtime call fails; a same-module `instance` on a static method is rejected (`instance-external-call`). `.cctor` is done (`cctor-init`), and external instance fields are done (`external-instance-field`). Locals, fat bodies, branching, catch, finally, fault, and filter EH are done. The `ldstr` hello world and `switch` fixtures are done. Virtual methods, body-less abstract methods, and `.override` (MethodImpl) are done (`virtual-override`).
 3. Multiple types with namespaces, extends, and nested types are done. Interfaces and implementation are done (`interfaces`). Interface inheritance and MethodImpl routing for interfaces are not.
 4. Value types, enums, static data. Single-dimension arrays are done (`arrays-sum`); multi-dimensional arrays with rank only are done (`multidim-arrays`); bounded multi-dimensional arrays are not. Static data is done (`static-data`). Syntax: a static field takes its initial bytes from a top-level `.data` block, `(.data D_Table = (bytearray (01 00 00 00)))` with hex bytes, and the field names it with `at`, `(.field (public static) int32 Table at D_Table)`. This is the ilasm spelling, so the `bytes` keyword is rejected. The length must equal the primitive's size, and each block belongs to one field. The field gets HasFieldRVA and a FieldRVA row (II.22.18) whose RVA points into the `.sdata` section (II.16). A literal field cannot have data.
-5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam are done. GenericParamConstraint and generic types are not.
+5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam, and GenericParamConstraint are done (see `generic-types`). Generic types are done for same-module type definitions with constraints. Field access on generic instances from outside the class is not.
 6. Properties, events, constants.
 7. DLL output and AnyCPU for Framework targets.
 8. P/Invoke is done (`pinvoke`): `pinvokeimpl` methods lower to ModuleRef, ImplMap, and MethodDef rows with PinvokeImpl and PreserveSig. Win32 resources are done (`win32-resources`): a `.win32resource` payload is laid out in the `.rsrc` section with data directory 2. PDB, strong naming, ARM64, and .NET (Core) are out of scope until requested. PE32+ (AMD64) output is covered by `nano-x64`.
