@@ -10,8 +10,11 @@ All code lives in `src/`, with the experiments in `experiments/` and the test ha
 
 | File                           | Role today                                                                                                   |
 |--------------------------------|--------------------------------------------------------------------------------------------------------------|
-| `src/cli-reader.rkt`           | Lazy PE + CLI metadata reader. Exports `read-file`, `get-public-typedefs`, `read-assembly-meta`, and read-only accessors used by tests. |
-| `src/cli-writer.rkt`           | s-expression ilasm front end (`parse-il`) and `assemble`, which writes a deterministic PE image. Takes an optional output path (default a temp file). |
+| `src/cli/reader.rkt`           | Lazy PE + CLI metadata reader. Exports `read-file`, `get-public-typedefs`, `read-assembly-meta`, and read-only accessors used by tests. `src/cli-reader.rkt` is a re-export shim. |
+| `src/ilasm/syntax.rkt`         | s-expression ilasm front end (`parse-il`). Returns a plain `module-model` of classes and methods, with no heap or table knowledge. |
+| `src/cli/lower.rkt`            | Lowers the model to a `cli-program`: type and member refs, typedefs, flags, signatures, IL bytes, and interning. |
+| `src/cli/build.rkt`            | Builds the metadata chunk (`build-metadata`) from a `cli-program`, using the schema, heaps, tables, and metadata modules. |
+| `src/image.rkt`                | `write-image`, `assemble`, and `image-layout-report`. Plans the PE layout and writes a deterministic image. Takes an optional output path (default a temp file). |
 | `src/log.rkt`                  | The `rangi` logger used by the writer for debug and warning output.                                          |
 | `tests/lib/pe-lint.rkt`        | Structural checker (`lint-image`) for PE, CLI, metadata, and IL invariants. Used by `tests/image-lint-test.rkt`. |
 | `experiments/nano.rkt`         | Assembles `nano` and `nano2` into the temp dir and runs them. Prints `42` and `84`.                          |
@@ -32,7 +35,7 @@ Fixed and covered by tests: the `#-` (uncompressed) stream name, which SRM reads
 
 ### Writer
 
-`parse-il` walks the s-expression program and collects strings, type references, and member references into mutable hashes. `plan-image` builds the heaps, assembles IL, and places every chunk with `pe/layout.rkt`. `assemble` then serialises the placed image with `pe/write.rkt`. `image-layout-report` prints the same plan as the layout map that each fixture snapshots as `layout.txt`.
+The writer is split into layers. `ilasm/syntax.rkt` (`parse-il`) produces a plain model. `cli/lower.rkt` turns that model into a `cli-program`, interning strings, type refs, and member refs in a fixed order and assembling IL bytes. `cli/build.rkt` (`build-metadata`) builds the metadata chunk. `image.rkt` (`plan-image`) places every chunk with `pe/layout.rkt`, then `assemble` serialises the placed image with `pe/write.rkt`. `image-layout-report` prints the same plan as the layout map that each fixture snapshots as `layout.txt`.
 
 The output is deterministic. Tables and heaps keep insertion order, the MVID is a content hash, and the COFF timestamp is 0. `<Module>` methods move into a generated `Program` class, which clears the PEVerify `0x8013129d` warning. Method bodies use a tiny header when the code is under 64 bytes and `.maxstack` is at most 8, and a fat header otherwise.
 

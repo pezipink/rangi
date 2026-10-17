@@ -49,7 +49,7 @@ The map is the main tool for reviewing layout changes. It is human-readable, dif
 
 ### L3 Metadata dump snapshot
 
-A canonical, text dump of every metadata table row, heap entry, and decoded signature, produced by Rangi's own reader (`src/cli-reader.rkt`), approved as `metadata.txt`. This dump also serves as the reader's round-trip test.
+A canonical, text dump of every metadata table row, heap entry, and decoded signature, produced by Rangi's own reader (`src/cli/reader.rkt`), approved as `metadata.txt`. This dump also serves as the reader's round-trip test.
 
 ### L4 Image hash snapshot
 
@@ -111,7 +111,7 @@ Deviations recorded for P1:
 * L3 covers table rows only. Heap entries and decoded signatures are not yet checked.
 * The diff is a `check-equal?` failure rather than a unified diff printer.
 * The row decoder lives in `tests/lib/metadata-dump.rkt` until P2 moves it into `cli/schema`.
-* `src/cli-reader.rkt` gains read-only accessors and stores the encoding sizes it already computes. It does not change the lazy lookup path.
+* `src/cli/reader.rkt` gains read-only accessors and stores the encoding sizes it already computes. It does not change the lazy lookup path.
 * The L3 decoder covers all 34 ECMA-335 II.22 tables. mscorlib and every other corpus assembly are compared row by row against SRM (see V7).
 * The PE32+ reader output was compared with SRM by hand on an `ilasm /X64` image. `tests/fixtures/nano-x64` is the PE32+ writer fixture. Its image is checked against the same structural lint, PEVerify, and ildasm oracles as the PE32 fixtures, and it must run and print 42. Probing showed that a PE32+ `.reloc` holding only padding fails at load, so that case is covered by the lint.
 * [x] V4 L5 invariant checker (`tests/lib/pe-lint.rkt`, `tests/image-lint-test.rkt`); deviations listed under L5

@@ -1,6 +1,7 @@
 #lang racket/base
 ; L4 image hash and L7 execution for every fixture under tests/fixtures/
-(require rackunit racket/file "lib/fixture.rkt" "lib/snapshot.rkt" "../src/cli-writer.rkt")
+(require rackunit racket/file "lib/fixture.rkt" "lib/snapshot.rkt"
+         "../src/ilasm/syntax.rkt" "../src/image.rkt")
 
 ; fixtures that exist to push .text past a layout threshold (roadmap P3); each must stay above it
 (define text-floors (hash "text-over-400" #x400 "text-over-2000" #x2000))

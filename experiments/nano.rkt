@@ -1,5 +1,5 @@
 #lang racket
-(require "../src/cli-writer.rkt")
+(require "../src/ilasm/syntax.rkt" "../src/image.rkt")
 
 (define nano
   '(

@@ -1,0 +1,70 @@
+#lang racket/base
+(require racket/match
+         racket/file
+         racket/path
+         "cli/lower.rkt"
+         "cli/build.rkt"
+         "cli/header.rkt"
+         "pe/imports.rkt"
+         "pe/layout.rkt"
+         "pe/relocs.rkt"
+         "pe/write.rkt")
+(provide write-image assemble image-layout-report)
+
+; ---------------------------------------------------------------------------
+; layout constants (the PE layout itself lives in pe/)
+
+(define image-bases (hasheq 'pe32 #x400000 'pe32+ #x140000000))
+(define section-align #x2000)
+(define file-align #x200)
+
+(define pe-data-dirs '((1 . import-dir) (5 . reloc) (12 . iat) (14 . cli-header)))
+
+; writes the module model to out-path and returns out-path
+(define (write-image m out-path)
+  (write-pe-image (plan-image (lower-module m) (path->string (file-name-from-path out-path)))
+                  out-path
+                  #:entry 'entry-stub
+                  #:dirs pe-data-dirs)
+  out-path)
+
+(define (assemble m [out-path (make-temporary-file "rangi-~a.exe")])
+  (write-image m out-path))
+
+; layout of the image that assemble writes for a file called file-name (V5 snapshots)
+(define (image-layout-report m [file-name "image.exe"])
+  (layout-report (plan-image (lower-module m) file-name)))
+
+; places every chunk and returns the placed image, without writing a file
+(define (plan-image p file-name)
+  (define asm-name (regexp-replace #rx"[.][^.]*$" file-name ""))
+  (define mod-name (or (cli-program-module-name p) file-name))
+  (define entry-rid (cli-program-entry-rid p))
+  (define fmt (cli-program-format p))
+  (define bodies
+    (for*/list ([td (in-list (cli-program-typedefs p))] [m (in-list (tdef-methods td))])
+      (mdef-body m)))
+
+  (define md (build-metadata p asm-name mod-name))
+  (match-define (list iat import-dir lookup hint-name dll-name entry-stub)
+    (mscoree-chunks fmt))
+  (define cli-header
+    (cli-header-chunk #:metadata-size (bytes-length (chunk-bytes md))
+                      #:entry-rid entry-rid))
+  (define body-chunks
+    (for/list ([b (in-list bodies)] [i (in-naturals)])
+      (chunk (method-sym i) 4 b '())))
+  (define text
+    (section ".text" #x60000020
+             (append (list iat cli-header md) body-chunks
+                     (list import-dir lookup hint-name dll-name entry-stub))))
+
+  (define params
+    (if (eq? fmt 'pe32+)
+        (image-params 'pe32+ #x8664 #x22 3 #x8540 (hash-ref image-bases fmt) section-align file-align)
+        (image-params 'pe32 #x14C #x102 3 #x8540 (hash-ref image-bases fmt) section-align file-align)))
+  ; the relocation table holds the addresses of .text, so lay out .text before building it
+  (define reloc
+    (section ".reloc" #x42000040
+             (list (base-relocation-chunk (layout-image params (list text))))))
+  (layout-image params (list text reloc)))

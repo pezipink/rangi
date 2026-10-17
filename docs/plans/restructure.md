@@ -25,7 +25,7 @@ Status: `src/private/binary.rkt` is the shared source for the little-endian, ali
 * [x] Create `src/cli/schema.rkt` describing all 45 table ids (0x00-0x2C) as data: name, id, sorted key (if any), and columns. Column kinds: `u8`, `u16`, `u32`, `string`, `guid`, `blob`, `(index table)`, `(coded kind)`. Merged from `stream/a2`.
 * [x] Describe the 13 coded index kinds (II.24.2.6) as data: tag bits and the ordered table list, including unused tags in `CustomAttributeType`.
 * [x] Derive row sizes and coded index widths from the schema. Delete the two hand-written `case` blocks.
-* [x] Port `src/cli-reader.rkt` onto the schema, in place. Add a generic `(read-row rdr table rid)` that returns a vector, keeping the fast paths (`get-public-typedefs`) as specialised readers. Deviation: the reader was not moved to `rangi/cli/reader.rkt`; the shim step in R5 covers the move. `read-row` on mscorlib matches `get-public-typedefs` (1520 public types, same order).
+* [x] Port `src/cli-reader.rkt` onto the schema, in place. Add a generic `(read-row rdr table rid)` that returns a vector, keeping the fast paths (`get-public-typedefs`) as specialised readers. The reader moved to `src/cli/reader.rkt` in R5, with a shim left at `src/cli-reader.rkt`. `read-row` on mscorlib matches `get-public-typedefs` (1520 public types, same order).
 * [x] Fix the remaining reader defects in [architecture.md](../architecture.md#reader): the `#-` stream and the extra-data flag. Already fixed in `ca7aa13`: PE32+, missing tables, `declsecurity` tag, visibility mask, and the port leak.
 
 ### R3 PE layer and layout engine
@@ -46,14 +46,15 @@ Deviations so far: a chunk holds plain bytes with zeroed holes and a list of typ
 * [x] `cli/metadata.rkt`: metadata root (BSJB, version `v4.0.30319` padded to 4, stream headers with computed offsets), as a single chunk. The MVID is a digest over the other streams, written into `#GUID` at layout.
 * [x] `cli/header.rkt`: CLI header chunk (II.25.3.3) with the entry token from the model and a fixup to the metadata chunk. Flags default to `ILONLY`. Deviation: `32BITREQUIRED`, `32BITPREFERRED`, and `STRONGNAMESIGNED` are not set yet, because nothing needs them. Resources are not emitted.
 * [x] Method bodies are one chunk each, 4-byte aligned. The MethodDef RVA is written as an `rva-ref` cell, and `tables-stream` returns it as a fixup, so the writer no longer patches offsets by hand. Bodies were already chunks before R4.
-* [ ] Delete every literal listed in [architecture.md](../architecture.md#writer). Partly done: the hand-written row layouts and the CLI header and metadata literals are gone. Still open: opcode bytes in `encode-il` (O4 replaces them), and the PE machine, flag, and section constants in `plan-image` (R5 and the PE layer).
+* [ ] Delete every literal listed in [architecture.md](../architecture.md#writer). Partly done: the hand-written row layouts and the CLI header and metadata literals are gone. Still open: opcode bytes in `encode-il` in `cli/lower.rkt` (O4 replaces them), and the PE machine, flag, and section constants in `image.rkt` (the PE layer).
 
 
 ### R5 Front end separation
 
-* [ ] Move `parse-il` into `ilasm/syntax.rkt`, producing a plain module model (structs) with no heap or table knowledge.
-* [ ] `image.rkt` glues `ilasm` -> `cli` -> `pe` and exposes `(write-image model path #:kind 'exe|'dll #:platform 'x86|'x64|'anycpu)`.
-* [ ] Keep `src/cli-writer.rkt` and `src/cli-reader.rkt` as thin compatibility shims re-exporting the old names until experiments are migrated, then delete them.
+* [x] Move `parse-il` into `ilasm/syntax.rkt`, producing a plain module model (structs) with no heap or table knowledge. Also `lower.rkt` (model to `cli-program`, interning and IL bytes) and `cli/build.rkt` (metadata chunk). Verified by `nano` (42, 84) and an unchanged suite with no snapshot or hash changes.
+* [x] `image.rkt` glues `ilasm` -> `cli` -> `pe` and exposes `write-image`, `assemble`, and `image-layout-report`. Deviation: the signature is `(write-image model path)`, without `#:kind` or `#:platform`. There is no DLL output and no x86 or anycpu support yet (`pe/imports.rkt` only imports `_CorExeMain`), so those keywords are deferred until something needs them.
+* [x] `src/cli-writer.rkt` deleted, since its callers now use `ilasm/syntax.rkt` and `image.rkt` directly. `src/cli-reader.rkt` is a re-export shim of `src/cli/reader.rkt` (moved with `git mv`). Delete the shim once the reader callers are migrated.
+
 
 ### R6 Reader hardening
 

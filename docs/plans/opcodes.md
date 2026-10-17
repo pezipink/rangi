@@ -6,7 +6,7 @@ ms.date: 2026-10-17
 
 ## Current state
 
-`encode-il` in `src/cli-writer.rkt`, fed by `parse-il`, handles four forms: `ret` (0x2A), `add` (0x58), `ldc.i4` (0x20, always a 4-byte operand), and `call` to a `MemberRef` or `MethodDef` (0x28). Any other instruction raises `unsupported IL instruction`, so nothing is skipped silently. `.locals`, labels, and exception handling are not supported yet.
+`encode-il` in `src/cli/lower.rkt`, fed by `parse-il` (through `lower-module`), handles four forms: `ret` (0x2A), `add` (0x58), `ldc.i4` (0x20, always a 4-byte operand), and `call` to a `MemberRef` or `MethodDef` (0x28). Any other instruction raises `unsupported IL instruction`, so nothing is skipped silently. `.locals`, labels, and exception handling are not supported yet.
 
 ## Target size
 

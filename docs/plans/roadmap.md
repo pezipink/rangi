@@ -56,9 +56,9 @@ Open items, in order:
 | P0 | Done | None |
 | P1 | Done | None |
 | P2 | Done | R1 and R2 merged. Signed compressed integers are deferred until a caller needs them |
-| P3 | Partly done | R3, V5, and R4 are done, except the partial literal removal in R4. R5 (front-end split) is not started. Close P3 after R5. |
+| P3 | Partly done | R3, V5, R4, and R5 are done. The partial literal removal in R4 stays open until O4 and the PE constants move. Close P3 after a person reviews the layout snapshots. |
 | P4 | Started | O1, O2, and O3 done (B merged). O5 unit and relaxation tests merged. O4 and the rest of O5 are open. O4 method bodies depend on R4. |
-| P5 | Not started | Depends on R4 and R5 |
+| P5 | Not started | Depends on R4 and R5 (both done). Now unblocked. |
 | P6 | Mostly done | V7 corpus diff matches SRM on 133 of 133 assemblies. The benchmark and memory-mapping items in R6 are open. |
 
 ## Next steps
@@ -66,10 +66,10 @@ Open items, in order:
 The critical path is P2, then R4, then R5, then closing P3, then P4 integration. Each step keeps `raco test tests/` green.
 
 1. Done: P2, part A1 (R1). Helpers live in `src/private/binary.rkt`, and the reader and writer use them. Signed compressed integers are still open. Merged from `stream/a1`.
-2. Done: P2, part A2 (R2), merged from `stream/a2`. The reader stays at `src/cli-reader.rkt` and the writer at `src/cli-writer.rkt`; the move happens in R5.
-3. R4 (CLI emits chunks). Done: heaps, tables, metadata root, CLI header, and body chunks. The literal removal is partly done, and the opcode and PE constants stay until O4 and R5. R5 is next on the critical path.
-4. R5 (front-end split). Move `parse-il` to `ilasm/syntax.rkt` and add `image.rkt`. This is when the writer's compatibility shims go.
-5. Close P3 once R4 and R5 are in and the layout snapshots have been reviewed by a person.
+2. Done: P2, part A2 (R2), merged from `stream/a2`.
+3. Done: R4 (CLI emits chunks). Heaps, tables, metadata root, CLI header, and body chunks. The literal removal is partly done, and the opcode and PE constants stay until O4 and the PE layer.
+4. Done: R5 (front-end split). `parse-il` is in `ilasm/syntax.rkt`, lowering is in `cli/lower.rkt`, the metadata chunk is in `cli/build.rkt`, and `image.rkt` writes the image. `cli-writer.rkt` is deleted. The reader moved to `cli/reader.rkt`, with a shim at `cli-reader.rkt` until its callers are migrated.
+5. Close P3 once the layout snapshots have been reviewed by a person.
 6. P4 (O2 to O5). Operand encoders, labels, and relaxation go in as pure modules and are wired to the writer at O4.
 
 ## What can run in parallel
@@ -78,20 +78,20 @@ Each stream owns files that no other stream touches, so the streams can run in s
 
 | Stream | Work | Owns | Start |
 |--------|------|------|-------|
-| A | P2: A1 (R1 helpers) done. A2 (R2 schema, port reader and writer) is next | `src/cli/schema.rkt`, `src/cli-reader.rkt`, `src/cli-writer.rkt`, `tests/lib/metadata-dump.rkt` | A2 now. It is the critical path. |
+| A | P2 and R4/R5 | Done (merged). | None. |
 | B | O2 operand encoders and O3 labels and branch relaxation | `src/il/encode.rkt`, `src/il/labels.rkt`, `tests/il/` | Done (merged). Wire in at O4. |
-| C | R4 heaps: insertion-ordered, deduplicated, `#US` encoding (II.24.2.4) | `src/cli/heaps.rkt`, `tests/cli/heaps-test.rkt` | Unlocked by A1 (merged). Can start now. |
+| C | R4 heaps | `src/cli/heaps.rkt`, `tests/cli/heaps-test.rkt` | Done (merged). |
 | D | R6 benchmark: timing of `read-file` plus `get-public-typedefs` on mscorlib | `tests/read-bench-test.rkt` | Done (merged). Timings recorded, not asserted. |
-| E | Decode signatures and heap entries in the L3 dump (not checked yet) | `tests/lib/metadata-dump.rkt` | After A2. A2 moves the row decoder, so E would conflict with it. |
+| E | Decode signatures and heap entries in the L3 dump (not checked yet) | `tests/lib/metadata-dump.rkt` | Unblocked by A2 (merged). Can start now. |
+| F | O4 pure encoders (opcode table and byte encoding) | `src/il/` | Not started. Needs the user's approval. |
 
 Not parallel:
 
-* R4 `tables.rkt`, `metadata.rkt`, `header.rkt`, and method-body chunks, plus R5. They all change `src/cli-writer.rkt`, and each depends on the schema from A.
-* O4 (method bodies, locals, exception handling). It needs R4's body chunks.
-* Writer features in P5. They depend on R4 and R5.
+* O4 (method bodies, locals, exception handling). Its body chunks exist now, so it is unblocked, but it changes `cli/lower.rkt` `encode-il`, so it should not run alongside other edits to that file.
+* Writer features in P5. They depend on R4 and R5, which are both done.
 * V6 ilasm differential fixtures for unsupported features. They can't pass until those features exist. Start them alongside P5, not before.
 
-Expected gain: B and D run while A is in progress, and C starts once A1 lands. The critical path is still A, then R4, then R5, then P5. E waits for A2 because both change the row decoder. B wires in at O4, not earlier.
+Expected gain: the critical path is now closed through R5. The next critical path is P4 (O4) and then P5. E and F can run in parallel with P4 work.
 
 ## Handoff
 

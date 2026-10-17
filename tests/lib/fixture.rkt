@@ -1,7 +1,8 @@
 #lang racket/base
 ; Shared fixture plumbing: each fixture is a directory under tests/fixtures/ holding a
 ; program.rktd. Images are assembled into a fresh temp directory, which is removed afterwards.
-(require racket/file racket/port racket/runtime-path file/sha1 "../../src/cli-writer.rkt")
+(require racket/file racket/port racket/runtime-path file/sha1
+         "../../src/ilasm/syntax.rkt" "../../src/image.rkt")
 (provide fixture-names with-built-image sha256-hex run-image normalize-newlines)
 
 (define-runtime-path fixtures-dir "../fixtures")
