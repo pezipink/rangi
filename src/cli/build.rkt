@@ -7,9 +7,37 @@
          "tables.rkt"
          "metadata.rkt"
          "../private/binary.rkt")
-(provide build-metadata method-sym)
+(provide build-metadata method-sym
+         add-typespec-row! add-standalonesig-row! add-methodspec-row!
+         add-genericparam-row! add-genericparamconstraint-row!)
 
 (define (method-sym i) (string->symbol (format "method:~a" i)))
+
+; Row helpers for the generics and signature tables. Each takes the table builder and the
+; heaps it writes into, and returns the 1-based rid. A target is (cons table rid).
+; Sorting is left to sort-tables!, which keeps GenericParam and GenericParamConstraint
+; in owner order.
+(define (add-typespec-row! tb bh sig)
+  (add-row! tb 'typespec (heap-add! bh sig)))
+
+(define (add-standalonesig-row! tb bh sig)
+  (add-row! tb 'standalonesig (heap-add! bh sig)))
+
+; method is (cons 'methoddef rid) or (cons 'memberref rid)
+(define (add-methodspec-row! tb bh method inst)
+  (add-row! tb 'methodspec (coded-encode 'methoddeforref (car method) (cdr method))
+            (heap-add! bh inst)))
+
+; owner is (cons 'typedef rid) or (cons 'methoddef rid)
+(define (add-genericparam-row! tb sh number flags owner name)
+  (add-row! tb 'genericparam number flags
+            (coded-encode 'typeormethoddef (car owner) (cdr owner))
+            (heap-add! sh name)))
+
+; owner is the rid of a GenericParam row; constraint is (cons 'typedef|'typeref|'typespec rid)
+(define (add-genericparamconstraint-row! tb owner constraint)
+  (add-row! tb 'genericparamconstraint owner
+            (coded-encode 'typedeforref (car constraint) (cdr constraint))))
 
 ; starts-of: 1-based first rid of each owner's run of rows (MethodList, FieldList)
 (define (starts-of counts)
