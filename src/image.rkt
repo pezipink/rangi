@@ -61,16 +61,24 @@
   (define md (build-metadata p asm-name mod-name))
   (match-define (list iat import-dir lookup hint-name dll-name entry-stub)
     (mscoree-chunks fmt #:dll? dll?))
+  ; the CLI resources blob (II.25.3.3) is placed after the metadata, and only when there are
+  ; resources, so images without them keep their layout
+  (define res-bytes (resources-blob (cli-program-resources p)))
   (define cli-header
     (cli-header-chunk #:metadata-size (bytes-length (chunk-bytes md))
                       #:entry-rid entry-rid
+                      #:resources-size (bytes-length res-bytes)
                       #:flags (cli-platform-flags (cli-program-platform p))))
+  (define res-chunks
+    (if (zero? (bytes-length res-bytes))
+        '()
+        (list (chunk 'cli-resources dword-align res-bytes '()))))
   (define body-chunks
     (for/list ([m (in-list all-mdefs)] [i (in-naturals)] #:when (mdef-body m))
       (chunk (method-sym i) dword-align (mdef-body m) '())))
   (define text
     (section ".text" section-chars-text
-             (append (list iat cli-header md) body-chunks
+             (append (list iat cli-header md) res-chunks body-chunks
                      (list import-dir lookup hint-name dll-name entry-stub))))
   ; initial data of FieldRVA fields (II.22.18), in Field-row order; the section is added only when
   ; some field has data, so images without static data keep their layout

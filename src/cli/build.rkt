@@ -7,13 +7,21 @@
          "tables.rkt"
          "metadata.rkt"
          "../private/binary.rkt")
-(provide build-metadata method-sym field-data-sym
+(provide build-metadata method-sym field-data-sym resources-blob
          add-typespec-row! add-standalonesig-row! add-methodspec-row!
          add-genericparam-row! add-genericparamconstraint-row!)
 
 (define (method-sym i) (string->symbol (format "method:~a" i)))
 ; the initial data of the Field row with 1-based rid i (II.22.18), placed by the image layout
 (define (field-data-sym i) (string->symbol (format "field-data:~a" i)))
+
+; The CLI resources blob (II.25.3.3): each resource is a u32 little-endian length followed by
+; its bytes, in the order given by lower-resources, so each offset matches its ManifestResource row.
+(define (resources-blob rs)
+  (apply bytes-append
+         (for/list ([r (in-list rs)])
+           (bytes-append (le (bytes-length (manifest-resource-data r)) 4)
+                         (manifest-resource-data r)))))
 
 ; Row helpers for the generics and signature tables. Each takes the table builder and the
 ; heaps it writes into, and returns the 1-based rid. A target is (cons table rid).
@@ -124,6 +132,11 @@
     (add-row! tb 'assemblyref major minor build revision 0
               (if (zero? (bytes-length token)) 0 (b token))
               (s n) 0 0))
+
+  ; ManifestResource rows (II.22.24); implementation 0 means the resource is in this file
+  (for ([r (in-list (cli-program-resources p))])
+    (add-row! tb 'manifestresource (manifest-resource-offset r) (manifest-resource-flags r)
+              (s (manifest-resource-name r)) 0))
 
   (extra tb sh bh)
   (sort-tables! tb)
