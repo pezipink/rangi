@@ -1,6 +1,6 @@
 #lang racket/base
 ; Builds and runs the System.Reflection.Metadata dumper (tests/oracles/srm-dump).
-(require racket/system racket/runtime-path)
+(require racket/system racket/runtime-path "dotnet-build.rkt")
 (provide srm-dotnet build-srm! run-srm run-srm-batch)
 
 (define-runtime-path srm-project "../oracles/srm-dump/srm-dump.csproj")
@@ -18,10 +18,7 @@
   (values code (get-output-string out) (get-output-string err)))
 
 (define (build-srm! dotnet)
-  (define-values (code out err)
-    (run-capture dotnet "build" (path->string srm-project) "-nologo" "-v" "q"))
-  (unless (zero? code)
-    (error 'srm "srm-dump build failed:\n~a~a" out err)))
+  (dotnet-build! dotnet srm-project))
 
 ; dumps an image with the built dumper; returns the exit code, stdout and stderr
 (define (run-srm dotnet exe)

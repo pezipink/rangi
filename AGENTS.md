@@ -23,6 +23,7 @@ Work is driven by the plans in [docs/plans/](docs/plans/). Start with [roadmap.m
 | [restructure.md](docs/plans/restructure.md)               | Splitting PE image writing from CLI metadata, module layout   |
 | [opcodes.md](docs/plans/opcodes.md)                       | Full ECMA-335 Partition III opcode table and IL assembler     |
 | [cli-coverage.md](docs/plans/cli-coverage.md)             | Spec coverage tracker: tables, signatures, bodies, PE features |
+| [workflow.md](docs/plans/workflow.md)                     | Lanes, worktrees, test tiers, hot spots, timings (read before parallel work) |
 
 ## Ground rules
 
@@ -43,7 +44,7 @@ Racket 8.16 CS is installed at `C:\Program Files\Racket`. Run the test suite wit
 raco test -j 4 tests/
 ```
 
-`-j 4` runs test files in parallel and takes about a minute. It is safe because each test writes to its own temp files. Do not run two oracle builds at once in a shared folder: `build-srm!` and the ilverify build both run `dotnet build` in fixed `bin/obj` folders.
+`-j 4` runs test files in parallel and takes about a minute. It is safe because each test writes to its own temp files. The two oracle builds (`build-srm!` and the ilverify build) go through `dotnet-build!` in `tests/lib/dotnet-build.rkt`, which holds a file lock, so parallel runs do not race on their `bin/obj` folders. Use `RANGI_SKIP_CORPUS=1` to skip the 30 s reader corpus while iterating; run it again at section boundaries. The tiers and the lane process are in [workflow.md](docs/plans/workflow.md).
 
 It runs the fixture checks (image hash, stdout, exit code) and the external oracles. Oracles are skipped when their tool is missing. It also runs the structural lint (`tests/lib/pe-lint.rkt`, tested by `tests/image-lint-test.rkt`) on every fixture. The metadata dump decodes MethodSpec rows (they match SRM on mscorlib), and it decodes every II.22 table except the pointer and edit-and-continue tables, which it rejects when they hold rows. The V7 corpus test diffs 133 reference assemblies against SRM (see [verification.md](docs/plans/verification.md)). `RANGI_UPDATE_SNAPSHOTS=1 raco test tests/` rewrites reviewed snapshots; only do that when the change to emitted bytes is intended and explained in the commit.
 

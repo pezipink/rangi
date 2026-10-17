@@ -2,7 +2,7 @@
 ; ILVerify oracle (Microsoft.ILVerification, tests/oracles/ilverify). Each fixture image is
 ; verified against the .NET Framework 4.7.1 reference assemblies. Any verification error fails
 ; the fixture, and the verifier's messages are part of the failure output.
-(require rackunit racket/runtime-path "../lib/fixture.rkt" "tools.rkt")
+(require rackunit racket/runtime-path "../lib/fixture.rkt" "../lib/dotnet-build.rkt" "tools.rkt")
 
 (define-runtime-path ilverify-project "ilverify/ilverify.csproj")
 
@@ -12,10 +12,7 @@
 (cond
   [(and dotnet reference-dir)
    (define project (path->string ilverify-project))
-   (define-values (build-code build-out)
-     (run-tool dotnet (list "build" project "-nologo" "-v" "q") ilverify-project))
-   (unless (zero? build-code)
-     (error 'ilverify "ilverify build failed:\n~a" build-out))
+   (dotnet-build! dotnet project)
    (for ([name (fixture-names)])
      (test-case name
        (with-built-image

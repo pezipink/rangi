@@ -81,7 +81,12 @@
 
 (define corpus-start (current-inexact-milliseconds))
 
+; targeted runs set RANGI_SKIP_CORPUS=1 to skip this ~30 s oracle. Full section-end runs leave it unset.
+(define skip-corpus? (let ([v (getenv "RANGI_SKIP_CORPUS")]) (and v (not (member v '("" "0"))))))
+
 (cond
+  [skip-corpus?
+   (printf "skipping reader corpus (RANGI_SKIP_CORPUS is set)\n")]
   [srm-dotnet
    (build-srm! srm-dotnet)
    (define files (corpus-files))

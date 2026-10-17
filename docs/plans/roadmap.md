@@ -26,7 +26,7 @@ P4 and P5 can interleave once P3 lands. P6 can start any time after P2, because 
 
 ## Status
 
-Last updated after the Wave 1 lane merges (PE constants, FieldSig and flags, `ldstr`/`switch` fixtures, `filter` EH and prefix validation). `RANGI_REQUIRE_ORACLES=1 raco test -j 4 tests/` passes (1086 tests at `3223340`, about 53 s). Start here, then read [AGENTS.md](../../AGENTS.md) and [architecture.md](../architecture.md).
+Last updated after the Wave 1 lane merges (PE constants, FieldSig and flags, `ldstr`/`switch` fixtures, `filter` EH and prefix validation). `RANGI_REQUIRE_ORACLES=1 raco test -j 4 tests/` passes (1086 tests at `3223340`, about 53 s). Start here, then read [AGENTS.md](../../AGENTS.md), [architecture.md](../architecture.md), and [workflow.md](workflow.md) before you run lanes.
 
 Done:
 
