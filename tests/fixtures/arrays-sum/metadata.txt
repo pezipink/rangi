@@ -1,0 +1,22 @@
+Module rows=1
+  Module[1] Name="arrays-sum.exe" Mvid=a9fdeb19c784631840bdd9ea963348c3
+TypeRef rows=3
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Int32" Namespace="System"
+  TypeRef[3] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=2
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..3]
+MethodDef rows=3
+  MethodDef[1] Rva=8736 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1f0a8d020000010a160b071f0a2f10060707075aa4020000010717580b2beb06280300000628020000060619a3020000012802000006068e6928020000062a
+  MethodDef[2] Rva=8812 ImplFlags=0 Flags=22 Name="show" Signature=00010108 Params=[] Il=02280100000a2a
+  MethodDef[3] Rva=8820 ImplFlags=0 Flags=22 Name="sum" Signature=0001081d08 Params=[] Il=160a160b07028e692f0c06020794580a0717580b2bee062a
+MemberRef rows=1
+  MemberRef[1] Parent=0x01000003 Name="WriteLine" Signature=00010108
+StandAloneSig rows=2
+  StandAloneSig[1] Signature=07021d0808
+  StandAloneSig[2] Signature=07020808
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
