@@ -1,7 +1,7 @@
 #lang racket
 
 
-(require (for-syntax "cli-reader.rkt"))
+(require (for-syntax "../src/cli-reader.rkt"))
 (require (for-syntax syntax/parse))
 (require racket/string)
 (begin-for-syntax  
