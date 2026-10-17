@@ -291,8 +291,11 @@
   (match elem
     [(? symbol?)
      (define entry (assq elem primitive-element-types))
-     (unless entry (error 'rangi "~a ~a is not supported" what elem))
-     (bitwise-ior #x01000000 (typeref-rid! cx 'mscorlib (string->symbol (cdr entry)) 0))]
+     (cond
+       [entry (bitwise-ior #x01000000 (typeref-rid! cx 'mscorlib (string->symbol (cdr entry)) 0))]
+       ; a class declared in this module is a TypeDef token (II.22.37, table 0x02)
+       [(hash-ref (ctx-class-rids cx) elem #f) => (lambda (rid) (bitwise-ior #x02000000 rid))]
+       [else (error 'rangi "~a ~a is not supported" what elem)])]
     [(list (? symbol? asm) (? symbol? ty))
      #:when (not (memq asm '(szarray class valuetype)))
      (bitwise-ior #x01000000 (typeref-rid! cx asm ty 0))]
