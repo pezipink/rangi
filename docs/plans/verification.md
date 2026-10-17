@@ -81,7 +81,7 @@ Each oracle is a script under `tests/oracles/` and is skipped when the tool is m
 | PEVerify (.NET Framework SDK)        | Metadata validation (`/md`) and IL type safety (`/il`)      | `PEVerify.exe /md /il /nologo <image>`                          |
 | ildasm                               | Readable disassembly; snapshot as `ildasm.il` after scrubbing timestamp, MVID, and image base comments | `ildasm.exe /all /text /nobar <image>` |
 | System.Reflection.Metadata dumper    | Independent table decoder; diff against L3                  | `dotnet run --project tests/oracles/srm-dump/srm-dump.csproj -- <image>` |
-| ILVerify (`Microsoft.ILVerification`) | IL verification that also works for .NET (Core) targets    | Not implemented: `tests/oracles/ilverify` does not exist yet    |
+| ILVerify (`Microsoft.ILVerification`) | IL verification that also works for .NET (Core) targets    | Implemented in `tests/oracles/ilverify`; checked by `tests/oracles/ilverify-test.rkt` |
 
 The baseline PEVerify warning (`0x8013129d` on `MethodDef` 1) is fixed. `main` sat on the `<Module>` type, and ilasm assembles the same code with no warning when `main` is inside a class. The writer now moves `<Module>` methods into a generated `Program` class, and `pe-verify.txt` records a clean run.
 
@@ -112,13 +112,13 @@ Deviations recorded for P1:
 * The diff is a `check-equal?` failure rather than a unified diff printer.
 * The row decoder lives in `tests/lib/metadata-dump.rkt` until P2 moves it into `cli/schema`.
 * `src/cli-reader.rkt` gains read-only accessors and stores the encoding sizes it already computes. It does not change the lazy lookup path.
-* mscorlib is compared by public type count only (1521, equal to SRM), because the L3 decoder still throws on tables it does not decode yet (TypeSpec, CustomAttribute, GenericParam, and others). MethodSpec rows are decoded and match SRM (656 rows on mscorlib).
+* The L3 decoder covers all 34 ECMA-335 II.22 tables. mscorlib and every other corpus assembly are compared row by row against SRM (see V7).
 * The PE32+ reader output was compared with SRM by hand on an `ilasm /X64` image. `tests/fixtures/nano-x64` is the PE32+ writer fixture. Its image is checked against the same structural lint, PEVerify, and ildasm oracles as the PE32 fixtures, and it must run and print 42. Probing showed that a PE32+ `.reloc` holding only padding fails at load, so that case is covered by the lint.
 * [x] V4 L5 invariant checker (`tests/lib/pe-lint.rkt`, `tests/image-lint-test.rkt`); deviations listed under L5
   * Threshold fixtures `text-over-400` and `text-over-2000` push `.text` past 0x400 and 0x2000, with fat bodies and 4 and 64 methods. `tests/fixtures-test.rkt` asserts each `.text` size. Their layout maps are checked by V5.
 * [x] V5 L2 layout map: `layout-report` in `pe/layout.rkt`, snapshotted as `layout.txt` beside each fixture and checked in `tests/fixtures-test.rkt`. Lists headers, section RVAs, and each chunk's RVA, file offset, size, and alignment.
 * [ ] V6 L8 ilasm differential fixtures for every feature in [cli-coverage.md](cli-coverage.md)
-* [ ] V7 Reader corpus test: run the L3 dump against every assembly in the .NET Framework 4.7.1 reference set and `System.Private.CoreLib`, diffed against SRM
+* [x] V7 Reader corpus test: run the L3 dump against every assembly in the .NET Framework 4.7.1 reference set and `System.Private.CoreLib`, diffed against SRM. `tests/oracles/reader-corpus-test.rkt` checks 133 of 133 assemblies, including CoreLib, in about 25 s.
 
 ## Spec sources and discovery
 

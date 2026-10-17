@@ -36,9 +36,9 @@ ms.date: 2026-10-17
 
 ### O1 Opcode table as data
 
-* [ ] Write `tests/oracles/opcodes-dump` (a single-file `dotnet run` program) that prints every `OpCode` as `name size byte1 byte2 operand-type flow-control stack-pop stack-push opcode-type`, sorted by value. Commit its output as `tests/fixtures/opcodes.tsv`.
-* [ ] Write `rangi/il/opcodes.rkt` as a literal table, one entry per opcode: symbol (`ldc.i4.s`), bytes, operand kind, flow control, stack pop and push behaviour. Use ECMA-335 Partition III names, which match Reflection.Emit names with `_` replaced by `.`.
-* [ ] Add a unit test that asserts the Racket table equals `opcodes.tsv` (minus reserved prefixes, plus `no.`). This is the completeness and correctness gate.
+* [x] Write `tests/oracles/opcodes-dump` (a single-file `dotnet run` program) that prints every `OpCode` as `name size byte1 byte2 operand-type flow-control stack-pop stack-push opcode-type`, sorted by value. Commit its output as `tests/fixtures/opcodes.tsv`.
+* [x] Write `rangi/il/opcodes.rkt` as a literal table, one entry per opcode: symbol (`ldc.i4.s`), bytes, operand kind, flow control, stack pop and push behaviour. Use ECMA-335 Partition III names, which match Reflection.Emit names with `_` replaced by `.`.
+* [x] Add a unit test that asserts the Racket table equals `opcodes.tsv` (minus reserved prefixes, plus `no.`). This is the completeness and correctness gate.
 
 ### O2 Operand encoding
 

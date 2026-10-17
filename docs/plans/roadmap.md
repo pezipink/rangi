@@ -35,23 +35,23 @@ Done:
 * V4 L5 structural lint (`tests/lib/pe-lint.rkt`, tested by `tests/image-lint-test.rkt`).
 * Writer rewrite: `<Module>` methods move to a generated `Program` class; `.entrypoint` sets the entry token; unknown IL raises; supported IL is `ret`, `add`, `ldc.i4`, and `call`.
 * Reader defects R1 to R10 fixed, except the two open items below. PE32 and PE32+ nano dumps match System.Reflection.Metadata. The mscorlib public type count matches (1521).
-* P3 bigger fixtures: `tests/fixtures/text-over-400` (`.text` VirtualSize 0x48E, 2 classes and 4 methods) and `tests/fixtures/text-over-2000` (`.text` 0x21A2, 8 classes and 64 methods). Both have fat IL bodies (code over 64 bytes, and `.maxstack 9` on some methods), and both pass PEVerify, ildasm, SRM, and the lint. `fixtures-test.rkt` asserts each `.text` stays above its threshold. The P3 gate still needs the layout map (V5), so P3 is not closed.
+* P3 bigger fixtures: `tests/fixtures/text-over-400` (`.text` VirtualSize 0x48E, 2 classes and 4 methods) and `tests/fixtures/text-over-2000` (`.text` 0x21A2, 8 classes and 64 methods). Both have fat IL bodies (code over 64 bytes, and `.maxstack 9` on some methods), and both pass PEVerify, ildasm, SRM, and the lint. `fixtures-test.rkt` asserts each `.text` stays above its threshold. The layout map (V5) is now in place.
 * Known writer gap: `call` only accepts MemberRef, so the non-entry methods in the bigger fixtures are never executed. They are checked by the oracles and lint only.
 
 Open items, in order:
 
 1. Done: the reader accepts the `#-` uncompressed stream and the HeapSizes extra-data bit (0x40), and skips unknown streams such as `#!`. The 6th-edition text does not define `#-` or 0x40, so this follows SRM (see [verification.md](verification.md#spec-sources-and-discovery)). `tests/stream-variants-test.rkt` patches nano into a `#-`/0x40 image and a `#!` variant. Both run, and their dumps match the `#~` dump and SRM. The patcher handles PE32 images only; PE32+ is not covered.
-2. Done: `tests/lib/metadata-dump.rkt` decodes MethodSpec rows, and the SRM oracle dumps them. mscorlib's 656 MethodSpec rows match SRM exactly. mscorlib is still compared by public type count, because the decoder does not yet cover TypeSpec, CustomAttribute, and other tables. That gap belongs to item 3.
-3. V7 reader corpus test over the .NET 4.7.1 reference assemblies and `System.Private.CoreLib`, diffed against SRM.
+2. Done: `tests/lib/metadata-dump.rkt` decodes MethodSpec rows, and the SRM oracle dumps them. mscorlib's 656 MethodSpec rows match SRM exactly. Item 3 completed the decoder for all II.22 tables.
+3. Done: V7 reader corpus test over the .NET 4.7.1 reference assemblies and `System.Private.CoreLib`, diffed against SRM. 133 of 133 assemblies match.
 4. P2 (R1, R2): `rangi/private/binary.rkt` and `rangi/cli/schema.rkt`. The reader and writer still hand-copy their layouts. Boundary values `0x3FFF` and `0x4000` for compressed integers have no unit test yet.
-5. V5 L2 layout map, landing with R3.
+5. Done: V5 L2 layout map, landed with R3.
 6. V6 ilasm differential fixtures. Start with the `ldstr` hello world: it needs `#US` content, which the writer does not produce yet.
 7. Writer gaps: follow the "Suggested order" in [cli-coverage.md](cli-coverage.md).
-8. The ILVerify oracle (L6) is not implemented. `tests/oracles/ilverify` does not exist.
+8. Done: the ILVerify oracle (L6) is in `tests/oracles/ilverify`, checked by `tests/oracles/ilverify-test.rkt`.
 ## Handoff
 
 * Item 1 is done. The `#-` and `#!` checks come from patched nano images (`tests/lib/patch-image.rkt`), not a unit test of the reader alone. The 0x40 field is read and discarded, as in SRM, and the stream-name rule cites SRM's `default: continue`.
-* Item 3 needs TypeSpec, CustomAttribute, and GenericParam decoding in `tests/lib/metadata-dump.rkt` before mscorlib can be compared fully.
+* Item 3 is done. `tests/lib/metadata-dump.rkt` decodes all II.22 tables, and the corpus diff runs against SRM.
 
 ## P0 checklist
 
