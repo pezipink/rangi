@@ -5,19 +5,37 @@
 (require racket/string file/sha1 "../../src/cli-reader.rkt")
 (provide metadata-dump layouts coded-specs column-size le)
 
-; tables dumped, in table-id order
-(define dumped-tables '(module typeref typedef methoddef memberref assembly assemblyref methodspec))
-; tables read only for their row counts, which bound the lists in typedef and methoddef rows
-(define count-only-tables '(field param))
+; tables dumped, in table-id order. Every table defined by ECMA-335 II.22 except the
+; pointer and edit-and-continue tables, which check-supported rejects when they hold rows.
+(define dumped-tables
+  '(module typeref typedef field methoddef param interfaceimpl memberref constant customattribute
+    fieldmarshal declsecurity classlayout fieldlayout standalonesig eventmap event propertymap
+    property methodsemantics methodimpl moduleref typespec implmap fieldrva assembly assemblyref
+    file exportedtype manifestresource nestedclass genericparam methodspec genericparamconstraint))
 
 (define table-ids
   (hash 'module #x00 'typeref #x01 'typedef #x02 'field #x04 'methoddef #x06 'param #x08
-        'memberref #x0A 'moduleref #x1A 'typespec #x1B 'assembly #x20 'assemblyref #x23))
+        'interfaceimpl #x09 'memberref #x0A 'constant #x0B 'customattribute #x0C
+        'fieldmarshal #x0D 'declsecurity #x0E 'classlayout #x0F 'fieldlayout #x10
+        'standalonesig #x11 'eventmap #x12 'event #x14 'propertymap #x15 'property #x17
+        'methodsemantics #x18 'methodimpl #x19 'moduleref #x1A 'typespec #x1B 'implmap #x1C
+        'fieldrva #x1D 'assembly #x20 'assemblyref #x23 'file #x26 'exportedtype #x27
+        'manifestresource #x28 'nestedclass #x29 'genericparam #x2A 'methodspec #x2B
+        'genericparamconstraint #x2C))
 
 (define table-titles
-  (hash 'module "Module" 'typeref "TypeRef" 'typedef "TypeDef" 'methoddef "MethodDef"
-        'memberref "MemberRef" 'assembly "Assembly" 'assemblyref "AssemblyRef"
-        'methodspec "MethodSpec"))
+  (hash 'module "Module" 'typeref "TypeRef" 'typedef "TypeDef" 'field "Field"
+        'methoddef "MethodDef" 'param "Param" 'interfaceimpl "InterfaceImpl"
+        'memberref "MemberRef" 'constant "Constant" 'customattribute "CustomAttribute"
+        'fieldmarshal "FieldMarshal" 'declsecurity "DeclSecurity" 'classlayout "ClassLayout"
+        'fieldlayout "FieldLayout" 'standalonesig "StandAloneSig" 'eventmap "EventMap"
+        'event "Event" 'propertymap "PropertyMap" 'property "Property"
+        'methodsemantics "MethodSemantics" 'methodimpl "MethodImpl" 'moduleref "ModuleRef"
+        'typespec "TypeSpec" 'implmap "ImplMap" 'fieldrva "FieldRva" 'assembly "Assembly"
+        'assemblyref "AssemblyRef" 'file "File" 'exportedtype "ExportedType"
+        'manifestresource "ManifestResource" 'nestedclass "NestedClass"
+        'genericparam "GenericParam" 'methodspec "MethodSpec"
+        'genericparamconstraint "GenericParamConstraint"))
 
 ; column kinds: (u N) fixed little-endian integer, str and blob and guid heap indexes,
 ; (simple T) row index into table T, (coded K) coded index (II.24.2.6)
@@ -35,14 +53,59 @@
    'assemblyref '((major (u 2)) (minor (u 2)) (build (u 2)) (revision (u 2)) (flags (u 4))
                   (public-key-or-token blob) (name str) (culture str) (hash-value blob))
    ; II.22.29
-   'methodspec '((method (coded methoddeforref)) (instantiation blob))))
+   'methodspec '((method (coded methoddeforref)) (instantiation blob))
+   'field '((flags (u 2)) (name str) (signature blob))
+   'param '((flags (u 2)) (sequence (u 2)) (name str))
+   'interfaceimpl '((class (simple typedef)) (interface (coded typedeforref)))
+   'constant '((type (u 1)) (padding (u 1)) (parent (coded hasconstant)) (value blob))
+   'customattribute '((parent (coded hascustomattribute)) (type (coded customattributetype))
+                      (value blob))
+   'fieldmarshal '((parent (coded hasfieldmarshal)) (native-type blob))
+   'declsecurity '((action (u 2)) (parent (coded hasdeclsecurity)) (permission-set blob))
+   'classlayout '((packing (u 2)) (class-size (u 4)) (parent (simple typedef)))
+   'fieldlayout '((offset (u 4)) (field (simple field)))
+   'standalonesig '((signature blob))
+   'eventmap '((parent (simple typedef)) (event-list (simple event)))
+   'event '((flags (u 2)) (name str) (type (coded typedeforref)))
+   'propertymap '((parent (simple typedef)) (property-list (simple property)))
+   'property '((flags (u 2)) (name str) (type blob))
+   'methodsemantics '((semantics (u 2)) (method (simple methoddef))
+                      (association (coded hassemantics)))
+   'methodimpl '((class (simple typedef)) (body (coded methoddeforref))
+                 (declaration (coded methoddeforref)))
+   'moduleref '((name str))
+   'typespec '((signature blob))
+   'implmap '((flags (u 2)) (member-forwarded (coded memberforwarded)) (import-name str)
+              (import-scope (simple moduleref)))
+   'fieldrva '((rva (u 4)) (field (simple field)))
+   'file '((flags (u 4)) (name str) (hash-value blob))
+   'exportedtype '((flags (u 4)) (type-def-id (u 4)) (name str) (namespace str)
+                   (implementation (coded implementation)))
+   'manifestresource '((offset (u 4)) (flags (u 4)) (name str)
+                       (implementation (coded implementation)))
+   'nestedclass '((nested (simple typedef)) (enclosing (simple typedef)))
+   'genericparam '((number (u 2)) (flags (u 2)) (owner (coded typeormethoddef)) (name str))
+   'genericparamconstraint '((owner (simple genericparam)) (constraint (coded typedeforref)))))
 
-; coded index bit width and the tables its tag selects, in tag order
+; coded index bit width and the tables its tag selects, in tag order (II.24.2.6).
+; #f marks a tag with no table.
 (define coded-specs
   (hash 'typedeforref '(2 typedef typeref typespec)
         'resolutionscope '(2 module moduleref assemblyref typeref)
         'memberrefparent '(3 typedef typeref moduleref methoddef typespec)
-        'methoddeforref '(1 methoddef memberref)))
+        'methoddeforref '(1 methoddef memberref)
+        'hasconstant '(2 field param property)
+        'hascustomattribute
+        '(5 methoddef field typeref typedef param interfaceimpl memberref module declsecurity
+            property event standalonesig moduleref typespec assembly assemblyref file
+            exportedtype manifestresource genericparam genericparamconstraint methodspec)
+        'hasfieldmarshal '(1 field param)
+        'hasdeclsecurity '(2 typedef methoddef assembly)
+        'hassemantics '(1 event property)
+        'memberforwarded '(1 field methoddef)
+        'implementation '(2 file assemblyref exportedtype)
+        'typeormethoddef '(1 typedef methoddef)
+        'customattributetype '(3 #f #f methoddef memberref #f)))
 
 (define (le raw pos size)
   (for/fold ([acc 0]) ([i (in-range size)])
@@ -108,7 +171,8 @@
   (define row (arithmetic-shift v (- bits)))
   (cond
     [(zero? row) 0]
-    [(>= tag (length tags)) (error 'metadata-dump "invalid ~a tag ~a" kind tag)]
+    [(or (>= tag (length tags)) (not (list-ref tags tag)))
+     (error 'metadata-dump "invalid ~a tag ~a" kind tag)]
     [else (bitwise-ior (arithmetic-shift (hash-ref table-ids (list-ref tags tag)) 24) row)]))
 
 (define (read-value rdr kind raw pos)
@@ -198,7 +262,8 @@
             (string-append "Name=" (quoted (ref 'name)))
             (string-append "Signature=" (bytes->hex-string (ref 'signature)))
             (string-append "Params=" (list-text rows i 'param-list (row-count rdr 'param))))
-      (if (zero? (ref 'rva))
+      ;; II.23.1.10: CodeTypeMask 0x3 == 0 is CIL; native or runtime bodies have no IL to dump.
+      (if (or (zero? (ref 'rva)) (not (zero? (bitwise-and (ref 'impl-flags) #x3))))
           '()
           (list (string-append "Il=" (bytes->hex-string (il-code rdr (ref 'rva)))))))]
     [(memberref)
@@ -221,7 +286,103 @@
            (string-append "PublicKeyOrToken=" (bytes->hex-string (ref 'public-key-or-token)))
            (string-append "Name=" (quoted (ref 'name)))
            (string-append "Culture=" (quoted (ref 'culture)))
-           (string-append "HashValue=" (bytes->hex-string (ref 'hash-value))))]))
+           (string-append "HashValue=" (bytes->hex-string (ref 'hash-value))))]
+    [(field)
+     (list (format "Flags=~a" (ref 'flags))
+           (string-append "Name=" (quoted (ref 'name)))
+           (string-append "Signature=" (bytes->hex-string (ref 'signature))))]
+    [(param)
+     (list (format "Flags=~a" (ref 'flags))
+           (format "Sequence=~a" (ref 'sequence))
+           (string-append "Name=" (quoted (ref 'name))))]
+    [(interfaceimpl)
+     (list (format "Class=~a" (ref 'class))
+           (string-append "Interface=" (token-text (ref 'interface))))]
+    [(constant)
+     (list (format "Type=~a" (ref 'type))
+           (string-append "Parent=" (token-text (ref 'parent)))
+           (string-append "Value=" (bytes->hex-string (ref 'value))))]
+    [(customattribute)
+     (list (string-append "Parent=" (token-text (ref 'parent)))
+           (string-append "Type=" (token-text (ref 'type)))
+           (string-append "Value=" (bytes->hex-string (ref 'value))))]
+    [(fieldmarshal)
+     (list (string-append "Parent=" (token-text (ref 'parent)))
+           (string-append "NativeType=" (bytes->hex-string (ref 'native-type))))]
+    [(declsecurity)
+     (list (format "Action=~a" (ref 'action))
+           (string-append "Parent=" (token-text (ref 'parent)))
+           (string-append "PermissionSet=" (bytes->hex-string (ref 'permission-set))))]
+    [(classlayout)
+     (list (format "PackingSize=~a" (ref 'packing))
+           (format "ClassSize=~a" (ref 'class-size))
+           (format "Parent=~a" (ref 'parent)))]
+    [(fieldlayout)
+     (list (format "Offset=~a" (ref 'offset))
+           (format "Field=~a" (ref 'field)))]
+    [(standalonesig)
+     (list (string-append "Signature=" (bytes->hex-string (ref 'signature))))]
+    [(eventmap)
+     (list (format "Parent=~a" (ref 'parent))
+           (string-append "Events=" (list-text rows i 'event-list (row-count rdr 'event))))]
+    [(event)
+     (list (format "Flags=~a" (ref 'flags))
+           (string-append "Name=" (quoted (ref 'name)))
+           (string-append "Type=" (token-text (ref 'type))))]
+    [(propertymap)
+     (list (format "Parent=~a" (ref 'parent))
+           (string-append "Properties=" (list-text rows i 'property-list
+                                                   (row-count rdr 'property))))]
+    [(property)
+     (list (format "Flags=~a" (ref 'flags))
+           (string-append "Name=" (quoted (ref 'name)))
+           (string-append "Type=" (bytes->hex-string (ref 'type))))]
+    [(methodsemantics)
+     (list (format "Semantics=~a" (ref 'semantics))
+           (format "Method=~a" (ref 'method))
+           (string-append "Association=" (token-text (ref 'association))))]
+    [(methodimpl)
+     (list (format "Class=~a" (ref 'class))
+           (string-append "Body=" (token-text (ref 'body)))
+           (string-append "Declaration=" (token-text (ref 'declaration))))]
+    [(moduleref)
+     (list (string-append "Name=" (quoted (ref 'name))))]
+    [(typespec)
+     (list (string-append "Signature=" (bytes->hex-string (ref 'signature))))]
+    [(implmap)
+     (list (format "Flags=~a" (ref 'flags))
+           (string-append "MemberForwarded=" (token-text (ref 'member-forwarded)))
+           (string-append "ImportName=" (quoted (ref 'import-name)))
+           (format "ImportScope=~a" (ref 'import-scope)))]
+    [(fieldrva)
+     (list (format "Rva=~a" (ref 'rva))
+           (format "Field=~a" (ref 'field)))]
+    [(file)
+     (list (format "Flags=~a" (ref 'flags))
+           (string-append "Name=" (quoted (ref 'name)))
+           (string-append "HashValue=" (bytes->hex-string (ref 'hash-value))))]
+    [(exportedtype)
+     (list (format "Flags=~a" (ref 'flags))
+           (format "TypeDefId=~a" (ref 'type-def-id))
+           (string-append "Name=" (quoted (ref 'name)))
+           (string-append "Namespace=" (quoted (ref 'namespace)))
+           (string-append "Implementation=" (token-text (ref 'implementation))))]
+    [(manifestresource)
+     (list (format "Offset=~a" (ref 'offset))
+           (format "Flags=~a" (ref 'flags))
+           (string-append "Name=" (quoted (ref 'name)))
+           (string-append "Implementation=" (token-text (ref 'implementation))))]
+    [(nestedclass)
+     (list (format "Nested=~a" (ref 'nested))
+           (format "Enclosing=~a" (ref 'enclosing)))]
+    [(genericparam)
+     (list (format "Number=~a" (ref 'number))
+           (format "Flags=~a" (ref 'flags))
+           (string-append "Owner=" (token-text (ref 'owner)))
+           (string-append "Name=" (quoted (ref 'name))))]
+    [(genericparamconstraint)
+     (list (format "Owner=~a" (ref 'owner))
+           (string-append "Constraint=" (token-text (ref 'constraint))))]))
 
 (define (render-table rdr name)
   (define rows (read-rows rdr name))
@@ -233,8 +394,7 @@
 (define (check-supported rdr)
   (for ([(name td) (in-hash (asm-reader-table-attributes rdr))])
     (when (and (> (table-data-row-count td) 0)
-               (not (memq name dumped-tables))
-               (not (memq name count-only-tables)))
+               (not (memq name dumped-tables)))
       (error 'metadata-dump "table ~a is not supported" name))))
 
 ; returns the dump with LF line endings and a trailing newline
