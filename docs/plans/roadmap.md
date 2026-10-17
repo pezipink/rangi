@@ -26,7 +26,7 @@ P4 and P5 can interleave once P3 lands. P6 can start any time after P2, because 
 
 ## Status
 
-Last updated after the A1, B, and D merges (October 17, 2026). `raco test tests/` passes (726 tests). Start here, then read [AGENTS.md](../../AGENTS.md) and [architecture.md](../architecture.md).
+Last updated after the A2, B+ (O5 tests), and C (heaps) merges (October 17, 2026). `raco test tests/` passes (865 tests). Start here, then read [AGENTS.md](../../AGENTS.md) and [architecture.md](../architecture.md).
 
 Done:
 
@@ -43,7 +43,7 @@ Open items, in order:
 1. Done: the reader accepts the `#-` uncompressed stream and the HeapSizes extra-data bit (0x40), and skips unknown streams such as `#!`. The 6th-edition text does not define `#-` or 0x40, so this follows SRM (see [verification.md](verification.md#spec-sources-and-discovery)). `tests/stream-variants-test.rkt` patches nano into a `#-`/0x40 image and a `#!` variant. Both run, and their dumps match the `#~` dump and SRM. The patcher handles PE32 images only; PE32+ is not covered.
 2. Done: `tests/lib/metadata-dump.rkt` decodes MethodSpec rows, and the SRM oracle dumps them. mscorlib's 656 MethodSpec rows match SRM exactly. Item 3 completed the decoder for all II.22 tables.
 3. Done: V7 reader corpus test over the .NET 4.7.1 reference assemblies and `System.Private.CoreLib`, diffed against SRM. 133 of 133 assemblies match.
-4. Partly done: P2 (R1 done, R2 open). `src/private/binary.rkt` holds the little-endian, compressed-integer, alignment, and pad-to helpers, and the reader and writer use them (A1). Boundary values `0x7F`, `0x80`, `0x3FFF`, `0x4000`, and `0x1FFFFFFF` are covered by `tests/binary-test.rkt`. Signed compressed integers are open. `src/cli/schema.rkt` does not exist yet. The reader still has its own `case` blocks for row sizes, and the writer still has its `tbl` list.
+4. Done: P2 R1 and R2 (A1 and A2 merged). `src/private/binary.rkt` holds the little-endian, compressed-integer, alignment, and pad-to helpers. `src/cli/schema.rkt` is the single source of table and coded-index layouts, and the reader and writer both use it. Signed compressed integers are still open; nothing calls them. `src/cli/heaps.rkt` is merged (C), but the writer does not use it yet.
 5. Done: V5 L2 layout map, landed with R3.
 6. Not started: V6 ilasm differential fixtures. Start with the `ldstr` hello world, which needs `#US` content that the writer does not produce yet (R4 heaps).
 7. Writer gaps: follow the "Suggested order" in [cli-coverage.md](cli-coverage.md).
@@ -55,9 +55,9 @@ Open items, in order:
 |-------|--------|--------------|
 | P0 | Done | None |
 | P1 | Done | None |
-| P2 | Started | R1 done (A1 merged). R2 open: `schema.rkt`, and porting the reader and writer onto it |
-| P3 | Partly done | R3 and V5 are done. R4 (CLI emits chunks) and R5 (front-end split) are not started, and P3's outcome needs both. Close P3 after them. |
-| P4 | Started | O1, O2, and O3 done (B merged). O4 and O5 open. O4 method bodies depend on R4. |
+| P2 | Done | R1 and R2 merged. Signed compressed integers are deferred until a caller needs them |
+| P3 | Partly done | R3 and V5 are done. R4 heaps (C) are merged; R4 tables, metadata, header, and body chunks are not started. R5 (front-end split) is not started. Close P3 after them. |
+| P4 | Started | O1, O2, and O3 done (B merged). O5 unit and relaxation tests merged. O4 and the rest of O5 are open. O4 method bodies depend on R4. |
 | P5 | Not started | Depends on R4 and R5 |
 | P6 | Mostly done | V7 corpus diff matches SRM on 133 of 133 assemblies. The benchmark and memory-mapping items in R6 are open. |
 
@@ -66,8 +66,9 @@ Open items, in order:
 The critical path is P2, then R4, then R5, then closing P3, then P4 integration. Each step keeps `raco test tests/` green.
 
 1. Done: P2, part A1 (R1). Helpers live in `src/private/binary.rkt`, and the reader and writer use them. Signed compressed integers are still open. Merged from `stream/a1`.
-2. P2, part A2 (R2, now the next step in stream A). Create `src/cli/schema.rkt` as the single source of table and coded-index layouts, and fold in the writer's `tbl` list. Derive row sizes from it and delete the two hand-written `case` blocks. Port the reader onto it. Gate: the L4 hash of nano is unchanged, the corpus test still matches SRM, and the lint passes.
-3. R4 (CLI emits chunks). Heaps, then tables, then the metadata root, the CLI header, and method-body chunks. Remove the writer literals in [architecture.md](../architecture.md#writer).
+2. Done: P2, part A2 (R2), merged from `stream/a2`. The reader stays at `src/cli-reader.rkt` and the writer at `src/cli-writer.rkt`; the move happens in R5.
+3. R4 (CLI emits chunks), remaining parts. Heaps are merged. Next are tables (typed constructors, sorting, remap), the metadata root, the CLI header, and method-body chunks, all in the writer. Remove the writer literals in [architecture.md](../architecture.md#writer).
+3. R4 (CLI emits chunks), remaining parts. Heaps are merged. Next are tables (typed constructors, sorting, remap), the metadata root, the CLI header, and method-body chunks, all in the writer. Remove the writer literals in [architecture.md](../architecture.md#writer).
 4. R5 (front-end split). Move `parse-il` to `ilasm/syntax.rkt` and add `image.rkt`. This is when the writer's compatibility shims go.
 5. Close P3 once R4 and R5 are in and the layout snapshots have been reviewed by a person.
 6. P4 (O2 to O5). Operand encoders, labels, and relaxation go in as pure modules and are wired to the writer at O4.
