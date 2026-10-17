@@ -2,6 +2,7 @@
 (require racket/string)
 (require racket/port)
 (require "pe/read.rkt")
+(require "private/binary.rkt")
 ; read-only accessors for tests that decode table rows. row decoding stays out of the reader,
 ; so the lazy path used by the macro expander is unchanged.
 (provide read-file get-public-typedefs read-assembly-meta
@@ -18,43 +19,6 @@
 
 (define (bits-not-set? mask int)
   (equal? (bitwise-and mask int) 0))
-
-; unsigned little-endian conversion
-(define (to-int bytes) (integer-bytes->integer bytes #f #f))
-
-; unsigned big-endian conversion
-(define (to-int-be bytes) (integer-bytes->integer bytes #f #t))
-
-; default little-endian unsigned for most binary data
-(define (read-int size port) (to-int (read-bytes size port)))
-
-
-(define (cli-decompress-unsigned port)
-  ;to decompress we acccept a port that starts with
-  ;the big-endian bytes. note that they are written inside
-  ;the PE file big-endian so we can tell with the first byte,
-  ;how many bytes there are.
-  ;unlike everything else in a PE which is little-endian
-  (define first (read-byte port))  
-  (cond
-    [(equal? (bitwise-and first #xC0) #xC0)         
-     (let ([second (read-byte port)]
-           [third (read-byte port)]
-           [fourth (read-byte port)])       
-       (bitwise-ior
-        (arithmetic-shift (bitwise-and #x3F first) 24)
-        (arithmetic-shift second 16)
-        (arithmetic-shift third 8)
-        fourth))]
-    
-    [(equal? (bitwise-and first #x80) #x80)
-     (let ([second (read-byte port)])
-           (bitwise-ior
-            (arithmetic-shift (bitwise-and #x7F first) 8)
-            second))]
-    
-    [else first]))
-
 
 (struct table-data
   ([type]
@@ -182,8 +146,8 @@
 
 (define (parse-cli-stream-header port)
   ; offset to start of stream from metadata root
-  (define offset (read-int 4 port))
-  (define size (read-int 4 port))
+  (define offset (read-u32-le port))
+  (define size (read-u32-le port))
   (define name-start (file-position port))
   ;the name does not have its size specified, we must
   ;read a null-terminated string. max 32.
@@ -240,7 +204,7 @@
   ; bit vector for heap sizes.
   ; these flags determine the size of the indexes that
   ; appear in all metadata tables 
-  (define heap-sizes (to-int (read-bytes 1 port)))
+  (define heap-sizes (read-u8-le port))
   
   (define string-size (if (bits-set? 1 heap-sizes) 4 2))
   (set-asm-reader-string-index-size! rdr string-size)
@@ -254,7 +218,7 @@
   (define reserved2 (read-bytes 1 port))
   ; bit vector of present tables
   (define valid (read-bytes 8 port))
-  (define valid-int (to-int valid))
+  (define valid-int (bytes->uint-le valid))
   ; bit vector of sorted tables (not sure about this? the spec doesn't describe it?)
   (define sorted (read-bytes 8 port))
 
@@ -322,7 +286,7 @@
                        [(#x25) 'assemblyrefos]
                        [else (error 'read-file "unknown cli metadata table 0x~x" i)]
                        )])
-                (values count1 (cons (table-data type (read-int 4 port) count) tables)))
+                (values count1 (cons (table-data type (read-u32-le port) count) tables)))
                     
               (values count tables))))])
       (values count (reverse tables))))
@@ -484,7 +448,7 @@
      (valid ,@valid)
      (valid-int ,@valid-int)
      (sorted ,@sorted)
-     (sorted-int ,@(to-int sorted))
+     (sorted-int ,@(bytes->uint-le sorted))
      (table-count ,@table-count)
      (tables ,@table-order)
      (tablemet ,@tables)
@@ -520,12 +484,12 @@
   (define reserved (read-bytes 4 port))
   ; version string is padded to a multiple of four
   (define length (read-bytes 4 port))
-  (define version (read-bytes (to-int length) port))
+  (define version (read-bytes (bytes->uint-le length) port))
   (define flags (read-bytes 2 port)) ;always 0
   (define num-streams (read-bytes 2 port))
   ;now follows num-streams array of StreamHeader structs
   (define headers 
-    (for*/hash ([i (in-range (to-int num-streams))]
+    (for*/hash ([i (in-range (bytes->uint-le num-streams))]
                 [header (in-value (parse-cli-stream-header port))]
                 [key (in-value (cli-stream-key (bytes->string/latin-1 (hash-ref header 'name))))]
                 #:when key)
@@ -637,12 +601,12 @@
 ;;    (writeln (format "import table : ~x" (calc-file-pos (to-int (hash-ref (hash-ref hash 'pe-opt) 'import-table-rva)))))
    ;cli header
    (define cli-header
-     (begin (file-position port (rva->file-offset pe-headers (to-int (hash-ref (hash-ref pe-headers 'pe-opt) 'cli-header-table-rva))))
+     (begin (file-position port (rva->file-offset pe-headers (bytes->uint-le (hash-ref (hash-ref pe-headers 'pe-opt) 'cli-header-table-rva))))
             (read-spec cli-header-spec port)))
 
 ;;    (writeln (format "cli metadata : ~x" (calc-file-pos (to-int (hash-ref cli-header 'metadata-rva)))))
    ;now onto the cli metadata itself
-   (define md-root (rva->file-offset pe-headers (to-int (hash-ref cli-header 'metadata-rva))))
+   (define md-root (rva->file-offset pe-headers (bytes->uint-le (hash-ref cli-header 'metadata-rva))))
    (set-asm-reader-metadata-root! rdr md-root)
    (define cli-meta
      (parse-cli-metadata md-root rdr port))
@@ -662,15 +626,15 @@
 (define (parse-assembly-row rdr port)
   (define ss (asm-reader-string-index-size rdr))
   (define bs (asm-reader-blob-index-size rdr))
-  (define hash-alg (read-int 4 port))
-  (define major (read-int 2 port))
-  (define minor (read-int 2 port))
-  (define build (read-int 2 port))
-  (define revision (read-int 2 port))
-  (define flags (read-int 4 port))
-  (define public-key-index (read-int bs port))
-  (define name-index (read-int ss port))
-  (define culture-index (read-int ss port))
+  (define hash-alg (read-u32-le port))
+  (define major (read-u16-le port))
+  (define minor (read-u16-le port))
+  (define build (read-u16-le port))
+  (define revision (read-u16-le port))
+  (define flags (read-u32-le port))
+  (define public-key-index (read-uint-le bs port))
+  (define name-index (read-uint-le ss port))
+  (define culture-index (read-uint-le ss port))
 
   ((asm-reader-get-string rdr) name-index)
   ;#t
@@ -700,8 +664,8 @@
           (let* ([name (+ index 4)]
                 [ns (+ name ss)]
                 [acc (cons
-                      (cons (to-int (subbytes raw name (+ name ss)))
-                            (to-int (subbytes raw ns (+ ns ss))))
+                      (cons (bytes->uint-le (subbytes raw name (+ name ss)))
+                            (bytes->uint-le (subbytes raw ns (+ ns ss))))
                       acc)])
             (aux acc (+ index size) (+ row-count 1))))]
       [else

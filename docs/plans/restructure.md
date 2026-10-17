@@ -14,11 +14,11 @@ Each step ends with `raco test tests/` green. R1 and R2 must not change any emit
 
 ### R1 Shared binary utilities
 
-Status: `src/private/binary.rkt` exists with `le`, `align`, and `pad-to`. R3 extracted these, and the PE layer and the writer use them. The writer's `write-le-*` helpers are gone. The reader still has its own `to-int`, `read-int`, and `cli-decompress-unsigned`, and the writer still has its own `compressed`. The items below are open until those are replaced.
+Status: `src/private/binary.rkt` is the shared source for the little-endian, alignment, and compressed-integer helpers. The reader, writer, and PE layer use it, and `tests/binary-test.rkt` covers the boundaries. The signed compressed helpers (`compress-signed`, `decompress-signed`) are not implemented yet, because the II.23.2 signed encoding has not been verified against the spec and nothing calls them.
 
-* [ ] Create `rangi/private/binary.rkt` with `write-u8/u16/u32/u64-le`, `read-u*-le`, `align-up`, `pad-to`, `compress-unsigned`, `compress-signed`, `decompress-unsigned`, `decompress-signed`.
-* [ ] Replace `write-le-*`, `to-int`, `read-int`, `compressed` (writer), and `cli-decompress-unsigned` (reader) with the shared versions.
-* [x] Fix the 2-byte compressed-integer limit (II.23.2, must be `#x3FFF`). The old `cli-compress-unsigned` is gone. The writer's `compressed` and the reader's `cli-decompress-unsigned` both use the correct bound. No boundary unit test exists yet.
+* [x] Create `rangi/private/binary.rkt` with `write-u8/u16/u32/u64-le`, `read-u*-le`, `align-up`, `pad-to`, `compress-unsigned`, and `decompress-unsigned`. (`compress-signed` and `decompress-signed` are deferred; see status above.)
+* [x] Replace `write-le-*`, `to-int`, `read-int`, `compressed` (writer), and `cli-decompress-unsigned` (reader) with the shared versions.
+* [x] Fix the 2-byte compressed-integer limit (II.23.2, must be `#x3FFF`). The old `cli-compress-unsigned` is gone. The writer's `compressed` and the reader's `cli-decompress-unsigned` both use the correct bound. `tests/binary-test.rkt` checks the 0x7F/0x80, 0x3FFF/0x4000, and 0x1FFFFFFF boundaries.
 
 ### R2 One metadata schema
 
