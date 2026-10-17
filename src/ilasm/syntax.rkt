@@ -8,6 +8,7 @@
          tyvar-ref
          (struct-out module-model)
          (struct-out class-decl)
+         (struct-out field-decl)
          (struct-out method-decl)
          (struct-out generic-param)
          (struct-out locals-decl)
@@ -17,7 +18,9 @@
 ; The front end's output. It holds names and instructions as written, with no tokens,
 ; heap indexes, or flag bits. cli/lower.rkt resolves those.
 (struct module-model (asm-refs classes module-name format))
-(struct class-decl (flags name gparams methods))
+(struct class-decl (flags name gparams methods fields))
+; A field (II.22.15). flags are FieldAttributes keywords; type is a type form (II.22.15).
+(struct field-decl (flags type name) #:transparent)
 ; handlers: list of eh-clause in source order. maxstack is #f when there is no .maxstack.
 (struct method-decl (flags ret name gparams params code maxstack entry? locals handlers))
 ; exception clause (II.25.4.6): kind is catch, finally, fault or filter. class is (asm ty) for a
@@ -185,6 +188,15 @@
   (method-decl prefix ret name gparams params code maxstack entry?
                (parse-locals name raw-locals ncls nmth) handlers))
 
+; (.field (flags ...) type name). Field types may use the class's type variables !N (II.23.2.12).
+(define (parse-field class-name node ncls)
+  (match node
+    [(list '.field (? list? flags) type (? symbol? name))
+     (check-type name type ncls 0)
+     (when (eq? type 'void) (error 'rangi "field ~a.~a cannot be void" class-name name))
+     (field-decl flags type name)]
+    [_ (error 'rangi "malformed .field in ~a: ~s" class-name node)]))
+
 (define (parse-il program)
   (define asm-refs '())
   (define asm-def? #f)
@@ -239,8 +251,15 @@
       (match-define (list flags name tp body) cls)
       (define gparams (parse-typarams name tp (typarams-count tp) 0))
       (define ncls (length gparams))
-      (class-decl flags name gparams
-                  (for/list ([node (in-list body)]) (parse-method name node ncls)))))
+      (define fields
+        (for/list ([node (in-list body)] #:when (and (pair? node) (eq? (car node) '.field)))
+          (parse-field name node ncls)))
+      (define methods
+        (for/list ([node (in-list body)] #:unless (and (pair? node) (eq? (car node) '.field)))
+          (parse-method name node ncls)))
+      (when (check-duplicates (map field-decl-name fields))
+        (error 'rangi "duplicate field ~a in ~a" (check-duplicates (map field-decl-name fields)) name))
+      (class-decl flags name gparams methods fields)))
 
   (define entries
     (for*/list ([c (in-list classes)] [m (in-list (class-decl-methods c))] #:when (method-decl-entry? m))

@@ -14,9 +14,9 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 |------|------------------------|---------|---------|----------------------------------------------------------|---------|
 | 0x00 | Module                 | partial | partial | MVID is a content hash; generation and EnC ids fixed     |         |
 | 0x01 | TypeRef                | partial | partial | ResolutionScope is the referenced AssemblyRef            |         |
-| 0x02 | TypeDef                | partial | partial | Flags from keywords; FieldList hardcoded to 1 (no fields) |         |
+| 0x02 | TypeDef                | partial | partial | Flags from keywords; FieldList from each class's field run |         |
 | 0x03 | FieldPtr               | partial | n/a     | Count only                                               |         |
-| 0x04 | Field                  | none    | none    |                                                          |         |
+| 0x04 | Field                  | partial | partial | Same-module fields from `.field` keywords and FieldSig; `ldsfld`/`stsfld` checked for static-ness and type. Instance fields have no positive fixture yet | static-fields |
 | 0x05 | MethodPtr              | partial | n/a     | Count only                                               |         |
 | 0x06 | MethodDef              | partial | partial | Flags from keywords; ImplFlags 0; ParamList hardcoded to 1; same-module `call` targets (`(call ret (Class) name (params))`, static only; forward calls and recursion) | calls-multi |
 | 0x07 | ParamPtr               | partial | n/a     | Count only                                               |         |
@@ -118,7 +118,8 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Multiple classes with namespaces                           | none    |         |
 | `extends` (`System.Object`, `System.ValueType`, `System.Enum`) | none |         |
 | Static methods, same-module calls (forward and recursive), parameters | done | calls-multi |
-| Instance and static fields, `.ctor`, `.cctor`              | none    |         |
+| Static fields (same module)                                | done    | `static-fields` |
+| Instance fields, `.ctor`, `.cctor`                         | none    |         |
 | Instance methods, `newobj`, virtual dispatch, `.override`  | none    |         |
 | Interfaces and implementation                              | none    |         |
 | Nested types                                               | none    |         |
@@ -154,7 +155,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 
 ## Suggested order
 
-1. Fields, `.ctor`, instance methods, and `newobj` are next. Locals, fat bodies, branching, catch, finally, fault, and filter EH are done. The `ldstr` hello world and `switch` fixtures are done.
+1. Static fields are done (`static-fields`). Instance fields, `.ctor`, instance methods, and `newobj` are next. Locals, fat bodies, branching, catch, finally, fault, and filter EH are done. The `ldstr` hello world and `switch` fixtures are done.
 3. Multiple types with namespaces, extends, interfaces, nested types.
 4. Value types, enums, static data. Single-dimension arrays are done (`arrays-sum`); multi-dimensional arrays are not.
 5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam are done. GenericParamConstraint and generic types are not.

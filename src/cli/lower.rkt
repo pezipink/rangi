@@ -5,7 +5,8 @@
          "../private/binary.rkt"
          "heaps.rkt"
          (only-in "sigs.rkt" encode-localvar-sig encode-method-sig encode-method-instantiation
-                  encode-typespec encode-type primitive-names)
+                  encode-typespec encode-type encode-field-sig primitive-names)
+         (only-in "flags.rkt" field-attributes-flags)
          (only-in "../il/encode.rkt" find-opcode opcode-named)
          (only-in "../il/opcodes.rkt" opcode-operand opcode-type)
          (only-in racket/string string-prefix?)
@@ -16,6 +17,7 @@
 (provide lower-module
          (struct-out cli-program)
          (struct-out tdef)
+         (struct-out fdef)
          (struct-out mdef))
 
 ; The CLI-level program: flags are bits, signatures and bodies are bytes, and
@@ -25,13 +27,17 @@
 ; is (cons 'methoddef|'memberref rid); a genericparam owner is (cons 'methoddef rid).
 (struct cli-program (asm-refs typerefs memberrefs typespecs methodspecs genericparams
                      typedefs module-name entry-rid format standalone-sigs us-heap))
-(struct tdef (flags name ns extends methods))
+; fields are the TypeDef's Field rows, in row order (II.22.15).
+(struct tdef (flags name ns extends methods fields))
 (struct mdef (name flags sig body entry?))
+; A Field row (II.22.15): flags are FieldAttributes bits, sig is a FieldSig blob.
+(struct fdef (name flags sig))
 
 ; class-rids maps a module class name to its TypeDef rid. method-rids maps
 ; (list class name ret params), as written in the source, to (cons MethodDef-rid arity).
+; field-rids maps (cons class name) to (vector Field-rid type static?) for fields of this module.
 (struct ctx (asm-refs typerefs memberrefs typespecs methodspecs standalone-sigs us-heap
-             class-rids method-rids))
+             class-rids method-rids field-rids))
 
 ; insertion-ordered interner: rids are 1-based and follow first-seen order
 (struct interner (table [rows #:mutable]))
@@ -204,6 +210,21 @@
   (define sig (bytes-append (bytes #x06) (encode-type (lower-type cx '(0 . 0) type))))
   (token #x0A000000 (member-ref! cx parent name sig)))
 
+; Field token for a field declared in this module (II.22.15): a Field table row. The static
+; instructions need a static field, and the field and instance instructions need an instance one.
+(define (module-field-token cx cls name type op)
+  (define hit (hash-ref (ctx-field-rids cx) (cons cls name)
+                        (λ () (error 'rangi "no field ~a in ~a" name cls))))
+  (define declared (vector-ref hit 1))
+  (define static? (vector-ref hit 2))
+  (unless (equal? declared type)
+    (error 'rangi "field ~a.~a has type ~s, not ~s" cls name declared type))
+  (when (and (memq op '(ldsfld stsfld)) (not static?))
+    (error 'rangi "~a.~a is an instance field; ~a needs a static field" cls name op))
+  (when (and (memq op '(ldfld stfld)) static?)
+    (error 'rangi "~a.~a is a static field; ~a needs an instance field" cls name op))
+  (token #x04000000 (vector-ref hit 0)))
+
 (define (string-token cx s)
   (unless (string? s) (error 'rangi "ldstr operand must be a string, got ~s" s))
   (bitwise-ior #x70000000 (heap-add! (ctx-us-heap cx) s)))
@@ -214,7 +235,8 @@
   '(InlineNone ShortInlineI InlineI InlineI8 ShortInlineR InlineR
     ShortInlineVar InlineVar ShortInlineBrTarget InlineBrTarget InlineSwitch))
 
-(define token-instructions '(call callvirt newobj ldfld stfld ldstr newarr ldelem ldelema stelem))
+(define token-instructions
+  '(call callvirt newobj ldfld stfld ldsfld stsfld ldstr newarr ldelem ldelema stelem))
 
 ; Element types for newarr, ldelem, ldelema, and stelem. A primitive name maps to its
 ; mscorlib System type explicitly. Void, typedref, and array element types are rejected.
@@ -291,8 +313,10 @@
     [(list (and base (or 'ldloc 'stloc 'ldloca)) n) (var-item base n nlocals "locals")]
     [(list (or 'call 'callvirt) _ ...) (call-item cx scope node)]
     [(list 'newobj _ ...) (newobj-item cx scope node)]
-    [(list (and op (or 'ldfld 'stfld)) (list asm ty) (? symbol? name) type)
+    [(list (and op (or 'ldfld 'stfld 'ldsfld 'stsfld)) (list asm ty) (? symbol? name) type)
      (list op (field-token! cx asm ty name type))]
+    [(list (and op (or 'ldfld 'stfld 'ldsfld 'stsfld)) (? symbol? cls) (? symbol? name) type)
+     (list op (module-field-token cx cls name type op))]
     [(list 'ldstr s) (list 'ldstr (string-token cx s))]
     [(list (and op (or 'newarr 'ldelem 'ldelema 'stelem)) elem)
      (list op (element-type-token! cx elem))]
@@ -666,8 +690,14 @@
         (error 'rangi "duplicate method ~a in ~a" (method-decl-name md) (class-decl-name cls)))
       (hash-set! method-rids key (cons next (length (method-decl-gparams md))))
       (add1 next)))
+  (define field-rids (make-hash))
+  (for/fold ([next 1]) ([cls (in-list classes)])
+    (for/fold ([next next]) ([fd (in-list (class-decl-fields cls))])
+      (hash-set! field-rids (cons (class-decl-name cls) (field-decl-name fd))
+                 (vector next (field-decl-type fd) (and (memq 'static (field-decl-flags fd)) #t)))
+      (add1 next)))
   (define cx (ctx asm-refs typerefs memberrefs typespecs methodspecs standalone-sigs us-heap
-                  class-rids method-rids))
+                  class-rids method-rids field-rids))
   (define-values (tdefs gps)
     (for/fold ([tdefs '()] [gps '()] [next-rid 1]
                #:result (values (reverse tdefs) (append* (reverse gps))))
@@ -679,8 +709,13 @@
         (cond
           [(or (eq? name '<Module>) (memq 'interface flags)) #f]
           [else (intern! typerefs (list (mscorlib-rid asm-refs) "System" "Object"))]))
+      (define fdefs
+        (for/list ([fd (in-list (class-decl-fields cls))])
+          (fdef (symbol->string (field-decl-name fd))
+                (field-attributes-flags (field-decl-flags fd))
+                (encode-field-sig (lower-type cx '(0 . 0) (field-decl-type fd))))))
       (define-values (mdefs rows) (encode-methods cx name next-rid (class-decl-methods cls)))
-      (values (cons (tdef (typedef-flags flags) short ns extends mdefs) tdefs)
+      (values (cons (tdef (typedef-flags flags) short ns extends mdefs fdefs) tdefs)
               (cons rows gps)
               (+ next-rid (length mdefs)))))
   (define entry-rid
