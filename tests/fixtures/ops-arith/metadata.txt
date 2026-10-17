@@ -1,0 +1,16 @@
+Module rows=1
+  Module[1] Name="ops-arith.exe" Mvid=795a2277d44662d8b494894a1d878e51
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=2
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+MethodDef rows=1
+  MethodDef[1] Rva=8660 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1d1b58280100000a1d1b59280100000a1d1b5a280100000a1f111b5b280100000a1f111b5d280100000a1fef1b5b280100000a1fef1b5d280100000a1f0965280100000a1f0c1f0a5f280100000a1f0c1f0a60280100000a1f0c1f0a61280100000a1666280100000a191a62280100000a1ff01863280100000a1ff01864280100000a1b1bfe01280100000a1b1cfe02280100000a1b1cfe04280100000a1517fe03280100000a1517fe05280100000a2a
+MemberRef rows=1
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

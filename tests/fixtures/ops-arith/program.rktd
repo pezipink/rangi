@@ -1,0 +1,33 @@
+(
+  (.assembly extern "C:/Program Files (x86)/Reference Assemblies/Microsoft/Framework/.NETFramework/v4.7.1/mscorlib.dll" {})
+  (.assembly donothing {})
+  (.module ops-arith.exe)
+  (.class (private auto ansi) <Module>
+    [
+     (.method
+      (public static) void main () (cil managed)
+      {
+       (.entrypoint)
+       (ldc.i4 7) (ldc.i4 5) add (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 7) (ldc.i4 5) sub (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 7) (ldc.i4 5) mul (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 17) (ldc.i4 5) div (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 17) (ldc.i4 5) rem (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 -17) (ldc.i4 5) div (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 -17) (ldc.i4 5) rem (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 9) neg (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 12) (ldc.i4 10) and (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 12) (ldc.i4 10) or (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 12) (ldc.i4 10) xor (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4.0) not (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 3) (ldc.i4 4) shl (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 -16) (ldc.i4 2) shr (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 -16) (ldc.i4 2) shr.un (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 5) (ldc.i4 5) ceq (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 5) (ldc.i4 6) cgt (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4 5) (ldc.i4 6) clt (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4.m1) (ldc.i4.1) cgt.un (call void (mscorlib System.Console) WriteLine (int32))
+       (ldc.i4.m1) (ldc.i4.1) clt.un (call void (mscorlib System.Console) WriteLine (int32))
+       (ret)
+       })
+     ]))
