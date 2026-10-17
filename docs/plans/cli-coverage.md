@@ -141,7 +141,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes; tiny and fat hea
 | AnyCPU and `32BITPREFERRED`                          | n/a     | none    |         |
 | Subsystem GUI versus console                         | n/a     | none    |         |
 | Multiple sections (`.text`, `.rsrc`, `.reloc`, `.sdata`) | partial | partial (`.text`, `.reloc`) |  |
-| Sections of any size (no 0x400 limit)                | done    | partial |         |
+| Sections of any size (no 0x400 limit)                | done    | done    | text-over-400, text-over-2000 |
 | Base relocations generated from fixups               | n/a     | partial |         |
 | Deterministic timestamp and MVID                     | n/a     | done    | nano    |
 | Debug directory and portable PDB                     | out of scope | out of scope |     |

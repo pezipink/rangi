@@ -17,7 +17,7 @@ ms.date: 2026-10-17
 | P0    | this file                                               | Shelve the WIP (done: `stash@{0}`); add `info.rkt`; move experiments out of `src/`; route output through a logger; parameterise the output path | `racket experiments/nano.rkt` prints `42` and `84`, and the image hash matches `tests/fixtures/nano/image.sha256` (the baseline was re-pinned on purpose in `ca7aa13`: `Program` class and deterministic MVID) |
 | P1    | [verification.md](verification.md) V1-V3               | Characterisation snapshots of today's output; PEVerify, ildasm, and SRM dumps run       | `raco test tests/` green on the baseline image                              |
 | P2    | [restructure.md](restructure.md) R1-R2                 | `private/binary.rkt` and `cli/schema.rkt` shared by reader and writer                    | Reader and writer produce identical bytes and parse results to P1 snapshots |
-| P3    | [restructure.md](restructure.md) R3-R5                 | PE layer with a layout engine; CLI layer emits chunks; hardcodes removed                 | Layout map snapshot reviewed; PEVerify clean; `.text` larger than 0x400     |
+| P3    | [restructure.md](restructure.md) R3-R5                 | PE layer with a layout engine; CLI layer emits chunks; hardcodes removed                 | Layout map snapshot reviewed; PEVerify clean; `.text` larger than 0x400 and 0x2000 |
 | P4    | [opcodes.md](opcodes.md)                               | Full opcode table, labels, branch relaxation, fat bodies, EH                             | Opcode table matches the .NET oracle; IL fixtures pass ILVerify and run     |
 | P5    | [cli-coverage.md](cli-coverage.md)                     | Fields, params, types, generics, attributes, DLLs                                        | Each row in the coverage tracker has a passing fixture                      |
 | P6    | [restructure.md](restructure.md) R6                    | Reader hardened against real assemblies (mscorlib, System.Private.CoreLib)               | Reader agrees with System.Reflection.Metadata on every reference assembly   |
@@ -30,12 +30,13 @@ Last updated at commit `ca7aa13`. Start here, then read [AGENTS.md](../../AGENTS
 
 Done:
 
-* P0 cleanup, and P1 harness (V1 to V3). `raco test tests/` passes (10 tests). `racket experiments/nano.rkt` prints `42` and `84`.
+* P0 cleanup, and P1 harness (V1 to V3). `raco test tests/` passes (33 tests, with `RANGI_REQUIRE_ORACLES=1`). `racket experiments/nano.rkt` prints `42` and `84`.
 * V0 determinism: insertion-ordered rows and heaps, content-hash MVID, COFF timestamp 0.
 * V4 L5 structural lint (`tests/lib/pe-lint.rkt`, tested by `tests/image-lint-test.rkt`).
 * Writer rewrite: `<Module>` methods move to a generated `Program` class; `.entrypoint` sets the entry token; unknown IL raises; supported IL is `ret`, `add`, `ldc.i4`, and `call`.
 * Reader defects R1 to R10 fixed, except the two open items below. PE32 and PE32+ nano dumps match System.Reflection.Metadata. The mscorlib public type count matches (1521).
-* The P3 gate ".text larger than 0x400" still needs a fixture. The writer uses 0x200 file alignment and 0x2000 section alignment, but no fixture covers a `.text` over 0x400 yet.
+* P3 bigger fixtures: `tests/fixtures/text-over-400` (`.text` VirtualSize 0x48E, 2 classes and 4 methods) and `tests/fixtures/text-over-2000` (`.text` 0x21A2, 8 classes and 64 methods). Both have fat IL bodies (code over 64 bytes, and `.maxstack 9` on some methods), and both pass PEVerify, ildasm, SRM, and the lint. `fixtures-test.rkt` asserts each `.text` stays above its threshold. The P3 gate still needs the layout map (V5), so P3 is not closed.
+* Known writer gap: `call` only accepts MemberRef, so the non-entry methods in the bigger fixtures are never executed. They are checked by the oracles and lint only.
 
 Open items, in order:
 

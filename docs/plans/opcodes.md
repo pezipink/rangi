@@ -59,7 +59,7 @@ ms.date: 2026-10-17
 
 ### O4 Method bodies (II.25.4)
 
-* [ ] Tiny header when code is under 64 bytes, maxstack is at most 8, there are no locals, and there are no exception handlers. Otherwise use a fat header: flags `0x3003` with `InitLocals` as needed, maxstack, code size, and a `LocalVarSigTok`.
+* [ ] Tiny header when code is under 64 bytes, maxstack is at most 8, there are no locals, and there are no exception handlers. Otherwise use a fat header: flags `0x3003` with `InitLocals` as needed, maxstack, code size, and a `LocalVarSigTok`. Fat headers without locals are covered by `text-over-400` and `text-over-2000`; `InitLocals` and `LocalVarSigTok` are not.
 * [ ] `.locals` -> local variable signature blob (`0x07`) -> StandAloneSig row -> token.
 * [ ] Exception handling sections (`.try`, `catch`, `finally`, `fault`, `filter`) with small (12-byte) or fat (24-byte) clause encoding chosen by offset sizes. Each section is 4-byte aligned after the code.
 * [ ] Compute maxstack by abstract interpretation over the opcode table's stack behaviour and the control flow graph, unless `.maxstack` is given. Report stack underflow and inconsistent depths at merge points as assembly errors.
