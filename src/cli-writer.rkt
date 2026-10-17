@@ -299,7 +299,7 @@
         (reverse acc)
         (loop (cdr cs) (+ next (car cs)) (cons next acc)))))
 
-(define (build-tables p sh bh mod-name asm-name rva-of)
+(define (build-tables p sh bh mod-name asm-name)
   (define (s x) (string-index! sh x))
   (define (b x) (blob-index! bh x))
   (define tds (il-program-typedefs p))
@@ -324,7 +324,7 @@
   (define methoddef-t
     (tbl #x06 '(u4 u2 u2 str blob (simple 8))
          (for/list ([m (in-list mdefs)] [i (in-naturals)])
-           (list (rva-of i) 0 (mdef-flags m) (s (mdef-name m)) (b (mdef-sig m)) 1))))
+           (list (rva-ref (method-sym i)) 0 (mdef-flags m) (s (mdef-name m)) (b (mdef-sig m)) 1))))
   (define memberref-t
     (tbl #x0A '((coded 3 (2 1 #x1A 6 #x1B)) str blob)
          (for/list ([r (in-list (il-program-memberrefs p))])
@@ -339,12 +339,14 @@
            (list 0 0 0 0 0 0 (s n) 0 0))))
   (list module-t typeref-t typedef-t methoddef-t memberref-t assembly-t assemblyref-t))
 
-; returns the complete metadata root; rva-of maps a 0-based method index to its body RVA
-(define (metadata-bytes p asm-name mod-name rva-of)
+; returns the metadata root and its fixups. Each MethodDef RVA is a 4-byte field whose
+; value is the body chunk's RVA, so it is left zero here and patched at layout. The MVID
+; is a digest over the other streams, so it is also left zero and filled at layout.
+(define (metadata-bytes p asm-name mod-name)
   (define sh (make-heap #"\0"))
   (define bh (make-heap #"\0"))
   (define tables
-    (filter (λ (t) (pair? (tbl-rows t))) (build-tables p sh bh mod-name asm-name rva-of)))
+    (filter (λ (t) (pair? (tbl-rows t))) (build-tables p sh bh mod-name asm-name)))
   (define strs (pad-to (heap-bytes sh) 4))
   (define blobs (pad-to (heap-bytes bh) 4))
   (define us (bytes 0 0 0 0))
@@ -363,14 +365,24 @@
       [(list 'coded bits targets)
        (define mx (for/fold ([m 0]) ([t (in-list targets)]) (max m (hash-ref counts t 0))))
        (if (< mx (expt 2 (- 16 bits))) 2 4)]))
+  (define cells
+    (for*/list ([t (in-list tables)]
+                [row (in-list (tbl-rows t))]
+                [(v w) (in-parallel row (map kind-width (tbl-kinds t)))])
+      (cons v w)))
   (define table-bytes
     (apply bytes-append
-           (for/list ([t (in-list tables)])
-             (define widths (map kind-width (tbl-kinds t)))
-             (apply bytes-append
-                    (for*/list ([row (in-list (tbl-rows t))]
-                                [(v w) (in-parallel row widths)])
-                      (le v w))))))
+           (for/list ([c (in-list cells)])
+             (le (if (rva-ref? (car c)) 0 (car c)) (cdr c)))))
+  ; byte offset of each RVA field within the table stream, after its 24-byte header and row counts
+  (define rva-cells
+    (let loop ([cs cells] [pos 0] [acc '()])
+      (cond
+        [(null? cs) (reverse acc)]
+        [else
+         (define c (car cs))
+         (loop (cdr cs) (+ pos (cdr c))
+               (if (rva-ref? (car c)) (cons (cons pos (rva-ref-target (car c))) acc) acc))])))
   (define heap-flags (+ (if strbig 1 0) (if blobbig 4 0)))
   (define valid (for/sum ([t (in-list tables)]) (arithmetic-shift 1 (tbl-id t))))
   (define tilde
@@ -380,12 +392,11 @@
                                    (le (length (tbl-rows t)) 4)))
                           table-bytes)
             4))
-  (define mvid (subbytes (sha256-bytes (bytes-append tilde strs us blobs)) 0 16))
   (define streams
     (list (cons "#~" tilde)
           (cons "#Strings" strs)
           (cons "#US" us)
-          (cons "#GUID" mvid)
+          (cons "#GUID" (make-bytes 16 0))
           (cons "#Blob" blobs)))
   (define (stream-header name off size)
     (bytes-append (le off 4) (le size 4)
@@ -405,12 +416,27 @@
     (bytes-append #"BSJB" (le 1 2) (le 1 2) (le 0 4)
                   (le 12 4) (pad-to #"v4.0.30319\0" 4)
                   (le 0 2) (le (length streams) 2)))
-  (bytes-append root headers (apply bytes-append (map cdr streams))))
+  (define table-start (+ 24 (* 4 (length tables))))
+  ; the MVID is a digest of every stream except #GUID, with the RVA fields filled in
+  (define guid-offset
+    (for/first ([st (in-list streams)] [off (in-list offsets)] #:when (equal? (car st) "#GUID"))
+      off))
+  (define digest-spans
+    (for/list ([st (in-list streams)] [off (in-list offsets)] #:unless (equal? (car st) "#GUID"))
+      (cons off (+ off (bytes-length (cdr st))))))
+  (values (bytes-append root headers (apply bytes-append (map cdr streams)))
+          (append
+           (for/list ([rc (in-list rva-cells)])
+             (fixup (+ (car offsets) table-start (car rc)) 'rva32 (cdr rc)))
+           (list (digest guid-offset digest-spans)))))
 
 ; ---------------------------------------------------------------------------
 ; PE image
 
 (define (method-sym i) (string->symbol (format "method:~a" i)))
+
+; a 4-byte metadata cell holding the RVA of target; metadata-bytes emits it as a fixup
+(struct rva-ref (target))
 
 (define (assemble p [out-path (make-temporary-file "rangi-~a.exe")])
   (write-pe-image (plan-image p (path->string (file-name-from-path out-path))) out-path
@@ -433,26 +459,21 @@
     (for*/list ([td (in-list (il-program-typedefs p))] [m (in-list (tdef-methods td))])
       (mdef-body m)))
 
-  ; metadata size does not depend on the RVA values, so measure once with zeros
-  (define md-len (bytes-length (metadata-bytes p asm-name mod-name (λ (i) 0))))
-
+  (define-values (md-bytes md-fixups) (metadata-bytes p asm-name mod-name))
   (match-define (list iat import-dir lookup hint-name dll-name entry-stub)
-    (mscoree-chunks image-base))
+    (mscoree-chunks))
   (define cli-header
-    (linked-chunk 'cli-header 4 #x48
-                  (λ (rva-of)
-                    (bytes-append (le #x48 4) (le 2 2) (le 0 2)
-                                  (le (rva-of 'metadata) 4) (le md-len 4)
-                                  (le 1 4)
-                                  (le (bitwise-ior #x06000000 entry-rid) 4)
-                                  (make-bytes 48 0)))))
-  (define metadata
-    (linked-chunk 'metadata 4 md-len
-                  (λ (rva-of)
-                    (metadata-bytes p asm-name mod-name (λ (i) (rva-of (method-sym i)))))))
+    (chunk 'cli-header 4
+           (bytes-append (le #x48 4) (le 2 2) (le 0 2)
+                         (make-bytes 4 0) (le (bytes-length md-bytes) 4)
+                         (le 1 4)
+                         (le (bitwise-ior #x06000000 entry-rid) 4)
+                         (make-bytes 48 0))
+           (list (fixup 8 'rva32 'metadata))))
+  (define metadata (chunk 'metadata 4 md-bytes md-fixups))
   (define body-chunks
     (for/list ([b (in-list bodies)] [i (in-naturals)])
-      (bytes-chunk (method-sym i) 4 b)))
+      (chunk (method-sym i) 4 b '())))
   (define text
     (section ".text" #x60000020
              (append (list iat cli-header metadata) body-chunks

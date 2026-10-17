@@ -88,7 +88,7 @@ bytes -> pe/read -> cli/reader -> model/dumps (round trip, verification)
 
 ### PE layer contract
 
-A section is an ordered list of chunks. Each chunk has a name, an alignment, and either fixed bytes or a size plus a writer procedure. Chunks may define symbols (for example `cli-header`, `metadata-root`, `method:Program::Main`) and may contain fixups that reference symbols as RVA, VA (needs a base relocation), or file offset. Layout runs in two passes: assign sizes and positions, then serialise with fixups resolved. Data directories reference symbols, not numbers. The layout pass also produces a text layout map for snapshots.
+A section is an ordered list of chunks. Each chunk has a name, an alignment, plain bytes, and a list of fixups. The bytes hold zeros in each field that depends on layout. A `fixup` is a typed 4-byte field at an offset, with a kind and a target chunk name: `rva32` writes the target's RVA, and `va32` writes the image base plus the target's RVA and needs a base relocation. A `digest` is a 16-byte field filled with the SHA-256 of spans of the chunk's rendered bytes, used for the MVID. Chunks name their targets, not numbers, so data directories refer to chunk names too. Layout runs in two passes: assign sizes and positions, then render each chunk by copying its bytes and filling its fixups and digests. The layout pass also produces a text layout map for snapshots. `file-offset` and `va64` fixups are not implemented yet.
 
 ### CLI layer contract
 

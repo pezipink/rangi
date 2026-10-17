@@ -1,22 +1,33 @@
 #lang racket/base
 ; Section and chunk layout for PE images (ECMA-335 II.25.2 and II.25.3).
 ; This module knows nothing about CLI metadata. A chunk is a named blob of
-; bytes that may refer to other chunks through a resolver (name -> RVA).
+; bytes with fixups: 4-byte holes that are filled in once every chunk has an RVA.
 (require "../private/binary.rkt")
 (provide (struct-out image-params)
          (struct-out chunk)
+         (struct-out fixup)
+         (struct-out digest)
          (struct-out section)
          (struct-out placement)
          (struct-out placed-section)
          (struct-out placed-image)
-         bytes-chunk linked-chunk chunk-bytes
+         chunk-size render-chunk
          layout-image layout-report lookup-placement placed-rva)
 
 (struct image-params (image-base section-align file-align))
 
-; data is either bytes, or a procedure (name -> RVA) -> bytes for chunks that
-; hold addresses. size must equal the length of the rendered bytes.
-(struct chunk (name align size data relocs))
+; bytes: the chunk contents with zeros in each fixup hole
+(struct chunk (name align bytes fixups))
+
+; A 32-bit field at offset inside the chunk, filled with the value for target (a chunk name):
+;   'rva32  the RVA of target
+;   'va32   image-base plus the RVA of target; the field needs a base relocation
+(struct fixup (offset kind target))
+
+; A 16-byte field at offset holding the first 16 bytes of the SHA-256 of the
+; chunk's rendered bytes at each (start . end) span. It is filled after the
+; rva32 fixups, so a span may cover RVA fields. Spans must not cover the field itself.
+(struct digest (offset spans))
 
 ; name: string; chars: section characteristics
 (struct section (name chars chunks))
@@ -29,23 +40,40 @@
 ; symbols: hasheq from chunk name to placement
 (struct placed-image (params headers-size sections size-of-image symbols))
 
-(define (bytes-chunk name align bs [relocs '()])
-  (chunk name align (bytes-length bs) bs relocs))
+(define (chunk-size c) (bytes-length (chunk-bytes c)))
 
-(define (linked-chunk name align size proc [relocs '()])
-  (chunk name align size proc relocs))
+; copies the chunk bytes and fills each fixup and digest once layout is known
+(define (render-chunk img p)
+  (define c (placement-chunk p))
+  (define bs (bytes-copy (chunk-bytes c)))
+  (define base (image-params-image-base (placed-image-params img)))
+  (define (check-field off)
+    (unless (<= 0 off (- (bytes-length bs) 4))
+      (error 'rangi "fixup at 0x~a is outside chunk ~a (~a bytes)"
+             (number->string off 16) (chunk-name c) (bytes-length bs))))
+  (for ([f (in-list (chunk-fixups c))] #:when (fixup? f))
+    (define off (fixup-offset f))
+    (check-field off)
+    (define target (placed-rva img (fixup-target f)))
+    (bytes-copy! bs off
+                 (le (case (fixup-kind f)
+                       [(rva32) target]
+                       [(va32) (+ base target)]
+                       [else (error 'rangi "unknown fixup kind ~a" (fixup-kind f))])
+                     4)))
+  (for ([d (in-list (chunk-fixups c))] #:when (digest? d))
+    (define off (digest-offset d))
+    (unless (<= 0 off (- (bytes-length bs) 16))
+      (error 'rangi "digest at 0x~a is outside chunk ~a" (number->string off 16) (chunk-name c)))
+    (define input
+      (apply bytes-append (for/list ([s (in-list (digest-spans d))])
+                            (subbytes bs (car s) (cdr s)))))
+    (bytes-copy! bs off (subbytes (sha256-bytes input) 0 16)))
+  bs)
 
 ; DOS header with PE signature (0x84) + COFF header (20) + PE32 optional header (224)
 (define fixed-header-size #x178)
 (define section-header-size 40)
-
-(define (chunk-bytes c rva-of)
-  (define d (chunk-data c))
-  (define bs (if (bytes? d) d (d rva-of)))
-  (unless (= (bytes-length bs) (chunk-size c))
-    (error 'rangi "chunk ~a is ~a bytes, expected ~a"
-           (chunk-name c) (bytes-length bs) (chunk-size c)))
-  bs)
 
 ; places chunks in order inside a section starting at base; returns the
 ; placements and the section's virtual size

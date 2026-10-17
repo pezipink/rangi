@@ -30,7 +30,7 @@
     (define buf (make-bytes (placed-section-raw-size ps) 0))
     (for ([p (in-list (placed-section-placements ps))])
       (bytes-copy! buf (- (placement-rva p) (placed-section-rva ps))
-                   (chunk-bytes (placement-chunk p) rva-of)))
+                   (render-chunk img p)))
     buf)
 
   (define (section-header ps)

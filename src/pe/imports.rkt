@@ -9,21 +9,17 @@
 (define dll-name-bytes #"mscoree.dll\0")
 
 ; returns (list iat import-dir lookup hint-name dll-name entry-stub)
-(define (mscoree-chunks image-base)
+(define (mscoree-chunks)
   (list
-   (linked-chunk 'iat 4 8
-                 (λ (rva-of) (bytes-append (le (rva-of 'hint-name) 4) (le 0 4))))
-   (linked-chunk 'import-dir 4 #x28
-                 (λ (rva-of)
-                   (bytes-append (le (rva-of 'lookup) 4) (le 0 4) (le 0 4)
-                                 (le (rva-of 'dll-name) 4) (le (rva-of 'iat) 4)
-                                 (make-bytes 20 0))))
-   (linked-chunk 'lookup 4 8
-                 (λ (rva-of) (bytes-append (le (rva-of 'hint-name) 4) (le 0 4))))
-   (bytes-chunk 'hint-name 1 hint-name-bytes)
-   (bytes-chunk 'dll-name 1 dll-name-bytes)
+   (chunk 'iat 4 (make-bytes 8 0) (list (fixup 0 'rva32 'hint-name)))
+   (chunk 'import-dir 4
+          (bytes-append (le 0 4) (le 0 4) (le 0 4) (le 0 4) (le 0 4) (make-bytes 20 0))
+          (list (fixup 0 'rva32 'lookup)
+                (fixup 12 'rva32 'dll-name)
+                (fixup 16 'rva32 'iat)))
+   (chunk 'lookup 4 (make-bytes 8 0) (list (fixup 0 'rva32 'hint-name)))
+   (chunk 'hint-name 1 hint-name-bytes '())
+   (chunk 'dll-name 1 dll-name-bytes '())
    ; FF 25 is jmp [abs32]; the operand is an absolute address, so it needs a base relocation
-   (linked-chunk 'entry-stub 4 6
-                 (λ (rva-of)
-                   (bytes-append (bytes #xFF #x25) (le (+ image-base (rva-of 'iat)) 4)))
-                 '(2))))
+   (chunk 'entry-stub 4 (bytes-append (bytes #xFF #x25) (make-bytes 4 0))
+          (list (fixup 2 'va32 'iat)))))
