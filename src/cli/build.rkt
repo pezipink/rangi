@@ -99,8 +99,14 @@
   (for ([sig (in-list (cli-program-standalone-sigs p))])
     (add-row! tb 'standalonesig (b sig)))
   (add-row! tb 'assembly 0 0 0 0 0 0 0 (s asm-name) 0)
-  (for ([n (in-list (cli-program-asm-refs p))])
-    (add-row! tb 'assemblyref 0 0 0 0 0 0 (s n) 0 0))
+  (for ([r (in-list (cli-program-asm-refs p))])
+    (match-define (list n version token) r)
+    ; II.22.5 AssemblyRef: four u16 version parts, u32 Flags, PublicKeyOrToken blob index,
+    ; then Name, Culture, and HashValue. An empty token is blob index 0, the same as before.
+    (match-define (list major minor build revision) version)
+    (add-row! tb 'assemblyref major minor build revision 0
+              (if (zero? (bytes-length token)) 0 (b token))
+              (s n) 0 0))
 
   (extra tb sh bh)
   (sort-tables! tb)
