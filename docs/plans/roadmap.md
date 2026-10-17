@@ -55,9 +55,9 @@ Open items, in order:
 |-------|--------|--------------|
 | P0 | Done | None |
 | P1 | Done | None |
-| P2 | Started | R1: finish `binary.rkt` (compressed-integer and read/write helpers) and switch the reader and writer over. R2: `schema.rkt`, and porting the reader onto it |
+| P2 | Started | R1 done (A1 merged). R2 open: `schema.rkt`, and porting the reader and writer onto it |
 | P3 | Partly done | R3 and V5 are done. R4 (CLI emits chunks) and R5 (front-end split) are not started, and P3's outcome needs both. Close P3 after them. |
-| P4 | Started | O1 done. O2 to O5 open. O4 method bodies depend on R4. |
+| P4 | Started | O1, O2, and O3 done (B merged). O4 and O5 open. O4 method bodies depend on R4. |
 | P5 | Not started | Depends on R4 and R5 |
 | P6 | Mostly done | V7 corpus diff matches SRM on 133 of 133 assemblies. The benchmark and memory-mapping items in R6 are open. |
 
@@ -65,8 +65,8 @@ Open items, in order:
 
 The critical path is P2, then R4, then R5, then closing P3, then P4 integration. Each step keeps `raco test tests/` green.
 
-1. P2, part A1 (R1). Extend `src/private/binary.rkt` with `compress-*`, `write-u*`, and `read-u*`. Switch the writer's `compressed` and the reader's `to-int`, `read-int`, and `cli-decompress-unsigned` over to them. Add boundary tests at `0x3FFF` and `0x4000`. Gate: the L4 hash of nano is unchanged and `raco test tests/` is green. Land this first, because stream C needs the helpers.
-2. P2, part A2 (R2). Create `src/cli/schema.rkt` as the single source of table and coded-index layouts, and fold in the writer's `tbl` list. Derive row sizes from it and delete the two hand-written `case` blocks. Port the reader onto it. Gate: the L4 hash of nano is unchanged, the corpus test still matches SRM, and the lint passes.
+1. Done: P2, part A1 (R1). Helpers live in `src/private/binary.rkt`, and the reader and writer use them. Signed compressed integers are still open. Merged from `stream/a1`.
+2. P2, part A2 (R2, now the next step in stream A). Create `src/cli/schema.rkt` as the single source of table and coded-index layouts, and fold in the writer's `tbl` list. Derive row sizes from it and delete the two hand-written `case` blocks. Port the reader onto it. Gate: the L4 hash of nano is unchanged, the corpus test still matches SRM, and the lint passes.
 3. R4 (CLI emits chunks). Heaps, then tables, then the metadata root, the CLI header, and method-body chunks. Remove the writer literals in [architecture.md](../architecture.md#writer).
 4. R5 (front-end split). Move `parse-il` to `ilasm/syntax.rkt` and add `image.rkt`. This is when the writer's compatibility shims go.
 5. Close P3 once R4 and R5 are in and the layout snapshots have been reviewed by a person.
@@ -78,10 +78,10 @@ Each stream owns files that no other stream touches, so the streams can run in s
 
 | Stream | Work | Owns | Start |
 |--------|------|------|-------|
-| A | P2: A1 (R1 helpers), then A2 (R2 schema, port reader and writer) | `src/private/binary.rkt`, `src/cli/schema.rkt`, `src/cli-reader.rkt`, `src/cli-writer.rkt`, `tests/lib/metadata-dump.rkt` | A1 now. A2 is the critical path after A1. |
-| B | O2 operand encoders and O3 labels and branch relaxation, as pure functions over `src/il/opcodes.rkt` | `src/il/encode.rkt`, `src/il/labels.rkt`, `tests/il/` | Now. Does not touch the writer. Wire in at O4. |
-| C | R4 heaps: insertion-ordered, deduplicated, `#US` encoding (II.24.2.4) | `src/cli/heaps.rkt`, `tests/cli/heaps-test.rkt` | After A1 lands, since heaps need its compressed-integer helpers. |
-| D | R6 benchmark: timing of `read-file` plus `get-public-typedefs` on mscorlib, recorded in a test | `tests/` only | Now. Tests only. Record timings; do not assert on them. |
+| A | P2: A1 (R1 helpers) done. A2 (R2 schema, port reader and writer) is next | `src/cli/schema.rkt`, `src/cli-reader.rkt`, `src/cli-writer.rkt`, `tests/lib/metadata-dump.rkt` | A2 now. It is the critical path. |
+| B | O2 operand encoders and O3 labels and branch relaxation | `src/il/encode.rkt`, `src/il/labels.rkt`, `tests/il/` | Done (merged). Wire in at O4. |
+| C | R4 heaps: insertion-ordered, deduplicated, `#US` encoding (II.24.2.4) | `src/cli/heaps.rkt`, `tests/cli/heaps-test.rkt` | Unlocked by A1 (merged). Can start now. |
+| D | R6 benchmark: timing of `read-file` plus `get-public-typedefs` on mscorlib | `tests/read-bench-test.rkt` | Done (merged). Timings recorded, not asserted. |
 | E | Decode signatures and heap entries in the L3 dump (not checked yet) | `tests/lib/metadata-dump.rkt` | After A2. A2 moves the row decoder, so E would conflict with it. |
 
 Not parallel:
