@@ -11,7 +11,7 @@
 (provide lint-image)
 
 (struct section (name va vsize raw-size raw-ptr chars))
-(struct pe-image (raw sections base entry dirs size-of-image plus?))
+(struct pe-image (raw sections base entry dirs size-of-image plus? dll?))
 
 (define (expect fail! ok? fmt . args)
   (unless ok? (apply fail! fmt args)))
@@ -157,7 +157,8 @@
           (define s (rva->section secs (car d)))
           (expect fail! (and s (<= (+ (car d) (cdr d)) (+ (section-va s) (section-vsize s))))
                   "data directory ~a (RVA ~x, size ~a) is not inside a section" i (car d) (cdr d)))
-        (pe-image raw secs image-base entry dirs size-of-image plus?)])]))
+        (pe-image raw secs image-base entry dirs size-of-image plus?
+                  (bitwise-bit-set? (le raw (+ coff 18) 2) 13))])]))
 
 (define (check-cli img fail!)
   (define raw (pe-image-raw img))
@@ -211,8 +212,10 @@
   (expect fail! (and dll-off (equal? (cstring-at raw dll-off) "mscoree.dll"))
           "import descriptor does not name mscoree.dll")
   (define hint-off (and first-thunk (rva->off img (le raw (rva->off img first-thunk) 4))))
-  (expect fail! (and hint-off (equal? (cstring-at raw (+ hint-off 2)) "_CorExeMain"))
-          "first import is not _CorExeMain")
+  ; IMAGE_FILE_DLL (0x2000) selects _CorDllMain; an EXE imports _CorExeMain (II.25.3.3)
+  (define expected-import (if (pe-image-dll? img) "_CorDllMain" "_CorExeMain"))
+  (expect fail! (and hint-off (equal? (cstring-at raw (+ hint-off 2)) expected-import))
+          "first import is not ~a" expected-import)
   (define relocs (reloc-targets img fail!))
   (expect fail! (member (+ entry 2) relocs)
           "no base relocation covers the entry stub operand at ~x" (+ entry 2)))
@@ -302,7 +305,9 @@
        [else
         (check-heaps rdr strings blob guid fail!)
         (check-tables rdr raw (+ md (cadr tilde)) (caddr tilde) attrs count-of fail!)
-        (check-entry-token raw attrs count-of entry-token img fail!)])]))
+        ; a DLL may have no entry point, so its CLI header token is 0 (II.25.3.3)
+        (unless (and (pe-image-dll? img) (zero? entry-token))
+          (check-entry-token raw attrs count-of entry-token img fail!))])]))
 
 (define (check-heaps rdr strings blob guid fail!)
   (expect fail! (= (caddr strings) (bytes-length (asm-reader-string-heap rdr)))

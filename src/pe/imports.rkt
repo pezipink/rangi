@@ -1,12 +1,14 @@
 #lang racket/base
-; Import of _CorExeMain from mscoree.dll and the entry stub that jumps through
-; its IAT slot (ECMA-335 II.25.3.3).
+; Import of _CorExeMain (or _CorDllMain for a DLL) from mscoree.dll and the entry stub that
+; jumps through its IAT slot (ECMA-335 II.25.3.3).
 (require "../private/binary.rkt"
          "constants.rkt"
          "layout.rkt")
 (provide mscoree-chunks)
 
-(define hint-name-bytes (bytes-append (le 0 2) #"_CorExeMain\0"))
+; both names are 11 bytes, so the import layout is the same for an EXE and a DLL
+(define exe-hint-name-bytes (bytes-append (le 0 2) #"_CorExeMain\0"))
+(define dll-hint-name-bytes (bytes-append (le 0 2) #"_CorDllMain\0"))
 (define dll-name-bytes #"mscoree.dll\0")
 
 ; sizes in bytes of the import and entry-stub encodings (II.22.25 and II.25.3.3)
@@ -24,8 +26,10 @@
 
 ; returns (list iat import-dir lookup hint-name dll-name entry-stub) for the given
 ; PE format. Thunks are 4 bytes in PE32 and 8 bytes in PE32+ (II.22.25 and II.25.3.3).
-(define (mscoree-chunks format)
+; A DLL imports _CorDllMain instead of _CorExeMain; the loader calls it through AddressOfEntryPoint.
+(define (mscoree-chunks format #:dll? [dll? #f])
   (define pe32+? (eq? format 'pe32+))
+  (define hint-name-bytes (if dll? dll-hint-name-bytes exe-hint-name-bytes))
   (define thunk-size (if pe32+? pe32plus-thunk-size pe32-thunk-size))
   (define thunk-table (make-bytes (* 2 thunk-size) 0))
   (list

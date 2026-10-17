@@ -43,7 +43,24 @@
   (test-case (format "~a image passes the L5 lint" name)
     (with-built-image name
       (λ (dir exe)
-        (check-equal? (lint-image exe) '())))))
+        (check-equal? (lint-image exe) '())
+        (define library (library-of exe))
+        (when (file-exists? library)
+          (test-case (format "~a library passes the L5 lint" name)
+            (check-equal? (lint-image library) '())))))))
+
+(with-built-image
+ "dll-output"
+ (λ (dir exe)
+   (test-case "first import that is not _CorDllMain in a DLL is reported"
+     (define library (library-of exe))
+     (define problems
+       (lint-damaged library (λ (bs)
+                               (define imp-rva (le-at bs (opt-pos bs 104) 4))
+                               (define ft-rva (le-at bs (+ (file-offset bs imp-rva) 16) 4))
+                               (define hint-rva (le-at bs (file-offset bs ft-rva) 4))
+                               (bytes-set! bs (+ (file-offset bs hint-rva) 2) (char->integer #\x)))))
+     (check-true (reports? problems #rx"_CorDllMain")))))
 
 (with-built-image
  "nano"

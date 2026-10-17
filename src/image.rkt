@@ -2,6 +2,7 @@
 (require racket/match
          racket/file
          racket/path
+         (only-in "ilasm/syntax.rkt" module-model-dll?)
          "cli/lower.rkt"
          "cli/build.rkt"
          "cli/header.rkt"
@@ -27,7 +28,8 @@
 
 ; writes the module model to out-path and returns out-path
 (define (write-image m out-path)
-  (write-pe-image (plan-image (lower-module m) (path->string (file-name-from-path out-path)))
+  (write-pe-image (plan-image (lower-module m) (path->string (file-name-from-path out-path))
+                              #:dll? (module-model-dll? m))
                   out-path
                   #:entry 'entry-stub
                   #:dirs pe-data-dirs)
@@ -38,10 +40,10 @@
 
 ; layout of the image that assemble writes for a file called file-name (V5 snapshots)
 (define (image-layout-report m [file-name "image.exe"])
-  (layout-report (plan-image (lower-module m) file-name)))
+  (layout-report (plan-image (lower-module m) file-name #:dll? (module-model-dll? m))))
 
 ; places every chunk and returns the placed image, without writing a file
-(define (plan-image p file-name)
+(define (plan-image p file-name #:dll? [dll? #f])
   (define asm-name (regexp-replace #rx"[.][^.]*$" file-name ""))
   (define mod-name (or (cli-program-module-name p) file-name))
   (define entry-rid (cli-program-entry-rid p))
@@ -52,7 +54,7 @@
 
   (define md (build-metadata p asm-name mod-name))
   (match-define (list iat import-dir lookup hint-name dll-name entry-stub)
-    (mscoree-chunks fmt))
+    (mscoree-chunks fmt #:dll? dll?))
   (define cli-header
     (cli-header-chunk #:metadata-size (bytes-length (chunk-bytes md))
                       #:entry-rid entry-rid))
@@ -64,11 +66,13 @@
              (append (list iat cli-header md) body-chunks
                      (list import-dir lookup hint-name dll-name entry-stub))))
 
+  (define chars-base (if (eq? fmt 'pe32+) pe32plus-characteristics pe32-characteristics))
+  (define chars (if dll? (bitwise-ior chars-base image-file-dll) chars-base))
   (define params
     (if (eq? fmt 'pe32+)
-        (image-params 'pe32+ machine-amd64 pe32plus-characteristics subsystem-windows-cui
+        (image-params 'pe32+ machine-amd64 chars subsystem-windows-cui
                       default-dll-characteristics (hash-ref image-bases fmt) section-align file-align)
-        (image-params 'pe32 machine-i386 pe32-characteristics subsystem-windows-cui
+        (image-params 'pe32 machine-i386 chars subsystem-windows-cui
                       default-dll-characteristics (hash-ref image-bases fmt) section-align file-align)))
   ; the relocation table holds the addresses of .text, so lay out .text before building it
   (define reloc
