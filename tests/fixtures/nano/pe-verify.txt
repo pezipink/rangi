@@ -1,0 +1,4 @@
+exit 0
+[MD]: .NET Framework Internal error: 0x8013129d [token:0x06000001]
+All Classes and Methods in <image> Verified.
+(1 Warnings)

@@ -2,7 +2,13 @@
 (require racket/string)
 (require racket/port)
 (require "log.rkt")
-(provide read-file get-public-typedefs read-assembly-meta)
+; read-only accessors for tests that decode table rows. row decoding stays out of the reader,
+; so the lazy path used by the macro expander is unchanged.
+(provide read-file get-public-typedefs read-assembly-meta
+         asm-reader-raw asm-reader-string-index-size asm-reader-blob-index-size
+         asm-reader-guid-index-size asm-reader-encoding-sizes asm-reader-table-attributes
+         asm-reader-get-string asm-reader-resolve-rva asm-reader-blob-heap asm-reader-guid-heap
+         table-data-row-count table-data-row-size table-data-start-offset)
 (define (int->hex n)
   (number->string n 16)) 
 
@@ -466,6 +472,7 @@
     (for/hash ([td table-order])
       (values (table-data-type td) td)))
   (set-asm-reader-table-attributes! rdr tables)
+  (set-asm-reader-encoding-sizes! rdr encodings)
   
   ;now we have everything we need to calculate the size of each table row,
   ;and therefore the actual size and offset of each table.
