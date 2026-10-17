@@ -1,15 +1,27 @@
 #lang racket/base
-; Locates the external .NET Framework tools used by the oracle tests. Set RANGI_PEVERIFY or
-; RANGI_ILDASM to override the default SDK paths.
+; Locates the external .NET Framework tools used by the oracle tests. Set RANGI_PEVERIFY,
+; RANGI_ILDASM, or RANGI_REFERENCE_ASSEMBLIES to override the default SDK paths.
 (require racket/system racket/string racket/port)
-(provide find-tool run-tool oracle-missing)
+(provide find-tool find-dotnet find-directory run-tool oracle-missing net471-reference-dir)
 
 (define sdk-tools "C:\\Program Files (x86)\\Microsoft SDKs\\Windows\\v10.0A\\bin\\NETFX 4.6.1 Tools\\")
+(define net471-reference-dir
+  "C:\\Program Files (x86)\\Reference Assemblies\\Microsoft\\Framework\\.NETFramework\\v4.7.1\\")
 
 ; returns the path of the tool, or #f when it is not installed
 (define (find-tool env-var exe-name)
   (for/first ([candidate (list (getenv env-var) (build-path sdk-tools exe-name))]
               #:when (and candidate (file-exists? candidate)))
+    candidate))
+
+; returns the path of the dotnet driver on PATH, or #f when the SDK is not installed
+(define (find-dotnet)
+  (find-executable-path "dotnet"))
+
+; returns the first existing directory among the env-var override and the default, or #f
+(define (find-directory env-var default)
+  (for/first ([candidate (list (getenv env-var) default)]
+              #:when (and candidate (directory-exists? candidate)))
     candidate))
 
 ; called when an oracle's tool is missing. By default the oracle is skipped with a message. When
