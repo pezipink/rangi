@@ -42,7 +42,9 @@ ms.date: 2026-10-17
 
 ### O2 Operand encoding
 
-* [ ] One encoder per operand kind, driven by the table, so adding an opcode never needs new assembler code.
+Status: encoders in `src/il/encode.rkt` (stream B) cover every operand kind; tests in `tests/il/encode-test.rkt`. Front-end syntax and token resolution are still open.
+
+* [x] One encoder per operand kind, driven by the table, so adding an opcode never needs new assembler code.
 * [ ] Operand syntax in the s-expression front end:
   * numbers for `I`, `I8`, `R`
   * symbols or integers for variables (`(ldloc x)`, `(ldarg 0)`)
@@ -52,9 +54,11 @@ ms.date: 2026-10-17
 
 ### O3 Labels and branch relaxation
 
-* [ ] Labels are `(label name)` forms or `name:` symbols in the instruction stream.
-* [ ] Assemble with all branches short, measure, then iteratively widen any branch whose offset does not fit in int8 until a fixed point. Long forms are never shrunk back, which guarantees termination.
-* [ ] Provide macro forms that pick the shortest encoding: `ldc.i4` -> `ldc.i4.m1`, `ldc.i4.0`-`ldc.i4.8`, `ldc.i4.s`, `ldc.i4`; `ldloc`/`stloc`/`ldarg`/`starg`/`ldloca`/`ldarga` -> `.0`-`.3`, `.s`, long. Keep explicit forms available for exact control.
+Status: label resolution and fixed-point relaxation in `src/il/labels.rkt` (stream B) are done; tests in `tests/il/labels-test.rkt`. The `ldc.i` writer replacement is still open (O4).
+
+* [x] Labels are `(label name)` forms or `name:` symbols in the instruction stream.
+* [x] Assemble with all branches short, measure, then iteratively widen any branch whose offset does not fit in int8 until a fixed point. Long forms are never shrunk back, which guarantees termination.
+* [x] Provide macro forms that pick the shortest encoding: `ldc.i4` -> `ldc.i4.m1`, `ldc.i4.0`-`ldc.i4.8`, `ldc.i4.s`, `ldc.i4`; `ldloc`/`stloc`/`ldarg`/`starg`/`ldloca`/`ldarga` -> `.0`-`.3`, `.s`, long. Keep explicit forms available for exact control. (Selectors `encode-ldc-i4` and `encode-var-access` in `src/il/encode.rkt`; not yet exposed as front-end names.)
 * [ ] Replace today's `ldc.i` with the `ldc.i4` macro; add `ldc.i8`, `ldc.r4`, `ldc.r8`.
 
 ### O4 Method bodies (II.25.4)
