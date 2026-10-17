@@ -537,7 +537,7 @@
           (set-table-data-row-size! table row-size)
           (+ address (* row-size count))))))
 
-  (writeln (format "total ~a"
+  #;(writeln (format "total ~a"
                    ( apply + (map (λ (x) (* (table-data-row-size x) (table-data-row-count x))) table-order))
                    ))
   
@@ -674,7 +674,7 @@
   )
 
 (define (read-file filename)
-  (time
+  ;(time
    (define rdr (asm-reader))
    (set-asm-reader-filename! rdr filename)
    (define all-bytes (port->bytes (open-input-file filename)))
@@ -736,12 +736,14 @@
    ;the rest gets more complex and is handled in other functions
    (hash-set! pe-headers 'sec-headers section-headers)
 
-   (writeln (format "ended at location 0x~X ~a" (file-position port)(file-position port)))
+   ;(writeln (format "ended at location 0x~X ~a" (file-position port)(file-position port)))
 
    ;(hash-count (hash-ref cli-meta 'strings))
    ;cli-meta
    rdr
-  ))
+
+;  )
+)
 
    
 
@@ -807,7 +809,7 @@
     (file-position port offset)
     (parse-assembly-row rdr port)))
 
-(define parsed (read-file "c:/temp/nano2.exe"))
+;(define parsed (read-file "c:/temp/nano2.exe"))
 ;parsed
 ;(define parsed (read-file  "C:/Program Files (x86)/Reference Assemblies/Microsoft/Framework/.NETFramework/v4.7.1/mscorlib.dll"))
 ;(define sl (asm-reader-get-string parsed))rb
