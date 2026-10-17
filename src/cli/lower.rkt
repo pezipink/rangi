@@ -6,7 +6,8 @@
          "heaps.rkt"
          (only-in "sigs.rkt" encode-localvar-sig encode-method-sig encode-method-instantiation
                   encode-typespec encode-type encode-field-sig primitive-names element-codes)
-         (only-in "flags.rkt" field-attributes-flags fa-hasdefault fa-hasfieldrva)
+         (only-in "flags.rkt" field-attributes-flags fa-hasdefault fa-hasfieldrva
+                  pinvoke-attributes-flags)
          (only-in "../il/encode.rkt" find-opcode opcode-named)
          (only-in "../il/opcodes.rkt" opcode-operand opcode-type)
          (only-in racket/string string-prefix?)
@@ -19,6 +20,7 @@
          (struct-out tdef)
          (struct-out fdef)
          (struct-out mdef)
+         (struct-out pinvokeinfo)
          (struct-out methodimpl)
          (struct-out interfaceimpl)
          (struct-out manifest-resource))
@@ -51,7 +53,10 @@
 ; (typeref . rid), or #f for an interface or <Module> (II.22.37). enclosing is the TypeDef rid of
 ; the enclosing class for a nested type, or #f (II.22.32).
 (struct tdef (flags name ns extends methods fields enclosing))
-(struct mdef (name flags sig body entry?))
+(struct mdef (name flags sig body entry? pinvoke))
+; A P/Invoke method's ImplMap data (II.22.22): dll is the ModuleRef name, import-name is the
+; entry point, and flags are the PInvokeAttributes MappingFlags (II.23.1.8).
+(struct pinvokeinfo (dll import-name flags))
 ; A Field row (II.22.15): flags are FieldAttributes bits, sig is a FieldSig blob. const is #f, or
 ; (element-code . value-bytes) for a literal field's Constant row (II.22.9). data is #f, or the
 ; initial value bytes of a FieldRVA field (II.22.18), which lives in the image's data area.
@@ -129,7 +134,7 @@
     (famandassem . #x2) (famorassem . #x5)))
 (define member-flags
   '((static . #x10) (final . #x20) (virtual . #x40) (hidebysig . #x80) (newslot . #x100)
-    (abstract . #x400) (specialname . #x800) (rtspecialname . #x1000)))
+    (abstract . #x400) (specialname . #x800) (rtspecialname . #x1000) (pinvokeimpl . #x2000)))
 
 ; A method without static is an instance method and takes this as arg 0 (II.22.26, II.23.2.1).
 (define (instance-kws? kws) (not (memq 'static kws)))
@@ -856,12 +861,23 @@
                                           (lower-type cx scope t)))))))
            (method-body code maxstack locals-tok init?
                         (and (pair? clauses) (eh-section cx asm clauses))))))
+  (define pinv (method-decl-pinvoke m))
+  (when (and pinv instance?)
+    (error 'rangi "the P/Invoke method ~a.~a must be static" class-name name))
+  (define pinvoke
+    (and pinv
+         (pinvokeinfo (pinvoke-decl-dll pinv)
+                      (symbol->string (or (pinvoke-decl-entry pinv) name))
+                      (pinvoke-attributes-flags (pinvoke-decl-conv pinv)
+                                                (pinvoke-decl-charset pinv)
+                                                (pinvoke-decl-lasterr? pinv)))))
   (values
    (mdef (symbol->string name)
          flags
          sig
          body
-         (method-decl-entry? m))
+         (method-decl-entry? m)
+         pinvoke)
    (for/list ([g (in-list gparams)] [i (in-naturals)])
      (list i (symbol->string (generic-param-name g)) (cons 'methoddef rid)))))
 

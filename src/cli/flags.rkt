@@ -9,7 +9,8 @@
          pa-in pa-out pa-lcid pa-retval pa-optional pa-hasdefault pa-hasfieldmarshal
          pa-reserved3 pa-reserved4 pa-reserved-mask
          field-attributes-flags
-         param-attributes-flags)
+         param-attributes-flags
+         pinvoke-attributes-flags)
 
 ; II.23.1.5 FieldAttributes. The access field is a 3-bit value (FieldAccessMask 0x7).
 (define fa-privatescope #x0000)
@@ -76,3 +77,21 @@
   (for/fold ([acc 0]) ([k (in-list kws)])
     (bitwise-ior acc (cond [(assq k param-keywords) => cdr]
                            [else (error 'flags "unsupported parameter flag ~a" k)]))))
+
+; II.23.1.8 PInvokeAttributes, the MappingFlags column of an ImplMap row (II.22.22).
+; charset is 'ansi, 'unicode, 'auto, or #f for NotSpecified. conv is the calling convention keyword.
+(define pinvoke-conv-flags
+  '((winapi . #x0100) (cdecl . #x0200) (stdcall . #x0300) (thiscall . #x0400) (fastcall . #x0500)))
+(define pinvoke-charset-flags
+  '((ansi . #x0002) (unicode . #x0004) (auto . #x0006)))
+(define pinvoke-supports-last-error #x0040)
+
+(define (pinvoke-attributes-flags conv charset lasterr?)
+  (define c (assq conv pinvoke-conv-flags))
+  (unless c (error 'flags "unsupported calling convention ~a" conv))
+  (bitwise-ior (cdr c)
+               (if charset
+                   (cdr (or (assq charset pinvoke-charset-flags)
+                            (error 'flags "unsupported charset ~a" charset)))
+                   0)
+               (if lasterr? pinvoke-supports-last-error 0)))

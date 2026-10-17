@@ -1,0 +1,23 @@
+Module rows=1
+  Module[1] Name="pinvoke.exe" Mvid=e88fffc811781c57975a2793510b96bf
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=2
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..3]
+MethodDef rows=3
+  MethodDef[1] Rva=8768 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1fd62802000006280100000a72010000702803000006280100000a2a
+  MethodDef[2] Rva=0 ImplFlags=128 Flags=8214 Name="Abs" Signature=00010808 Params=[]
+  MethodDef[3] Rva=0 ImplFlags=128 Flags=8214 Name="StrLen" Signature=0001080e Params=[]
+MemberRef rows=1
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+ModuleRef rows=1
+  ModuleRef[1] Name="msvcrt.dll"
+ImplMap rows=2
+  ImplMap[1] Flags=512 MemberForwarded=0x06000002 ImportName="abs" ImportScope=1
+  ImplMap[2] Flags=512 MemberForwarded=0x06000003 ImportName="strlen" ImportScope=1
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
