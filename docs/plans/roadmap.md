@@ -65,7 +65,7 @@ Open items, in order:
 | P2 | Done | R1 and R2 merged. Signed compressed integers are deferred until a caller needs them |
 | P3 | Done | R3, V5, R4, and R5 are done. The threshold fixtures pass the 0x400 and 0x2000 limits (0x476 and 0x2346), and a person reviewed the layout snapshots. PE constants are named. Still open: the DOS stub blob and the CLI-side literals in `encode-il`. |
 | P4 | Done | O1 to O5 are merged, including `filter` EH, prefix validation, and the `il-all-opcodes` fixture. Its stdout is checked, and PEVerify and ILVerify pass. Unverifiable opcodes are in `il-unverifiable-opcodes`, and TypedReference and calli are in `il-runtime-only-opcodes`. |
-| P5 | Partly done | Done: generic methods and types (signatures, TypeSpec, MethodSpec, GenericParam), same-module calls, same-module static fields, instance methods, `.ctor`, `newobj`, single-dimension arrays, catch, finally, and fault EH. Open: multiple types, interfaces, value types, attributes, DLLs, and external instance `call` (see [cli-coverage.md](cli-coverage.md)). |
+| P5 | Partly done | Done: generic methods and types (signatures, TypeSpec, MethodSpec, GenericParam), same-module calls, same-module static fields, instance methods, `.ctor`, `newobj`, single-dimension arrays, catch, finally, and fault EH. External instance calls via the `instance` keyword are done (`instance-external-call`). Open: multiple types, interfaces, value types, attributes, and DLLs (see [cli-coverage.md](cli-coverage.md)). |
 | P6 | Mostly done | V7 corpus diff matches SRM on 133 of 133 assemblies. The benchmark and memory-mapping items in R6 are open. |
 
 ## Next steps

@@ -356,18 +356,23 @@
     [else (error 'rangi "malformed generic method arguments in ~s; expected (inst T ...)" node)]))
 
 ; Whether a call passes this. A same-module callee takes its flag from the MethodDef. An external
-; call has no signature lookup, so it passes this only for callvirt and for .ctor. Other
-; non-virtual instance calls to external methods are not supported yet; they are lowered as static.
+; callee takes it from the `instance` keyword, as in ilasm (`call instance void [asm]T::M()`), which
+; sets HASTHIS in the MemberRef signature (II.22.25, II.23.2.1). callvirt, ldvirtftn, and .ctor
+; always pass this.
 (define (same-module-owner? owner) (and (pair? owner) (null? (cdr owner)) (symbol? (car owner))))
 
+(define (call-instance-kw? node) (and (pair? node) (pair? (cdr node)) (eq? (cadr node) 'instance)))
+(define (strip-instance node)
+  (if (call-instance-kw? node) (cons (car node) (cddr node)) node))
+
 (define (call-has-this? cx node)
-  (match node
+  (match (strip-instance node)
     [(list (and op (or 'call 'callvirt 'ldftn 'ldvirtftn 'jmp)) ret owner (? symbol? name) params _ ...)
      (cond
        [(same-module-owner? owner)
         (define hit (hash-ref (ctx-method-rids cx) (list (car owner) name ret params) #f))
         (and hit (vector-ref hit 2))]
-       [else (or (and (memq op '(callvirt ldvirtftn)) #t) (eq? name '.ctor))])]
+       [else (or (call-instance-kw? node) (and (memq op '(callvirt ldvirtftn)) #t) (eq? name '.ctor))])]
     [_ #f]))
 
 ; call, callvirt, and the function-pointer forms ldftn, ldvirtftn, and jmp share this path. A
@@ -375,7 +380,7 @@
 ; is an external MemberRef (II.22.25). A generic method call names its instantiation with a
 ; MethodSpec (II.22.29).
 (define (call-item cx scope node)
-  (match node
+  (match (strip-instance node)
     [(list (and op (or 'call 'callvirt 'ldftn 'ldvirtftn 'jmp)) ret owner (? symbol? name) params more ...)
      (define inst (inst-arg more node))
      (define callvirt? (and (memq op '(callvirt ldvirtftn)) #t))
@@ -388,6 +393,8 @@
           (error 'rangi "no method ~a in ~a with return ~a and parameters ~s" name cls ret params))
         (when (and callvirt? (not this?))
           (error 'rangi "callvirt to static same-module method ~a; callvirt needs an instance method" name))
+        (when (and (call-instance-kw? node) (not this?))
+          (error 'rangi "instance keyword on static same-module method ~a" name))
         (define rid (vector-ref hit 0))
         (define arity (vector-ref hit 1))
         (define ninst (if inst (length inst) 0))
@@ -446,10 +453,11 @@
     [(or (eq? node 'ret) (and (pair? node) (eq? (car node) 'ret)))
      (effect 'ret (if ret-void? 0 1) 0 'return '())]
     [(and (pair? node) (memq (car node) '(call callvirt)))
-     (effect (car node)
-             (+ (length (list-ref node 4)) (if this? 1 0))
-             (if (eq? (cadr node) 'void) 0 1)
-             'next '())]
+     (let ([n (strip-instance node)])
+       (effect (car n)
+               (+ (length (list-ref n 4)) (if this? 1 0))
+               (if (eq? (cadr n) 'void) 0 1)
+               'next '()))]
     [(and (pair? node) (eq? (car node) 'newobj))
      (effect 'newobj (length (caddr node)) 1 'next '())]
     ; calli pops its arguments and the function pointer, and pushes the result unless void

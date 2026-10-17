@@ -71,6 +71,26 @@
              (λ () (module-with '(public static) '((ldc.i4.1) (call void (Store) Bump (int32)))
                                 (list ctor bump)))))
 
+(test-case "the instance keyword lowers a non-virtual call to an external instance method"
+  (check-not-exn
+   (λ () (module-with '(public static)
+                      '((ldstr "hi") (call instance int32 (mscorlib System.String) get_Length ()) (pop))
+                      (list ctor bump)))))
+
+(test-case "an external instance call with no receiver on the stack underflows"
+  (check-exn #rx"stack underflow"
+             (λ () (module-with '(public static)
+                                '((call instance int32 (mscorlib System.String) get_Length ()) (pop))
+                                (list ctor bump)))))
+
+(test-case "the instance keyword on a static same-module method is rejected"
+  (check-exn #rx"instance keyword on static same-module method S"
+             (λ () (module-with '(public static) '((ldc.i4.1) (call instance void (Store) S (int32)))
+                                (list
+                                 '(.method (public static) void S (int32) (cil managed)
+                                    { (.maxstack 8) (ret) })
+                                 ctor)))))
+
 (test-case "newobj, callvirt, and a non-virtual call to an instance method lower together"
   (check-not-exn
    (λ () (module-with '(public static)
