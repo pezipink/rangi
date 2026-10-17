@@ -69,13 +69,13 @@ Status: label resolution and fixed-point relaxation in `src/il/labels.rkt` (stre
   * [x] Syntax: `(.try (catch (asm ty)) ts te hs he)`, `(.try (finally) ts te hs he)`, `(.try (fault) ts te hs he)`. Clauses are written in source order, so inner clauses come before enclosing ones. The form mirrors the existing `catch` form. `endfault` is accepted as an alias for `endfinally` (both are 0xDC, III.4.5 and III.4.6).
   * [x] Flags: catch 0x0000, finally 0x0002, fault 0x0004 (II.25.4.6). The class token is 0 for finally and fault.
   * [x] Handler entry stack depth (III.1.7.5): catch 1 (the exception object), finally and fault 0. This feeds `compute-max-stack`.
-  * [ ] `filter` (0x0001) is rejected at parse time. Clause nesting and order are not validated.
+  * [x] `filter` (0x0001): `(.try (filter <label>) ts te hs he)`. The class token is the filter block offset. Filter blocks come before their handler and end in `endfilter` (0xFE 0x11). The filter entry depth is 1 (II.25.4.6, inferred; see the open items in the lane report). Fixture `ops-eh-filter`.
 * [x] Compute maxstack by abstract interpretation over the opcode table's stack behaviour and the control flow graph, unless `.maxstack` is given. Report stack underflow and inconsistent depths at merge points as assembly errors. An explicit `.maxstack` must be at least the computed depth (`tests/il/stack-test.rkt`).
-* [ ] Prefix validation: `unaligned.`, `volatile.`, `tail.`, `constrained.`, `readonly.`, and `no.` must precede an instruction they apply to.
+* [x] Prefix validation: `unaligned.`, `volatile.`, `tail.` (must be followed by `ret`), `constrained.`, `readonly.`, and `no.` must precede an instruction they apply to. Labels are skipped when checking. `constrained.` is still rejected by `check-passable`.
 
 ### O5 Verification
 
 * [x] Unit tests per operand kind and per macro boundary (`-1`, `0`, `8`, `9`, `127`, `128`, `-128`, `-129`). Merged from `stream/b-tests` in `tests/il/operand-boundary-test.rkt`.
 * [x] Branch relaxation tests with a branch exactly at the int8 limit (127 and 128 bytes). In `tests/il/relaxation-boundary-test.rkt`.
 * [ ] An `il-all-opcodes` fixture that uses every opcode at least once in valid, verifiable (where possible) code, run through ildasm and the SRM dumper. Unverifiable opcodes (`cpblk`, `localloc`, `jmp`, `calli`, `arglist`) go in a separate fixture that checks PEVerify `/md` only.
-* [ ] ILVerify on every IL fixture. Execution tests exist for loops, catch, finally, and fault (`ops-branch`, `ops-eh`, `ops-eh-finally`). `switch` and `ldstr` have no execution test yet.
+* [ ] ILVerify on every IL fixture. Execution tests exist for loops, catch, finally, fault, filter (`ops-branch`, `ops-eh`, `ops-eh-finally`, `ops-eh-filter`), `ldstr-hello`, and `switch-dispatch`. Not every fixture is covered yet.

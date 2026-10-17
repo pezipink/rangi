@@ -40,8 +40,10 @@ Work is driven by the plans in [docs/plans/](docs/plans/). Start with [roadmap.m
 Racket 8.16 CS is installed at `C:\Program Files\Racket`. Run the test suite with:
 
 ```powershell
-raco test tests/
+raco test -j 4 tests/
 ```
+
+`-j 4` runs test files in parallel and takes about a minute. It is safe because each test writes to its own temp files. Do not run two oracle builds at once in a shared folder: `build-srm!` and the ilverify build both run `dotnet build` in fixed `bin/obj` folders.
 
 It runs the fixture checks (image hash, stdout, exit code) and the external oracles. Oracles are skipped when their tool is missing. It also runs the structural lint (`tests/lib/pe-lint.rkt`, tested by `tests/image-lint-test.rkt`) on every fixture. The metadata dump decodes MethodSpec rows (they match SRM on mscorlib), and it decodes every II.22 table except the pointer and edit-and-continue tables, which it rejects when they hold rows. The V7 corpus test diffs 133 reference assemblies against SRM (see [verification.md](docs/plans/verification.md)). `RANGI_UPDATE_SNAPSHOTS=1 raco test tests/` rewrites reviewed snapshots; only do that when the change to emitted bytes is intended and explained in the commit.
 

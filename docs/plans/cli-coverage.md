@@ -67,7 +67,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | `#-` uncompressed stream                       | none    | n/a     | SRM reads it as a table stream and allows pointer tables. Not in the 6th-edition text; see [verification.md](verification.md#spec-sources-and-discovery) |         |
 | Unknown streams (for example `#!` in NGEN images) | none | n/a  | SRM skips them; the reader rejects them             |         |
 | `#Strings` (UTF-8, dedup)                      | partial | partial | UTF-8, dedup in insertion order; no suffix sharing    |         |
-| `#US` (UTF-16LE, length, trailing flag byte)   | partial | partial | Written from `ldstr` literals (`lower.rkt`). No fixture runs `ldstr` yet |         |
+| `#US` (UTF-16LE, length, trailing flag byte) | partial | partial | Written from `ldstr` literals (`lower.rkt`) | ldstr-hello |
 | `#GUID`                                        | partial | partial | MVID content hash (V0)                                |         |
 | `#Blob`                                        | partial | partial |                                                       |         |
 | 4-byte heap index widths                       | done    | partial | Writer ignores widths in several columns              |         |
@@ -79,7 +79,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | MethodDefSig and MethodRefSig (default, `HASTHIS`, `EXPLICITTHIS`) (II.23.2.1) | partial | partial |         |
 | `VARARG` call convention and sentinel                            | none | none    |         |
 | Generic method sig (`GENERIC`, `GenParamCount`) (II.23.2.1)      | partial | partial | generic-calls |
-| FieldSig (0x06)                                                  | none | none    |         |
+| FieldSig (0x06)                                                  | partial | partial | unit tests only (`field-sigs-test.rkt`) |
 | PropertySig (0x08)                                               | none | none    |         |
 | LocalVarSig (0x07), including `PINNED` and `BYREF` (II.23.2.6)   | partial | partial | ops-locals-args |
 | StandAloneMethodSig for `calli`                                  | none | none    |         |
@@ -99,8 +99,8 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 |-------------------------------------------------|--------------|---------|
 | TypeAttributes (visibility, layout, semantics)  | partial (from keywords) |         |
 | MethodAttributes and MethodImplAttributes       | partial (from keywords) |         |
-| FieldAttributes                                 | none         |         |
-| ParamAttributes                                 | none         |         |
+| FieldAttributes                                 | constants only (`flags.rkt`), not wired to ilasm | |
+| ParamAttributes                                 | constants only (`flags.rkt`), not wired to ilasm | |
 | AssemblyFlags and AssemblyHashAlgorithm         | none         |         |
 | PInvokeAttributes                               | none         |         |
 | GenericParamAttributes                          | none         |         |
@@ -109,7 +109,7 @@ Parse ilasm keyword lists (`(public static hidebysig)`) into these flag values i
 
 ## Method bodies and IL (II.25.4, Partition III)
 
-Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (`src/il/opcodes.rkt`) can be encoded, and the lint decodes all of them. Tiny and fat headers, `.locals` (LocalVarSig), and computed maxstack are done. Catch, finally, and fault EH are done; `filter`, prefix validation, and the `il-all-opcodes` fixture are not. The `ops-*` fixtures run arithmetic, branches, constants, conversions, locals and args, and EH.
+Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (`src/il/opcodes.rkt`) can be encoded, and the lint decodes all of them. Tiny and fat headers, `.locals` (LocalVarSig), and computed maxstack are done. Catch, finally, fault, and `filter` EH are done, and prefix validation is in. The `il-all-opcodes` fixture is not. The `ops-*` fixtures run arithmetic, branches, constants, conversions, locals and args, and EH.
 
 ## Module and type model
 
@@ -154,8 +154,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 
 ## Suggested order
 
-1. `ldstr` hello world is next: lowering and `#US` are written, and the fixture is missing. Entry point token, flags, and multiple TypeRefs and AssemblyRefs are done.
-2. Fields, `.ctor`, instance methods, and `newobj` are next. Locals, fat bodies, branching, and catch, finally, and fault EH are done.
+1. Fields, `.ctor`, instance methods, and `newobj` are next. Locals, fat bodies, branching, catch, finally, fault, and filter EH are done. The `ldstr` hello world and `switch` fixtures are done.
 3. Multiple types with namespaces, extends, interfaces, nested types.
 4. Value types, enums, static data. Single-dimension arrays are done (`arrays-sum`); multi-dimensional arrays are not.
 5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam are done. GenericParamConstraint and generic types are not.

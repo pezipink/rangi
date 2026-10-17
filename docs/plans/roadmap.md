@@ -26,7 +26,7 @@ P4 and P5 can interleave once P3 lands. P6 can start any time after P2, because 
 
 ## Status
 
-Last updated after the O4 (method bodies, maxstack, opcode batches), generics, same-module calls, finally/fault, arrays, and generic-calls merges. `RANGI_REQUIRE_ORACLES=1 raco test tests/` passes (1026 tests at `6b8e1de`). Start here, then read [AGENTS.md](../../AGENTS.md) and [architecture.md](../architecture.md).
+Last updated after the Wave 1 lane merges (PE constants, FieldSig and flags, `ldstr`/`switch` fixtures, `filter` EH and prefix validation). `RANGI_REQUIRE_ORACLES=1 raco test -j 4 tests/` passes (1086 tests at `3223340`, about 53 s). Start here, then read [AGENTS.md](../../AGENTS.md) and [architecture.md](../architecture.md).
 
 Done:
 
@@ -36,12 +36,14 @@ Done:
 * Writer rewrite: `<Module>` methods move to a generated `Program` class; `.entrypoint` sets the entry token; unknown IL raises.
 * Reader defects R1 to R10 fixed. PE32 and PE32+ nano dumps match System.Reflection.Metadata. The mscorlib public type count matches the SRM oracle (1520; the earlier 1521 figure was wrong, see `tests/read-bench-test.rkt`). Stream D baseline: lazy open median about 6.5 ms, enumerate public types median about 0.5 ms (20 runs, 4.7.1 mscorlib).
 * P3 bigger fixtures: `tests/fixtures/text-over-400` (`.text` VirtualSize 0x476) and `tests/fixtures/text-over-2000` (0x2346). Both pass PEVerify, ildasm, SRM, and the lint. `fixtures-test.rkt` asserts the 0x400 and 0x2000 limits. The O4 short-form `ldc.i4` change had shrunk them, so they were grown back. The layout map (V5) is in place.
-* O4 method bodies merged: `.locals`, computed maxstack, catch, finally, and fault EH (`filter` is open), and the `ops-*` opcode batch fixtures (PEVerify and ILVerify clean).
+* O4 method bodies merged: `.locals`, computed maxstack, catch, finally, fault, and `filter` EH, plus prefix validation, and the `ops-*` opcode batch fixtures (PEVerify and ILVerify clean).
+* `ldstr-hello` (UTF-16 `#US` text, including non-ASCII) and `switch-dispatch` execution fixtures merged.
+* FieldSig (0x06) codec with custom mods, and FieldAttributes and ParamAttributes constants in `src/cli/flags.rkt`. Unit-tested only; not wired into ilasm syntax yet.
+* PE header, section, and directory constants are named in `src/pe/constants.rkt`. Output is byte-identical.
 * Same-module calls merged (`calls-multi`): forward calls and recursion. The writer gap where `call` only accepted MemberRef is closed.
 * Generics merged: data layer, signatures, reader, ilasm syntax, and generic same-module calls (`generic-calls`).
 * Arrays merged (`arrays-sum`): `newarr`, `ldelem`, `stelem`, `ldlen`, `ldelema`, and `szarray` types.
 * V7 reader corpus test and the metadata dump decode MethodSpec. mscorlib's 656 MethodSpec rows match SRM.
-* `#US` heap and `ldstr` lowering are written, but no fixture runs `ldstr` yet.
 
 Open items, in order:
 
@@ -50,7 +52,7 @@ Open items, in order:
 3. Done: V7 reader corpus test over the .NET 4.7.1 reference assemblies and `System.Private.CoreLib`, diffed against SRM. 133 of 133 assemblies match.
 4. Done: P2 R1 and R2 (A1 and A2 merged). `src/private/binary.rkt` holds the little-endian, compressed-integer, alignment, and pad-to helpers. `src/cli/schema.rkt` is the single source of table and coded-index layouts, and the reader and writer both use it. Signed compressed integers are still open; nothing calls them. `src/cli/heaps.rkt` is merged (C), and the writer uses it.
 5. Done: V5 L2 layout map, landed with R3.
-6. Not started: V6 ilasm differential fixtures. Start with the `ldstr` hello world, which now has the `#US` heap behind it and needs a fixture.
+6. Partly done: V6 ilasm differential fixtures. `ldstr-hello` and `switch-dispatch` are in. The rest wait for P5 features.
 7. Writer gaps: follow the "Suggested order" in [cli-coverage.md](cli-coverage.md).
 8. Done: the ILVerify oracle (L6) is in `tests/oracles/ilverify`, checked by `tests/oracles/ilverify-test.rkt`.
 
@@ -61,14 +63,14 @@ Open items, in order:
 | P0 | Done | None |
 | P1 | Done | None |
 | P2 | Done | R1 and R2 merged. Signed compressed integers are deferred until a caller needs them |
-| P3 | Done | R3, V5, R4, and R5 are done. The threshold fixtures pass the 0x400 and 0x2000 limits (0x476 and 0x2346), and a person reviewed the layout snapshots. The partial literal removal in R4 stays open until the PE constants move. |
-| P4 | Mostly done | O1 to O4 are merged, except `filter` EH and prefix validation. O5: unit and relaxation tests are merged, and the opcode batch fixtures pass ILVerify and PEVerify. Still open: the `il-all-opcodes` fixture, ILVerify on every fixture, and execution tests for `switch` and `ldstr`. |
+| P3 | Done | R3, V5, R4, and R5 are done. The threshold fixtures pass the 0x400 and 0x2000 limits (0x476 and 0x2346), and a person reviewed the layout snapshots. PE constants are named. Still open: the DOS stub blob and the CLI-side literals in `encode-il`. |
+| P4 | Nearly done | O1 to O4 are merged, including `filter` EH and prefix validation. O5: unit and relaxation tests are merged, and the opcode batch fixtures pass ILVerify and PEVerify. `switch` and `ldstr` have execution fixtures. Still open: the `il-all-opcodes` fixture. |
 | P5 | Partly done | Done: generic methods and types (signatures, TypeSpec, MethodSpec, GenericParam), same-module calls, single-dimension arrays, catch, finally, and fault EH. Open: fields, instance methods and `newobj`, multiple types, interfaces, value types, attributes, DLLs. |
 | P6 | Mostly done | V7 corpus diff matches SRM on 133 of 133 assemblies. The benchmark and memory-mapping items in R6 are open. |
 
 ## Next steps
 
-The remaining critical path is: finish P4 (`filter`, prefixes, `il-all-opcodes`, the `switch` and `ldstr` fixtures), then P5 instance members and types. Each step keeps `RANGI_REQUIRE_ORACLES=1 raco test tests/` green.
+The remaining critical path is: finish P4 (`il-all-opcodes`), then P5 instance members and types. Each step keeps `RANGI_REQUIRE_ORACLES=1 raco test tests/` green.
 
 1. Done: P2, part A1 (R1). Helpers live in `src/private/binary.rkt`, and the reader and writer use them. Merged from `stream/a1`.
 2. Done: P2, part A2 (R2), merged from `stream/a2`.
@@ -88,7 +90,8 @@ Each stream owns files that no other stream touches, so the streams can run in s
 | C | R4 heaps | `src/cli/heaps.rkt`, `tests/cli/heaps-test.rkt` | Done (merged). |
 | D | R6 benchmark: timing of `read-file` plus `get-public-typedefs` on mscorlib | `tests/read-bench-test.rkt` | Done (merged). Timings recorded, not asserted. |
 | E | Decode signatures and heap entries in the L3 dump | `tests/lib/metadata-dump.rkt` | Done (merged). |
-| F | O4 method bodies and opcode batches | `src/il/`, `src/cli/lower.rkt`, `src/il/stack.rkt`, `tests/fixtures/ops-*` | Done (merged to `main`). Open: `filter` EH, prefix validation, the `il-all-opcodes` fixture. |
+| F | O4 method bodies and opcode batches | `src/il/`, `src/cli/lower.rkt`, `src/il/stack.rkt`, `tests/fixtures/ops-*` | Done (merged to `main`). `filter` EH and prefix validation are in. Open: the `il-all-opcodes` fixture. |
+| I | Wave 1: PE constants, FieldSig and flags, `ldstr`/`switch` fixtures, `filter` EH | `src/pe/constants.rkt`, `src/cli/flags.rkt`, `tests/fixtures/ldstr-hello`, `tests/fixtures/switch-dispatch`, `tests/fixtures/ops-eh-filter` | Done (merged to `main`). Four lanes ran in parallel, about 10 min wall time. |
 | G | Generics: data layer, signatures, reader, ilasm syntax, generic calls | `src/cli/sigs.rkt`, `src/cli/reader.rkt`, `src/ilasm/syntax.rkt`, `tests/fixtures/generic-calls` | Done (merged to `main`). |
 | H | Same-module calls, finally and fault EH, single-dimension arrays | `src/cli/lower.rkt`, `tests/fixtures/calls-multi`, `tests/fixtures/arrays-sum`, `tests/fixtures/ops-eh-finally` | Done (merged to `main`). |
 
