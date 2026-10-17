@@ -156,7 +156,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Base relocations generated from fixups               | n/a     | done    | base-relocs |
 | Deterministic timestamp and MVID                     | n/a     | done    | nano    |
 | Debug directory and portable PDB                     | out of scope | out of scope |     |
-| Win32 resources (version info, manifest)             | none    | none    |         |
+| Win32 resources (version info, manifest)             | none    | done    | win32-resources |
 | Strong-name signature                                | out of scope | out of scope |     |
 | .NET (Core) target with `runtimeconfig.json`         | out of scope | out of scope |     |
 
@@ -168,4 +168,4 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam are done. GenericParamConstraint and generic types are not.
 6. Properties, events, constants.
 7. DLL output and AnyCPU for Framework targets.
-8. P/Invoke is done (`pinvoke`): `pinvokeimpl` methods lower to ModuleRef, ImplMap, and MethodDef rows with PinvokeImpl and PreserveSig. Win32 resources are not. PDB, strong naming, ARM64, and .NET (Core) are out of scope until requested. PE32+ (AMD64) output is covered by `nano-x64`.
+8. P/Invoke is done (`pinvoke`): `pinvokeimpl` methods lower to ModuleRef, ImplMap, and MethodDef rows with PinvokeImpl and PreserveSig. Win32 resources are done (`win32-resources`): a `.win32resource` payload is laid out in the `.rsrc` section with data directory 2. PDB, strong naming, ARM64, and .NET (Core) are out of scope until requested. PE32+ (AMD64) output is covered by `nano-x64`.
