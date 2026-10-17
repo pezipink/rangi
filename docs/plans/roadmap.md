@@ -61,20 +61,20 @@ Open items, in order:
 | P0 | Done | None |
 | P1 | Done | None |
 | P2 | Done | R1 and R2 merged. Signed compressed integers are deferred until a caller needs them |
-| P3 | Partly done | R3, V5, R4, and R5 are done. The threshold fixtures pass the 0x400 and 0x2000 limits (0x476 and 0x2346). Open: a person reviews the layout snapshots. The partial literal removal in R4 stays open until the PE constants move. |
+| P3 | Done | R3, V5, R4, and R5 are done. The threshold fixtures pass the 0x400 and 0x2000 limits (0x476 and 0x2346), and a person reviewed the layout snapshots. The partial literal removal in R4 stays open until the PE constants move. |
 | P4 | Mostly done | O1 to O4 are merged, except `filter` EH and prefix validation. O5: unit and relaxation tests are merged, and the opcode batch fixtures pass ILVerify and PEVerify. Still open: the `il-all-opcodes` fixture, ILVerify on every fixture, and execution tests for `switch` and `ldstr`. |
 | P5 | Partly done | Done: generic methods and types (signatures, TypeSpec, MethodSpec, GenericParam), same-module calls, single-dimension arrays, catch, finally, and fault EH. Open: fields, instance methods and `newobj`, multiple types, interfaces, value types, attributes, DLLs. |
 | P6 | Mostly done | V7 corpus diff matches SRM on 133 of 133 assemblies. The benchmark and memory-mapping items in R6 are open. |
 
 ## Next steps
 
-The remaining critical path is: grow the P3 threshold fixtures past 0x400 and 0x2000 and close P3, finish P4 (`filter`, prefixes, `il-all-opcodes`, the `switch` and `ldstr` fixtures), then P5 instance members and types. Each step keeps `RANGI_REQUIRE_ORACLES=1 raco test tests/` green.
+The remaining critical path is: finish P4 (`filter`, prefixes, `il-all-opcodes`, the `switch` and `ldstr` fixtures), then P5 instance members and types. Each step keeps `RANGI_REQUIRE_ORACLES=1 raco test tests/` green.
 
 1. Done: P2, part A1 (R1). Helpers live in `src/private/binary.rkt`, and the reader and writer use them. Merged from `stream/a1`.
 2. Done: P2, part A2 (R2), merged from `stream/a2`.
 3. Done: R4 (CLI emits chunks). Heaps, tables, metadata root, CLI header, and body chunks.
 4. Done: R5 (front-end split). `parse-il` is in `ilasm/syntax.rkt`, lowering is in `cli/lower.rkt`, the metadata chunk is in `cli/build.rkt`, and `image.rkt` writes the image. `cli-writer.rkt` is deleted. The reader moved to `cli/reader.rkt`, with a shim at `cli-reader.rkt` until its callers are migrated.
-5. Open: close P3 once the threshold fixtures are grown and a person has reviewed the layout snapshots.
+5. Done: P3 closed after the threshold fixtures were grown and a person reviewed the layout snapshots.
 6. P4 and P5 remaining work is listed in the phase table and in [opcodes.md](opcodes.md) and [cli-coverage.md](cli-coverage.md). The operand encoders, labels, and relaxation are wired to the writer.
 
 ## What can run in parallel
@@ -97,7 +97,7 @@ Not parallel:
 * Lanes that touch `cli/lower.rkt` still conflict with one another. The generic-calls lane needed a manual merge of 10 hunks. Keep one lane per file at a time.
 * V6 ilasm differential fixtures for unsupported features. They can't pass until those features exist. Start them alongside P5, not before.
 
-Expected gain: the next gains are P3 threshold fixtures and the P4 open items, then P5 instance members and types.
+Expected gain: the next gains are the P4 open items, then P5 instance members and types.
 
 
 ## Handoff
