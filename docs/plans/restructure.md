@@ -41,7 +41,7 @@ Deviations so far: a chunk holds plain bytes with zeroed holes and a list of typ
 
 ### R4 CLI layer emits chunks
 
-* [ ] `cli/heaps.rkt`: insertion-ordered heaps with dedup. The `#Strings` heap writes UTF-8; the `#US` heap writes a compressed length, UTF-16LE text, and the trailing flag byte (II.24.2.4); `#Blob`; `#GUID` (1-based index).
+* [x] `cli/heaps.rkt`: insertion-ordered heaps with dedup. The `#Strings` heap writes UTF-8; the `#US` heap writes a compressed length, UTF-16LE text, and the trailing flag byte (II.24.2.4); `#Blob`; `#GUID` (1-based index). Merged from `stream/c-heaps`; the writer does not use it yet.
 * [ ] `cli/tables.rkt`: rows are added through typed constructors and stored in insertion order. Sorted tables are sorted at serialisation time, with a remap of any tokens that point into them. Compute `Valid`, `Sorted`, `HeapSizes`, and row counts.
 * [ ] `cli/metadata.rkt`: metadata root (signature, version string padded to 4, stream headers with computed offsets), as a single chunk.
 * [ ] `cli/header.rkt`: CLI header with the entry point token from the model, flags (`ILONLY`, `32BITREQUIRED`, `32BITPREFERRED`, `STRONGNAMESIGNED`), and symbol fixups to the metadata and resources.
