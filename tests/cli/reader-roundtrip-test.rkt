@@ -58,7 +58,10 @@
 (define program
   (cli-program '("mscorlib")
                (list (list 1 "System" "Object"))
-               (list (list 1 "Foo" memberref-sig))
+               (list (list (cons 'typeref 1) "Foo" memberref-sig))
+               '()
+               '()
+               '()
                (list (tdef 1 "C" "N" #f (list (mdef "M" 1 method-sig #f #f))))
                "rangi.dll"
                0
