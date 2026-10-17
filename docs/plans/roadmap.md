@@ -19,7 +19,7 @@ ms.date: 2026-10-17
 | P2    | [restructure.md](restructure.md) R1-R2                 | `private/binary.rkt` and `cli/schema.rkt` shared by reader and writer                    | Reader and writer produce identical bytes and parse results to P1 snapshots |
 | P3    | [restructure.md](restructure.md) R3-R5                 | PE layer with a layout engine; CLI layer emits chunks; hardcodes removed                 | Layout map snapshot reviewed; PEVerify clean; `.text` larger than 0x400     |
 | P4    | [opcodes.md](opcodes.md)                               | Full opcode table, labels, branch relaxation, fat bodies, EH                             | Opcode table matches the .NET oracle; IL fixtures pass ILVerify and run     |
-| P5    | [cli-coverage.md](cli-coverage.md)                     | Fields, params, types, generics, attributes, DLLs, PE32+                                 | Each row in the coverage tracker has a passing fixture                      |
+| P5    | [cli-coverage.md](cli-coverage.md)                     | Fields, params, types, generics, attributes, DLLs                                        | Each row in the coverage tracker has a passing fixture                      |
 | P6    | [restructure.md](restructure.md) R6                    | Reader hardened against real assemblies (mscorlib, System.Private.CoreLib)               | Reader agrees with System.Reflection.Metadata on every reference assembly   |
 
 P4 and P5 can interleave once P3 lands. P6 can start any time after P2, because the reader only depends on the shared schema.
@@ -32,9 +32,13 @@ P4 and P5 can interleave once P3 lands. P6 can start any time after P2, because 
 * [x] Make the output path a parameter of `assemble` (default to a temp file) so tests and experiments stop sharing `c:\temp\rangi.exe`.
 * [x] Route debug output through a `rangi` logger (`src/log.rkt`) instead of `writeln`. Remove the module-level `nano2` run from the library.
 
-## Open questions
+## Decisions
 
-* Target runtimes: .NET Framework only (mscoree `_CorExeMain`), or also .NET (Core) with a `runtimeconfig.json` and an apphost? This affects PE32+ priority and which reference assemblies fixtures use.
-* Should the s-expression ilasm syntax stay close to textual ilasm (`.method`, `.class`), or move toward a Racket-native structure such as keyword arguments and structs?
-* Is a PDB (portable PDB) needed for debugging generated code, and if so, in which phase?
-* Is strong naming needed? It requires SHA-1 hashing of the image and an RSA signature, which is a significant feature.
+Decided by the user (October 2026). Plans must follow these unless the user changes them.
+
+* **Target runtime: .NET Framework only.** Entry is `_CorExeMain` through mscoree, and fixtures run on the Framework 4.x reference assemblies. .NET (Core) targets, `runtimeconfig.json`, and apphost are out of scope for now.
+* **Syntax: stay close to textual ilasm.** Keep `.method`, `.class`, and keyword lists such as `(public static)`. Do not move to a Racket-native structure.
+* **No portable PDB yet.** The debug directory and PDB are out of scope until the user asks for them.
+* **No strong naming.** The strong-name signature and `STRONGNAMESIGNED` flag stay out of scope.
+
+Consequence: PE32+ is not needed for Framework-only fixtures, which are PE32. Keep the PE32+ reader fix in the backlog and do not schedule it in P5.

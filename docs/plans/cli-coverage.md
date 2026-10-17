@@ -136,17 +136,17 @@ Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes, tiny headers onl
 |------------------------------------------------------|---------|---------|---------|
 | PE32, x86 `ILONLY` EXE                               | done    | partial |         |
 | DLL output (`IMAGE_FILE_DLL`, `_CorDllMain`)         | n/a     | none    |         |
-| PE32+ (AMD64, ARM64), no import stub needed          | none    | none    |         |
+| PE32+ (AMD64, ARM64), no import stub needed          | out of scope | out of scope |     |
 | AnyCPU and `32BITPREFERRED`                          | n/a     | none    |         |
 | Subsystem GUI versus console                         | n/a     | none    |         |
 | Multiple sections (`.text`, `.rsrc`, `.reloc`, `.sdata`) | partial | partial (`.text`, `.reloc`) |  |
 | Sections of any size (no 0x400 limit)                | done    | none    |         |
 | Base relocations generated from fixups               | n/a     | partial |         |
 | Deterministic timestamp and MVID                     | n/a     | none    |         |
-| Debug directory and portable PDB                     | none    | none    |         |
+| Debug directory and portable PDB                     | out of scope | out of scope |     |
 | Win32 resources (version info, manifest)             | none    | none    |         |
-| Strong-name signature                                | none    | none    |         |
-| .NET (Core) target with `runtimeconfig.json`         | n/a     | none    |         |
+| Strong-name signature                                | out of scope | out of scope |     |
+| .NET (Core) target with `runtimeconfig.json`         | out of scope | out of scope |     |
 
 ## Suggested order
 
@@ -156,5 +156,5 @@ Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes, tiny headers onl
 4. Value types, enums, arrays, static data.
 5. Generics (TypeSpec, MethodSpec, GenericParam, GenericParamConstraint).
 6. Properties, events, custom attributes, constants.
-7. DLL output, PE32+, AnyCPU, .NET (Core) target.
-8. P/Invoke, resources, PDB, strong naming.
+7. DLL output and AnyCPU for Framework targets.
+8. P/Invoke and Win32 resources. PDB, strong naming, PE32+, and .NET (Core) are out of scope until requested.

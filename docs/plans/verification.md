@@ -84,7 +84,7 @@ PEVerify already finds one issue in today's baseline (`0x8013129d` on `MethodDef
 
 ### L7 Execution
 
-Run the image and compare stdout and exit code with `expected-stdout.txt`. .NET Framework images run directly. .NET (Core) images need a `runtimeconfig.json` and `dotnet exec`.
+Run the image and compare stdout and exit code with `expected-stdout.txt`. Images run directly under .NET Framework. .NET (Core) runs are out of scope.
 
 ### L8 Differential comparison with ilasm
 
