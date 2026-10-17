@@ -10,6 +10,7 @@
          (struct-out asm-ref)
          (struct-out class-decl)
          (struct-out override-decl)
+         (struct-out custom-decl)
          (struct-out field-decl)
          (struct-out data-decl)
          (struct-out method-decl)
@@ -22,8 +23,9 @@
 ; heap indexes, or flag bits. cli/lower.rkt resolves those.
 ; subsystem is 'console (the default) or 'windows (.subsystem). platform is 'anycpu (the default),
 ; 'x86, or '32bitpreferred (.platform). Both are names here; lower and image map them to flags.
-; data is the list of data-decl blocks (.data, II.16) in source order.
-(struct module-model (asm-refs classes module-name format dll? subsystem platform data))
+; data is the list of data-decl blocks (.data, II.16) in source order. customs is the list of
+; custom-decl on the assembly (top-level .custom).
+(struct module-model (asm-refs classes module-name format dll? subsystem platform data customs))
 ; An .assembly extern (II.22.5 AssemblyRef). name comes from the referenced file. version is four
 ; 16-bit parts, and token is the 8-byte public key token or #"" when none is given.
 (struct asm-ref (name version token) #:transparent)
@@ -32,11 +34,16 @@
 ; name is the full name: Outer/Inner for a nested class (II.10.3). enclosing is the full name of
 ; the enclosing class, or #f for a top-level class. overrides is a list of override-decl, in source order.
 ; implements is a list of interface names in source order, each as in extends (II.22.23).
-(struct class-decl (flags name gparams extends methods fields enclosing overrides implements))
+; customs is the list of custom-decl written in the class body (II.22.10 with a TypeDef parent).
+(struct class-decl (flags name gparams extends methods fields enclosing overrides implements customs))
 ; A .override directive (II.22.27 MethodImpl): owner is the base class as in extends, name, ret and
 ; params are the base method's signature. The body is the method of the same name and signature in
 ; the class that declares the override.
 (struct override-decl (owner name ret params) #:transparent)
+; A custom attribute (II.22.10, blob II.23.3). ctor is a symbol for a constructor in this module's
+; class of that name, or (asm ty) for one in a referenced assembly. ret is void and params are the
+; constructor's parameter types. blob is the literal bytes of the value, not typed.
+(struct custom-decl (ctor ret params blob) #:transparent)
 ; A field (II.22.15). flags are FieldAttributes keywords; type is a type form (II.22.15).
 ; init is #f, or (prim . value) for a literal field: an integral primitive and its integer value.
 ; at is #f, or the name of a data-decl whose bytes are the field's initial value (FieldRVA, II.22.18).
@@ -44,7 +51,8 @@
 ; A data block (II.16): name is the symbol a field's `at` refers to, bytes its initial value.
 (struct data-decl (name bytes) #:transparent)
 ; handlers: list of eh-clause in source order. maxstack is #f when there is no .maxstack.
-(struct method-decl (flags ret name gparams params code maxstack entry? locals handlers))
+; customs is the list of custom-decl written in the method body (II.22.10 with a MethodDef parent).
+(struct method-decl (flags ret name gparams params code maxstack entry? locals handlers customs))
 ; exception clause (II.25.4.6): kind is catch, finally, fault or filter. class is (asm ty) for a
 ; catch, the filter block's label name for a filter, and #f otherwise; the four labels are names
 ; without the colon.
@@ -221,14 +229,45 @@
   (unless (list? params) (error 'rangi "malformed parameter list on ~a: ~s" name params))
   (define gparams (parse-typarams name tp ncls (typarams-count tp)))
   (define nmth (length gparams))
+  (define-values (body-customs body-il)
+    (if bodiless? (values '() '()) (partition custom-node? il)))
   (define-values (code maxstack entry? raw-locals handlers)
     (if bodiless?
         (values #f #f #f #f '())
-        (split-directives il)))
+        (split-directives body-il)))
   (check-type name ret ncls nmth)
   (for ([p (in-list params)]) (check-type name p ncls nmth))
   (method-decl prefix ret name gparams params code maxstack entry?
-               (parse-locals name raw-locals ncls nmth) handlers))
+               (parse-locals name raw-locals ncls nmth) handlers
+               (map (λ (n) (parse-custom name n)) body-customs)))
+
+; .custom directives (II.22.10). The parent is set by where the directive is written: top level
+; for the assembly, in a class body for the class, and in a method body for the method.
+(define (custom-node? node)
+  (and (pair? node) (eq? (car node) '.custom)))
+
+; .custom Owner::.ctor void (PARAMS) = (bytearray (HEX ...)) for a constructor in this module, or
+; .custom (asm ty) .ctor void (PARAMS) = (bytearray (HEX ...)) for one in a referenced assembly.
+; The blob is written literally (II.23.3); only its 0x0001 prolog is checked.
+(define (parse-custom who node)
+  (define-values (ctor ret params items)
+    (match node
+      [(list '.custom (? symbol? qual) ret (? list? params) '= (list 'bytearray (? list? items)))
+       (define m (regexp-match #rx"^([^:]+)::[.]ctor$" (symbol->string qual)))
+       (unless m
+         (error 'rangi "malformed .custom in ~a: ~s (expected Owner::.ctor)" who node))
+       (values (string->symbol (cadr m)) ret params items)]
+      [(list '.custom (list (? symbol? asm) (? symbol? ty)) '.ctor ret (? list? params)
+             '= (list 'bytearray (? list? items)))
+       (values (list asm ty) ret params items)]
+      [_ (error 'rangi "malformed .custom in ~a: ~s" who node)]))
+  (unless (eq? ret 'void)
+    (error 'rangi ".custom in ~a: a constructor returns void, not ~a" who ret))
+  (for ([p (in-list params)]) (check-type who p 0 0))
+  (define blob (apply bytes (for/list ([x (in-list items)]) (parse-data-byte who x))))
+  (unless (and (>= (bytes-length blob) 2) (= (bytes-ref blob 0) 1) (= (bytes-ref blob 1) 0))
+    (error 'rangi ".custom in ~a: blob must start with the prolog 01 00 (II.23.3)" who))
+  (custom-decl ctor ret params blob))
 
 ; .override Owner::M ret params, or .override (asm ty) M ret params for a base in another assembly.
 (define (parse-override class-name node ncls)
@@ -411,11 +450,14 @@
     (error 'rangi "duplicate .implements ~a in ~a" (check-duplicates implements) name))
   (define methods
     (for/list ([node (in-list members)]
-               #:unless (and (pair? node) (memq (car node) '(.field .override .implements))))
+               #:unless (and (pair? node) (memq (car node) '(.field .override .implements .custom))))
       (parse-method name node ncls)))
+  (define customs
+    (for/list ([node (in-list members)] #:when (custom-node? node))
+      (parse-custom name node)))
   (when (check-duplicates (map field-decl-name fields))
     (error 'rangi "duplicate field ~a in ~a" (check-duplicates (map field-decl-name fields)) name))
-  (cons (class-decl flags name gparams ext methods fields enclosing overrides implements)
+  (cons (class-decl flags name gparams ext methods fields enclosing overrides implements customs)
         (append* (for/list ([node (in-list body)] #:when (nested-class-node? node))
                    (flatten-class (nested-class-raw node) name)))))
 
@@ -434,9 +476,13 @@
       (error 'rangi "duplicate .assembly extern ~a" name))
     (define-values (version token) (parse-asm-extern-body name body))
     (set! asm-refs (cons (asm-ref name version token) asm-refs)))
+  (define asm-customs '())
   (define raw-classes
     (for/fold ([acc '()] #:result (reverse acc)) ([node (in-list program)])
       (match node
+        [(cons '.custom _)
+         (set! asm-customs (cons (parse-custom 'assembly node) asm-customs))
+         acc]
         [(list '.assembly 'extern filename)
          (add-asm-extern! filename '())
          acc]
@@ -497,14 +543,17 @@
   (define module-body (list-ref module-cls 4))
   (when (ormap nested-class-node? module-body)
     (error 'rangi "<Module> cannot have nested classes"))
-  (define moved? (pair? module-body))
+  ; .custom on <Module> stays on <Module>; its other members move to Program
+  (define module-customs (filter custom-node? module-body))
+  (define module-code (filter (λ (n) (not (custom-node? n))) module-body))
+  (define moved? (pair? module-code))
   (when (and moved? (findf (class-named? 'Program) others))
     (error 'rangi "class Program clashes with the holder generated for <Module> methods"))
   (define ordered
     (append (list (if moved?
-                      (list (car module-cls) '<Module> (caddr module-cls) (cadddr module-cls) '())
+                      (list (car module-cls) '<Module> (caddr module-cls) (cadddr module-cls) module-customs)
                       module-cls))
-            (if moved? (list (list '() 'Program #f #f module-body)) '())
+            (if moved? (list (list '() 'Program #f #f module-code)) '())
             others))
 
   (define classes (append* (for/list ([cls (in-list ordered)]) (flatten-class cls #f))))
@@ -532,4 +581,5 @@
     (error 'rangi "exactly one .entrypoint is required, found ~a" (length entries)))
 
   (module-model (reverse asm-refs) classes mod-name (or fmt 'pe32) dll?
-                (or subsystem 'console) (or platform 'anycpu) (reverse data-decls)))
+                (or subsystem 'console) (or platform 'anycpu) (reverse data-decls)
+                (reverse asm-customs)))

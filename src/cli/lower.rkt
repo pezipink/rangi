@@ -20,7 +20,8 @@
          (struct-out fdef)
          (struct-out mdef)
          (struct-out methodimpl)
-         (struct-out interfaceimpl))
+         (struct-out interfaceimpl)
+         (struct-out customattr))
 
 ; The CLI-level program: flags are bits, signatures and bodies are bytes, and
 ; references are rids. asm-refs rows are (name version token), where version is four ints and
@@ -30,16 +31,20 @@
 ; is (cons 'methoddef|'memberref rid); a genericparam owner is (cons 'methoddef rid).
 ; subsystem and platform are the module model's names ('console|'windows, 'anycpu|'x86|'32bitpreferred).
 ; methodimpls are the MethodImpl rows for .override, in source order. interfaceimpls are the
-; InterfaceImpl rows for .implements, in source order.
+; InterfaceImpl rows for .implements, in source order. customattrs are the CustomAttribute rows
+; (II.22.10) in source order; the builder sorts them by parent.
 (struct cli-program (asm-refs typerefs memberrefs typespecs methodspecs genericparams
                      typedefs module-name entry-rid format standalone-sigs us-heap
-                     subsystem platform methodimpls interfaceimpls))
+                     subsystem platform methodimpls interfaceimpls customattrs))
 ; A MethodImpl row (II.22.27): class is the TypeDef rid, body is (cons 'methoddef rid) of an
 ; override in that class, and decl is (cons 'methoddef|'memberref rid) of the base method.
 (struct methodimpl (class body decl))
 ; An InterfaceImpl row (II.22.23): class is the implementing TypeDef rid, and iface is
 ; (cons 'typedef|'typeref rid) of the interface.
 (struct interfaceimpl (class iface))
+; A CustomAttribute row (II.22.10): parent is (cons 'assembly|'typedef|'methoddef rid), ctor is
+; (cons 'methoddef|'memberref rid) of the attribute's constructor, and value is the literal blob.
+(struct customattr (parent ctor value))
 ; fields are the TypeDef's Field rows, in row order (II.22.15). extends is (typedef . rid),
 ; (typeref . rid), or #f for an interface or <Module> (II.22.37). enclosing is the TypeDef rid of
 ; the enclosing class for a nested type, or #f (II.22.32).
@@ -1061,6 +1066,43 @@
        (interfaceimpl class-rid (cons 'typeref (typeref-rid! cx asm ty 0)))])))
 
 
+; CustomAttribute row (II.22.10) for one .custom. A constructor is a MethodDef of this module, or a
+; MemberRef on an external attribute class (II.22.25, MethodRefSig with HASTHIS). The blob is
+; written literally (II.23.3).
+(define (lower-custom cx parent cu)
+  (define params (custom-decl-params cu))
+  (define ctor (custom-decl-ctor cu))
+  (define type
+    (cond
+      [(symbol? ctor)
+       (define hit (hash-ref (ctx-method-rids cx) (list ctor '.ctor 'void params) #f))
+       (unless hit (error 'rangi "no constructor ~a in this module matches .custom ~s" ctor params))
+       (cons 'methoddef (vector-ref hit 0))]
+      [else
+       (define-values (asm ty) (asm-type-parts ctor))
+       (define sig (method-sig cx '(0 . 0) 'void params #:hasthis? #t))
+       (cons 'memberref (member-ref! cx (owner-parent! cx asm ty '() '(0 . 0)) '.ctor sig))]))
+  (customattr parent type (custom-decl-blob cu)))
+
+; The CustomAttribute rows of a module, in source order: the assembly's (parent Assembly rid 1),
+; then each class's (parent TypeDef), then each method's (parent MethodDef).
+(define (lower-customattrs cx m classes)
+  (append
+   (for/list ([cu (in-list (module-model-customs m))])
+     (lower-custom cx (cons 'assembly 1) cu))
+   (append*
+    (for/list ([cls (in-list classes)])
+      (define name (class-decl-name cls))
+      (append
+       (for/list ([cu (in-list (class-decl-customs cls))])
+         (lower-custom cx (cons 'typedef (module-class-rid cx name)) cu))
+       (append*
+        (for/list ([md (in-list (class-decl-methods cls))])
+          (define hit (hash-ref (ctx-method-rids cx)
+                                (list name (method-decl-name md) (method-decl-ret md) (method-decl-params md))))
+          (for/list ([cu (in-list (method-decl-customs md))])
+            (lower-custom cx (cons 'methoddef (vector-ref hit 0)) cu)))))))))
+
 (define (lower-module m)
   (define classes (module-model-classes m))
   (for ([cls (in-list classes)] #:unless (null? (class-decl-gparams cls)))
@@ -1145,6 +1187,7 @@
   (define interfaceimpls
     (append* (for/list ([cls (in-list classes)] #:unless (null? (class-decl-implements cls)))
                (lower-implements cx cls class-decls))))
+  (define customattrs (lower-customattrs cx m classes))
   (cli-program (for/list ([name (in-list (interner-keys asm-refs))])
                  (define r (findf (λ (r) (equal? (asm-ref-name r) name)) (module-model-asm-refs m)))
                  (list name (asm-ref-version r) (asm-ref-token r)))
@@ -1162,5 +1205,6 @@
                (module-model-subsystem m)
                (module-model-platform m)
                methodimpls
-               interfaceimpls))
+               interfaceimpls
+               customattrs))
 

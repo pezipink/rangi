@@ -101,13 +101,14 @@
   (define m (parse-il (program '(.class (public) Keep []))))
   (define bad (module-model (module-model-asm-refs m)
                             (append (module-model-classes m)
-                                    (list (class-decl '(nested public) 'Inner '() #f '() '() 'Missing '() '())))
+                                    (list (class-decl '(nested public) 'Inner '() #f '() '() 'Missing '() '() '())))
                             (module-model-module-name m)
                             (module-model-format m)
                             (module-model-dll? m)
                             (module-model-subsystem m)
                            (module-model-platform m)
-                           (module-model-data m)))
+                           (module-model-data m)
+                           '()))
   (check-exn #rx"nested class Inner has no enclosing class Missing"
              (λ () (lower-module bad))))
 
