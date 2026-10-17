@@ -6,7 +6,7 @@ ms.date: 2026-10-17
 
 ## Current state
 
-`encode-il` in `src/cli/lower.rkt`, fed by `parse-il` (through `lower-module`), handles four forms: `ret` (0x2A), `add` (0x58), `ldc.i4` (0x20, always a 4-byte operand), and `call` to a `MemberRef` (0x28) or a same-module `MethodDef` (0x28, token `0x06000000 | rid`, written as `(call ret (Class) name (params))`). `callvirt` on a same-module method is rejected, because all local methods are static. Any other instruction raises `unsupported IL instruction`, so nothing is skipped silently. `.locals` and labels are supported. Exception handling supports `catch`, `finally`, and `fault` clauses (see below). `filter` is not supported yet.
+`encode-il` in `src/cli/lower.rkt` lowers the parsed model with the shared opcode table (`src/il/opcodes.rkt`) and the encoders in `src/il/encode.rkt`. Labels and branch relaxation come from `src/il/labels.rkt`, and maxstack from `src/il/stack.rkt`. `call` targets a MemberRef, a same-module static MethodDef (`(call ret (Class) name (params))`), or a MethodSpec for a generic method. `callvirt` on a same-module method is rejected, because local methods are static. Supported beyond plain opcodes: `.locals`, labels, `ldstr`, `switch`, and EH clauses `catch`, `finally`, and `fault`. `filter` is not supported. The `ops-*` fixtures (`ops-arith`, `ops-branch`, `ops-constants`, `ops-conversions`, `ops-eh`, `ops-eh-finally`, `ops-locals-args`) are checked with PEVerify and ILVerify.
 
 ## Target size
 
@@ -59,7 +59,7 @@ Status: label resolution and fixed-point relaxation in `src/il/labels.rkt` (stre
 * [x] Labels are `(label name)` forms or `name:` symbols in the instruction stream.
 * [x] Assemble with all branches short, measure, then iteratively widen any branch whose offset does not fit in int8 until a fixed point. Long forms are never shrunk back, which guarantees termination.
 * [x] Provide macro forms that pick the shortest encoding: `ldc.i4` -> `ldc.i4.m1`, `ldc.i4.0`-`ldc.i4.8`, `ldc.i4.s`, `ldc.i4`; `ldloc`/`stloc`/`ldarg`/`starg`/`ldloca`/`ldarga` -> `.0`-`.3`, `.s`, long. Keep explicit forms available for exact control. (Selectors `encode-ldc-i4` and `encode-var-access` in `src/il/encode.rkt`; not yet exposed as front-end names.)
-* [x] Replace today's `ldc.i` with the `ldc.i4` macro; add `ldc.i8`, `ldc.r4`, `ldc.r8`.
+* [~] Replace today's `ldc.i` with the `ldc.i4` macro; add `ldc.i8`, `ldc.r4`, `ldc.r8`. The `ldc.i8`, `ldc.r4`, and `ldc.r8` forms are in use (`ops-conversions`). The `ldc.i4` macro is not yet exposed to the front end, so `ldc.i4.s` and the other explicit forms are written by hand.
 
 ### O4 Method bodies (II.25.4)
 
@@ -78,4 +78,4 @@ Status: label resolution and fixed-point relaxation in `src/il/labels.rkt` (stre
 * [x] Unit tests per operand kind and per macro boundary (`-1`, `0`, `8`, `9`, `127`, `128`, `-128`, `-129`). Merged from `stream/b-tests` in `tests/il/operand-boundary-test.rkt`.
 * [x] Branch relaxation tests with a branch exactly at the int8 limit (127 and 128 bytes). In `tests/il/relaxation-boundary-test.rkt`.
 * [ ] An `il-all-opcodes` fixture that uses every opcode at least once in valid, verifiable (where possible) code, run through ildasm and the SRM dumper. Unverifiable opcodes (`cpblk`, `localloc`, `jmp`, `calli`, `arglist`) go in a separate fixture that checks PEVerify `/md` only.
-* [ ] ILVerify on every IL fixture; execution tests for control flow (loops, `switch`, `try`/`finally`).
+* [ ] ILVerify on every IL fixture. Execution tests exist for loops, catch, finally, and fault (`ops-branch`, `ops-eh`, `ops-eh-finally`). `switch` and `ldstr` have no execution test yet.

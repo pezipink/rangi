@@ -12,7 +12,12 @@ All code lives in `src/`, with the experiments in `experiments/` and the test ha
 |--------------------------------|--------------------------------------------------------------------------------------------------------------|
 | `src/cli/reader.rkt`           | Lazy PE + CLI metadata reader. Exports `read-file`, `get-public-typedefs`, `read-assembly-meta`, and read-only accessors used by tests. `src/cli-reader.rkt` is a re-export shim. |
 | `src/ilasm/syntax.rkt`         | s-expression ilasm front end (`parse-il`). Returns a plain `module-model` of classes and methods, with no heap or table knowledge. |
-| `src/cli/lower.rkt`            | Lowers the model to a `cli-program`: type and member refs, typedefs, flags, signatures, IL bytes, and interning. |
+| `src/cli/lower.rkt`            | Lowers the model to a `cli-program`: type and member refs, typedefs, flags, signatures, IL bytes, locals, EH clauses, and interning. |
+| `src/cli/sigs.rkt`             | II.23.2 signature blob encoders: method, field, LocalVarSig, SZARRAY, GENERIC, GENERICINST, TypeSpec, and MethodSpec blobs. |
+| `src/il/opcodes.rkt`           | Partition III opcode table (data). The single source of truth for opcode bytes, operand kinds, and stack behaviour. |
+| `src/il/encode.rkt`            | Operand encoders driven by the opcode table. Used by the writer. |
+| `src/il/labels.rkt`            | Label resolution and fixed-point branch relaxation. Used by the writer. |
+| `src/il/stack.rkt`             | Computes `maxstack` over the control-flow graph, including handler entry depths. |
 | `src/cli/build.rkt`            | Builds the metadata chunk (`build-metadata`) from a `cli-program`, using the schema, heaps, tables, and metadata modules. |
 | `src/image.rkt`                | `write-image`, `assemble`, and `image-layout-report`. Plans the PE layout and writes a deterministic image. Takes an optional output path (default a temp file). |
 | `src/log.rkt`                  | The `rangi` logger used by the writer for debug and warning output.                                          |
@@ -37,13 +42,16 @@ Fixed and covered by tests: the `#-` (uncompressed) stream name, which SRM reads
 
 The writer is split into layers. `ilasm/syntax.rkt` (`parse-il`) produces a plain model. `cli/lower.rkt` turns that model into a `cli-program`, interning strings, type refs, and member refs in a fixed order and assembling IL bytes. `cli/build.rkt` (`build-metadata`) builds the metadata chunk. `image.rkt` (`plan-image`) places every chunk with `pe/layout.rkt`, then `assemble` serialises the placed image with `pe/write.rkt`. `image-layout-report` prints the same plan as the layout map that each fixture snapshots as `layout.txt`.
 
-The output is deterministic. Tables and heaps keep insertion order, the MVID is a content hash, and the COFF timestamp is 0. `<Module>` methods move into a generated `Program` class, which clears the PEVerify `0x8013129d` warning. Method bodies use a tiny header when the code is under 64 bytes and `.maxstack` is at most 8, and a fat header otherwise.
+The output is deterministic. Tables and heaps keep insertion order, the MVID is a content hash, and the COFF timestamp is 0. `<Module>` methods move into a generated `Program` class, which clears the PEVerify `0x8013129d` warning. Method bodies use a tiny header only when the code is under 64 bytes, `maxstack` is at most 8, and the method has no locals and no EH clauses. Otherwise they use a fat header. `maxstack` is computed from the control-flow graph (`src/il/stack.rkt`) unless `.maxstack` is given.
 
 Known limits (planned gaps, not defects in code that is present):
 
-* Only `ret`, `add`, `ldc.i4`, and `call` (to a MemberRef or MethodDef) are assembled. Any other instruction raises an error. The lint decodes the same four opcodes.
-* Signatures support only `void`, `int32`, and `object`.
-* Method bodies have no locals and no exception handling.
+* Instructions come from the shared opcode table. The lint decodes every opcode in that table. Unknown names raise an error.
+* `call` targets a MemberRef, a same-module static MethodDef (`(call ret (Class) name (params))`), or a MethodSpec for a generic method. `callvirt` on a same-module method and instance methods are rejected.
+* Signatures cover primitives, class and value type references, `SZARRAY`, generic instances, `VAR` and `MVAR`, and LocalVarSig. Not yet: multi-dimensional arrays, `calli`, field and property signatures, and custom modifiers.
+* Exception handling supports `catch`, `finally`, and `fault`. `filter` is not supported. Clause nesting and order are not validated.
+* Instruction prefixes (`unaligned.`, `volatile.`, `tail.`, and the rest) are not validated.
+* Fixtures run only some of the opcodes. The `ops-*` fixtures cover arithmetic, branches, constants, conversions, locals and args, and EH. `ldstr` and `switch` lower and encode, but no fixture runs them yet.
 * Assembly and AssemblyRef versions are 0, and the `.assembly` name is ignored. The assembly name is the output basename.
 * Field and param rows are written, but the lint checks only their counts.
 
@@ -72,8 +80,9 @@ rangi/
     reader.rkt              lazy metadata reader built on schema.rkt
   il/
     opcodes.rkt             Partition III opcode table (data)
-    encode.rkt              operand encoders driven by opcodes.rkt (built, not yet wired to the writer)
-    labels.rkt              labels, fixed-point branch relaxation (built, not yet wired to the writer)
+    encode.rkt              operand encoders driven by opcodes.rkt (built, wired to the writer)
+    labels.rkt              labels, fixed-point branch relaxation (built, wired to the writer)
+    stack.rkt               maxstack from control flow (built, wired to the writer)
     body.rkt                tiny/fat headers, locals sig, EH sections
   ilasm/
     syntax.rkt              s-expression ilasm front end -> module model

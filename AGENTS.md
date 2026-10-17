@@ -43,7 +43,7 @@ Racket 8.16 CS is installed at `C:\Program Files\Racket`. Run the test suite wit
 raco test tests/
 ```
 
-It runs the fixture checks (image hash, stdout, exit code) and the external oracles. Oracles are skipped when their tool is missing. It also runs the structural lint (`tests/lib/pe-lint.rkt`, tested by `tests/image-lint-test.rkt`) on every fixture. The metadata dump decodes MethodSpec rows (they match SRM on mscorlib). It still throws on TypeSpec, CustomAttribute, and GenericParam, so mscorlib is compared by public type count only (see [verification.md](docs/plans/verification.md)). `RANGI_UPDATE_SNAPSHOTS=1 raco test tests/` rewrites reviewed snapshots; only do that when the change to emitted bytes is intended and explained in the commit.
+It runs the fixture checks (image hash, stdout, exit code) and the external oracles. Oracles are skipped when their tool is missing. It also runs the structural lint (`tests/lib/pe-lint.rkt`, tested by `tests/image-lint-test.rkt`) on every fixture. The metadata dump decodes MethodSpec rows (they match SRM on mscorlib), and it decodes every II.22 table except the pointer and edit-and-continue tables, which it rejects when they hold rows. The V7 corpus test diffs 133 reference assemblies against SRM (see [verification.md](docs/plans/verification.md)). `RANGI_UPDATE_SNAPSHOTS=1 raco test tests/` rewrites reviewed snapshots; only do that when the change to emitted bytes is intended and explained in the commit.
 
 The smoke test is still:
 

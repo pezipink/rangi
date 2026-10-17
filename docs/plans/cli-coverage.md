@@ -18,7 +18,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x03 | FieldPtr               | partial | n/a     | Count only                                               |         |
 | 0x04 | Field                  | none    | none    |                                                          |         |
 | 0x05 | MethodPtr              | partial | n/a     | Count only                                               |         |
-| 0x06 | MethodDef              | partial | partial | Flags from keywords; ImplFlags 0; ParamList hardcoded to 1; same-module `call` targets (`(call ret (Class) name (params))`, static only) |         |
+| 0x06 | MethodDef              | partial | partial | Flags from keywords; ImplFlags 0; ParamList hardcoded to 1; same-module `call` targets (`(call ret (Class) name (params))`, static only; forward calls and recursion) | calls-multi |
 | 0x07 | ParamPtr               | partial | n/a     | Count only                                               |         |
 | 0x08 | Param                  | none    | none    | Needed for parameter names and `[out]`                   |         |
 | 0x09 | InterfaceImpl          | none    | none    | Sorted                                                   |         |
@@ -29,7 +29,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x0E | DeclSecurity           | none    | none    | Sorted                                                   |         |
 | 0x0F | ClassLayout            | none    | none    | Sorted; needed for explicit and sequential structs       |         |
 | 0x10 | FieldLayout            | none    | none    | Sorted                                                   |         |
-| 0x11 | StandAloneSig          | partial | partial | Reader parses it; row helper added; LocalVarSig blobs in `sigs.rkt`; `calli` pending |         |
+| 0x11 | StandAloneSig          | partial | partial | Reader parses it; row helper added; LocalVarSig blobs in `sigs.rkt`; `calli` pending | ops-locals-args |
 | 0x12 | EventMap               | none    | none    |                                                          |         |
 | 0x13 | EventPtr               | partial | n/a     | Count only                                               |         |
 | 0x14 | Event                  | none    | none    |                                                          |         |
@@ -39,7 +39,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x18 | MethodSemantics        | none    | none    | Sorted                                                   |         |
 | 0x19 | MethodImpl             | none    | none    | Sorted; explicit interface implementation                |         |
 | 0x1A | ModuleRef              | none    | none    | Needed for P/Invoke                                      |         |
-| 0x1B | TypeSpec               | partial | partial | Row helper and `read-row`; blob via `sigs.rkt` and reader; arrays pending | generic-calls |
+| 0x1B | TypeSpec               | partial | partial | Row helper and `read-row`; blob via `sigs.rkt` and reader; generic instance types | generic-calls |
 | 0x1C | ImplMap                | none    | none    | Sorted; P/Invoke                                         |         |
 | 0x1D | FieldRVA               | none    | none    | Sorted; static data, needs a `.sdata` or `.text` chunk   |         |
 | 0x1E | ENCLog                 | partial | n/a     | Count only                                               |         |
@@ -67,7 +67,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | `#-` uncompressed stream                       | none    | n/a     | SRM reads it as a table stream and allows pointer tables. Not in the 6th-edition text; see [verification.md](verification.md#spec-sources-and-discovery) |         |
 | Unknown streams (for example `#!` in NGEN images) | none | n/a  | SRM skips them; the reader rejects them             |         |
 | `#Strings` (UTF-8, dedup)                      | partial | partial | UTF-8, dedup in insertion order; no suffix sharing    |         |
-| `#US` (UTF-16LE, length, trailing flag byte)   | partial | partial | Writer emits an empty stream; no `ldstr`               |         |
+| `#US` (UTF-16LE, length, trailing flag byte)   | partial | partial | Written from `ldstr` literals (`lower.rkt`). No fixture runs `ldstr` yet |         |
 | `#GUID`                                        | partial | partial | MVID content hash (V0)                                |         |
 | `#Blob`                                        | partial | partial |                                                       |         |
 | 4-byte heap index widths                       | done    | partial | Writer ignores widths in several columns              |         |
@@ -81,11 +81,11 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | Generic method sig (`GENERIC`, `GenParamCount`) (II.23.2.1)      | partial | partial | generic-calls |
 | FieldSig (0x06)                                                  | none | none    |         |
 | PropertySig (0x08)                                               | none | none    |         |
-| LocalVarSig (0x07), including `PINNED` and `BYREF` (II.23.2.6)   | partial | partial |         |
+| LocalVarSig (0x07), including `PINNED` and `BYREF` (II.23.2.6)   | partial | partial | ops-locals-args |
 | StandAloneMethodSig for `calli`                                  | none | none    |         |
 | Primitive element types (`BOOLEAN` through `U`, `STRING`, `OBJECT`) | partial | partial | |
 | `CLASS` and `VALUETYPE` with TypeDefOrRefOrSpec encoded tokens   | partial | partial |         |
-| `SZARRAY` (`ARRAY` rank, sizes, lower bounds not yet)            | partial | partial |         |
+| `SZARRAY` (`ARRAY` rank, sizes, lower bounds not yet)            | partial | partial | arrays-sum |
 | `PTR`, `BYREF` (`FNPTR`, `TYPEDBYREF` not yet)                   | partial | partial |         |
 | `GENERICINST`, `VAR`, `MVAR`                                     | partial | partial | generic-calls |
 | `CMOD_REQD`, `CMOD_OPT`                                          | none | none    |         |
@@ -109,7 +109,7 @@ Parse ilasm keyword lists (`(public static hidebysig)`) into these flag values i
 
 ## Method bodies and IL (II.25.4, Partition III)
 
-Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes; tiny and fat headers; no locals; no exception handling.
+Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (`src/il/opcodes.rkt`) can be encoded, and the lint decodes all of them. Tiny and fat headers, `.locals` (LocalVarSig), and computed maxstack are done. Catch, finally, and fault EH are done; `filter`, prefix validation, and the `il-all-opcodes` fixture are not. The `ops-*` fixtures run arithmetic, branches, constants, conversions, locals and args, and EH.
 
 ## Module and type model
 
@@ -117,12 +117,14 @@ Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes; tiny and fat hea
 |------------------------------------------------------------|---------|---------|
 | Multiple classes with namespaces                           | none    |         |
 | `extends` (`System.Object`, `System.ValueType`, `System.Enum`) | none |         |
+| Static methods, same-module calls (forward and recursive), parameters | done | calls-multi |
 | Instance and static fields, `.ctor`, `.cctor`              | none    |         |
 | Instance methods, `newobj`, virtual dispatch, `.override`  | none    |         |
 | Interfaces and implementation                              | none    |         |
 | Nested types                                               | none    |         |
 | Properties and events                                      | none    |         |
-| Generic types and methods                                  | partial | generic-calls |
+| Generic types and methods (generic instances, same-module generic calls) | partial | generic-calls |
+| Single-dimension arrays (`newarr`, `ldelem`, `stelem`, `ldlen`; `ldelema` unit-tested only) | done | arrays-sum |
 | Value types and enums                                      | none    |         |
 | Custom attributes                                          | none    |         |
 | P/Invoke                                                   | none    |         |
@@ -130,6 +132,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes; tiny and fat hea
 | Entry point token taken from `.entrypoint`                 | done    | nano    |
 | Static data (`.data`, FieldRVA)                            | none    |         |
 | Embedded managed resources                                 | none    |         |
+
 
 ## PE image (II.25, PE/COFF)
 
@@ -141,7 +144,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes; tiny and fat hea
 | AnyCPU and `32BITPREFERRED`                          | n/a     | none    |         |
 | Subsystem GUI versus console                         | n/a     | none    |         |
 | Multiple sections (`.text`, `.rsrc`, `.reloc`, `.sdata`) | partial | partial (`.text`, `.reloc`) |  |
-| Sections of any size (no 0x400 limit)                | done    | done    | text-over-400, text-over-2000 |
+| Sections of any size (no 0x400 limit)                | done    | partial | text-over-400, text-over-2000 (floors only; `.text` is now below both names' limits, see [verification.md](verification.md)) |
 | Base relocations generated from fixups               | n/a     | partial |         |
 | Deterministic timestamp and MVID                     | n/a     | done    | nano    |
 | Debug directory and portable PDB                     | out of scope | out of scope |     |
@@ -151,11 +154,11 @@ Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes; tiny and fat hea
 
 ## Suggested order
 
-1. `#US` with `ldstr` is next (smallest change that makes "hello world" real). Entry point token, flags, and multiple TypeRefs and AssemblyRefs are done.
-2. Fields, `.ctor`, instance methods, `newobj`, locals and fat bodies, then branching and EH.
+1. `ldstr` hello world is next: lowering and `#US` are written, and the fixture is missing. Entry point token, flags, and multiple TypeRefs and AssemblyRefs are done.
+2. Fields, `.ctor`, instance methods, and `newobj` are next. Locals, fat bodies, branching, and catch, finally, and fault EH are done.
 3. Multiple types with namespaces, extends, interfaces, nested types.
-4. Value types, enums, arrays, static data.
-5. Generics (TypeSpec, MethodSpec, GenericParam, GenericParamConstraint).
+4. Value types, enums, static data. Single-dimension arrays are done (`arrays-sum`); multi-dimensional arrays are not.
+5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam are done. GenericParamConstraint and generic types are not.
 6. Properties, events, custom attributes, constants.
 7. DLL output and AnyCPU for Framework targets.
 8. P/Invoke and Win32 resources. PDB, strong naming, ARM64, and .NET (Core) are out of scope until requested. PE32+ (AMD64) output is covered by `nano-x64`.
