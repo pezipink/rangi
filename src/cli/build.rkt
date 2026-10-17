@@ -147,6 +147,12 @@
     (add-row! tb 'assemblyref major minor build revision 0
               (if (zero? (bytes-length token)) 0 (b token))
               (s n) 0 0))
+  ; CustomAttribute rows (II.22.10); sort-tables! orders them by their parent
+  (for ([ca (in-list (cli-program-customattrs p))])
+    (add-row! tb 'customattribute
+              (coded-encode 'hascustomattribute (car (customattr-parent ca)) (cdr (customattr-parent ca)))
+              (coded-encode 'customattributetype (car (customattr-ctor ca)) (cdr (customattr-ctor ca)))
+              (b (customattr-value ca))))
 
   ; ManifestResource rows (II.22.24); implementation 0 means the resource is in this file
   (for ([r (in-list (cli-program-resources p))])

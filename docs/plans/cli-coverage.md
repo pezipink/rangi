@@ -24,7 +24,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x09 | InterfaceImpl          | partial | partial | Sorted; `.implements` rows (same-module and external interfaces); no interface inheritance | interfaces |
 | 0x0A | MemberRef              | partial | partial | Parent is the TypeRef of the call target                 |         |
 | 0x0B | Constant               | none    | none    | Sorted                                                   |         |
-| 0x0C | CustomAttribute        | none    | none    | Sorted; needs custom attribute blob encoding (II.23.3)   |         |
+| 0x0C | CustomAttribute        | partial | partial | Sorted by Parent; `.custom` on assembly, class, and method parents; Module parent not supported. Value blobs are literal bytes (II.23.3 prolog checked), not typed | custom-attrs |
 | 0x0D | FieldMarshal           | none    | none    | Sorted                                                   |         |
 | 0x0E | DeclSecurity           | none    | none    | Sorted                                                   |         |
 | 0x0F | ClassLayout            | none    | none    | Sorted; needed for explicit and sequential structs       |         |
@@ -90,7 +90,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | `GENERICINST`, `VAR`, `MVAR`                                     | partial | partial | generic-calls |
 | `CMOD_REQD`, `CMOD_OPT`                                          | none | none    |         |
 | TypeSpec and MethodSpec blobs (II.23.2.14, II.23.2.15)           | partial | partial | generic-calls |
-| Custom attribute value blobs (II.23.3)                           | none | none    |         |
+| Custom attribute value blobs (II.23.3)                           | partial | partial | custom-attrs (literal bytes from `.custom`, not typed; only the 0x0001 prolog is checked) |
 | Marshalling descriptors (II.23.4)                                | none | none    |         |
 
 ## Flags and enumerations (II.23.1)
@@ -133,7 +133,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Single-dimension arrays (`newarr`, `ldelem`, `stelem`, `ldlen`; `ldelema` unit-tested only) | done | arrays-sum |
 | Multi-dimensional arrays `(array ELEM RANK)` with `.ctor`, `Get`, `Set`, `Address` as `call instance` on a TypeSpec parent (II.14.2, II.23.2.13); bounded form (sizes, lower bounds) rejected | done | multidim-arrays |
 | Value types and enums (enum `value__` and literal fields with Constant rows) | done | enum-literals, value-types |
-| Custom attributes                                          | none    |         |
+| Custom attributes: `.custom` on the assembly, a class, or a method, with a same-module or external constructor and a literal hex blob (II.22.10, II.23.3). Blobs are written as given, not typed | done | custom-attrs |
 | P/Invoke (static, body-less `pinvokeimpl` with DLL, calling convention, optional charset and lasterr, entry point `as`; PreserveSig set) | done (instance P/Invoke rejected) | pinvoke |
 | Multiple assembly references with versions and public key tokens | done | asm-refs-versioned |
 | Entry point token taken from `.entrypoint`                 | done    | nano    |
@@ -166,6 +166,6 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 3. Multiple types with namespaces, extends, and nested types are done. Interfaces and implementation are done (`interfaces`). Interface inheritance and MethodImpl routing for interfaces are not.
 4. Value types, enums, static data. Single-dimension arrays are done (`arrays-sum`); multi-dimensional arrays with rank only are done (`multidim-arrays`); bounded multi-dimensional arrays are not. Static data is done (`static-data`). Syntax: a static field takes its initial bytes from a top-level `.data` block, `(.data D_Table = (bytearray (01 00 00 00)))` with hex bytes, and the field names it with `at`, `(.field (public static) int32 Table at D_Table)`. This is the ilasm spelling, so the `bytes` keyword is rejected. The length must equal the primitive's size, and each block belongs to one field. The field gets HasFieldRVA and a FieldRVA row (II.22.18) whose RVA points into the `.sdata` section (II.16). A literal field cannot have data.
 5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam are done. GenericParamConstraint and generic types are not.
-6. Properties, events, custom attributes, constants.
+6. Properties, events, constants.
 7. DLL output and AnyCPU for Framework targets.
 8. P/Invoke is done (`pinvoke`): `pinvokeimpl` methods lower to ModuleRef, ImplMap, and MethodDef rows with PinvokeImpl and PreserveSig. Win32 resources are not. PDB, strong naming, ARM64, and .NET (Core) are out of scope until requested. PE32+ (AMD64) output is covered by `nano-x64`.
