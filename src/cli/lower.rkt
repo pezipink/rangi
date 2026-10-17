@@ -481,6 +481,9 @@
 
 (define (type-variable? x) (and (symbol? x) (tyvar-ref x) #t))
 
+(define (constructed-type? t)
+  (and (pair? t) (memq (car t) '(class valuetype szarray array)) #t))
+
 ; II.25.4.6: a catch handler, and a filter block and its handler, start with the exception
 ; object on the stack. finally and fault handlers start with an empty stack.
 (define (handler-depth clause)
@@ -543,6 +546,9 @@
     [(list (and op (or 'ldfld 'stfld 'ldflda 'ldsfld 'stsfld 'ldsflda)) (list 'class _ ...) _ ...)
      (error 'rangi "field access through an external generic instance is not supported in ~s" node)]
     [(list 'ldstr s) (list 'ldstr (string-token cx s))]
+    ; a constructed type operand (class, valuetype, szarray or array) is a TypeSpec (II.22.39)
+    [(list (and op (or 'newarr 'ldelem 'stelem 'box 'unbox 'unbox.any 'castclass 'isinst)) (? constructed-type? t))
+     (list op (bitwise-ior #x1B000000 (typespec-rid! cx (encode-typespec (lower-type cx scope t)))))]
     [(list (and op (or 'newarr 'ldelem 'ldelema 'stelem)) elem)
      (list op (element-type-token! cx elem))]
     ; a type variable operand is a TypeSpec whose blob is VAR or MVAR (II.22.39, II.23.2.12)

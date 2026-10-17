@@ -1,7 +1,7 @@
 #lang racket/base
 ; Array instructions lower to tokens (II.22, III.4). A primitive element type becomes a
-; TypeRef to mscorlib (System.<Name>). Void, typedref, and array element types are rejected
-; in the element operand of newarr, ldelem, and stelem.
+; TypeRef to mscorlib (System.<Name>). Void and typedref are rejected in the element operand of
+; newarr, ldelem, and stelem. A constructed element type (an array, or a class) is a TypeSpec.
 (require rackunit
          racket/list
          "../../src/ilasm/syntax.rkt"
@@ -50,9 +50,11 @@
   (check-exn #rx"array element type typedref is not supported"
              (λ () (lower-module (program-with '(ldc.i4.s 1) '(newarr typedref) '(pop))))))
 
-(test-case "an array element type is rejected in newarr"
-  (check-exn #rx"array element type"
-             (λ () (lower-module (program-with '(ldc.i4.s 1) '(newarr (szarray int32)) '(pop))))))
+(test-case "an array element type in newarr is a TypeSpec token"
+  (define tok (operand-after (entry-body (lower-module
+                                          (program-with '(ldc.i4.s 1) '(newarr (szarray int32)) '(pop))))
+                             #x8D))
+  (check-equal? (arithmetic-shift tok -24) #x1B))
 
 (test-case "ldelem and stelem with a primitive type use the same TypeRef as newarr"
   ; arr = newarr 1; arr[0] = 7; x = arr[0]; pop x; pop arr
