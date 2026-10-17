@@ -4,6 +4,7 @@
          "../private/binary.rkt")
 (provide cli-header-chunk
          cli-platform-flags
+         cli-platform-requires-32bit?
          cli-flag-ilonly)
 
 ; COMIMAGE_FLAGS_ILONLY (II.25.3.3.1)
@@ -20,6 +21,10 @@
     [(x86) (bitwise-ior cli-flag-ilonly cli-flag-32bitrequired)]
     [(32bitpreferred) (bitwise-ior cli-flag-ilonly cli-flag-32bitrequired cli-flag-32bitpreferred)]
     [else (error 'cli-platform-flags "unknown platform ~a" platform)]))
+
+; IMAGE_FILE_32BIT_MACHINE must be set if and only if COMIMAGE_FLAGS_32BITREQUIRED is set (II.25.2.2.1)
+(define (cli-platform-requires-32bit? platform)
+  (not (zero? (bitwise-and (cli-platform-flags platform) cli-flag-32bitrequired))))
 
 ; metadata-size is the byte length of the metadata chunk. entry-rid is the MethodDef
 ; row of the entry point, which the entry token names (II.22.22). A DLL with no entry point

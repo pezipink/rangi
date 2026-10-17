@@ -112,7 +112,11 @@
         '()
         (list (section ".rsrc" section-chars-rsrc (win32-resource-chunks win32-entries)))))
 
-  (define chars-base (if (eq? fmt 'pe32+) pe32plus-characteristics pe32-characteristics))
+  (define chars-base
+    (bitwise-ior (if (eq? fmt 'pe32+) pe32plus-characteristics pe32-characteristics)
+                 (if (cli-platform-requires-32bit? (cli-program-platform p))
+                     image-file-32bit-machine
+                     0)))
   (define chars (if dll? (bitwise-ior chars-base image-file-dll) chars-base))
   (define subsystem (pe-subsystem (cli-program-subsystem p)))
   (define params

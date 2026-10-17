@@ -25,8 +25,7 @@
 (define image-file-large-address-aware #x0020)
 (define image-file-32bit-machine #x0100)
 (define image-file-dll #x2000)
-(define pe32-characteristics
-  (bitwise-ior image-file-executable-image image-file-32bit-machine))
+(define pe32-characteristics image-file-executable-image)
 (define pe32plus-characteristics
   (bitwise-ior image-file-executable-image image-file-large-address-aware))
 

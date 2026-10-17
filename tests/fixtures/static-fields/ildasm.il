@@ -30,7 +30,7 @@
 // Ptr to symbol table:        0x00000000
 // Number of symbols:          0x00000000
 // Size of optional header:    0x00e0
-// Characteristics:            0x0102
+// Characteristics:            0x0002
 // ----- PE Optional Header (32 bit):
 // Magic:                          0x010b
 // Major linker version:           0x06

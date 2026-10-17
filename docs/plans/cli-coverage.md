@@ -90,7 +90,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | `GENERICINST`, `VAR`, `MVAR`                                     | partial | partial | generic-calls |
 | `CMOD_REQD`, `CMOD_OPT`                                          | none | none    |         |
 | TypeSpec and MethodSpec blobs (II.23.2.14, II.23.2.15)           | partial | partial | generic-calls |
-| Custom attribute value blobs (II.23.3)                           | partial | partial | custom-attrs (literal bytes from `.custom`, not typed; only the 0x0001 prolog is checked) |
+| Custom attribute value blobs (II.23.3)                           | partial | partial | custom-attrs (literal bytes from `.custom`, not typed; prolog 0x0001 verified against II.23.3; NumNamed is not written by the code, the user's blob is literal. The System.Attribute base is a CLS rule (II.21), not checked) |
 | Marshalling descriptors (II.23.4)                                | none | none    |         |
 
 ## Flags and enumerations (II.23.1)
@@ -102,8 +102,8 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | FieldAttributes                                 | constants only (`flags.rkt`), not wired to ilasm | |
 | ParamAttributes                                 | constants only (`flags.rkt`), not wired to ilasm | |
 | AssemblyFlags and AssemblyHashAlgorithm         | none         |         |
-| PInvokeAttributes                               | partial (calling convention, charset, SupportsLastError from `pinvokeimpl`; `flags.rkt`) | pinvoke |
-| GenericParamAttributes                          | partial (`class`, `valuetype`, `.ctor` specials; variance not) | generic-types |
+| PInvokeAttributes                               | partial (calling convention, charset, SupportsLastError from `pinvokeimpl`; `flags.rkt`). Values verified against II.23.1.8 (cdecl 0x0200, stdcall 0x0300, winapi = CallConvPlatformapi 0x0100, thiscall 0x0400, fastcall 0x0500). BestFit and ThrowOnUnmappableChar are not in the 2012 spec and are not written | pinvoke |
+| GenericParamAttributes                          | partial (`class`, `valuetype`, `.ctor` specials; variance not). Values verified against II.23.1.7: class 0x0004, valuetype (NotNullableValueTypeConstraint) 0x0008, .ctor 0x0010. Covariant and contravariant are not written, and no GenericParamConstraint row is emitted for `valuetype` | generic-types |
 
 Parse ilasm keyword lists (`(public static hidebysig)`) into these flag values instead of writing literals.
 
@@ -122,10 +122,10 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Static fields (same module)                                | done    | `static-fields` |
 | Instance fields (same module: `ldfld`, `stfld`, `ldflda`), `.ctor` | done | instance-methods, il-all-opcodes |
 | Instance fields on external types (`ldfld`, `stfld`, `ldflda` on a MemberRef FieldSig) | done | external-instance-field |
-| `.cctor` type initializer (static, specialname, rtspecialname; no beforefieldinit unless requested) | done | cctor-init |
+| `.cctor` type initializer (static, specialname, rtspecialname; no beforefieldinit unless requested). Flags 0x1811 (private) are the spec-required set (II.10.5.3, II.22.26): Static, SpecialName, RTSpecialName. HideBySig (0x0080, csc emits 0x1891) is optional and not written | done | cctor-init |
 | Instance methods, `newobj`, `callvirt`                     | done    | instance-methods |
 | Virtual methods (`virtual`, `newslot`, `final`, `abstract`; body-less abstract methods) and virtual dispatch through `callvirt` on a base-typed reference (II.10.3) | done | virtual-override |
-| `.override Base::M` (same-module base or external base MemberRef), MethodImpl row (II.22.27) | done (base must be an ancestor; external base's virtual flag not checked) | virtual-override |
+| `.override Base::M` (same-module base or external base MemberRef), MethodImpl row (II.22.27) | done (base must be an ancestor; the body must be virtual, II.22.27 rule 7; a same-module declaration must be virtual, rule 4; external base's virtual flag not checked; final, sealed, and strict-accessibility rules 5, 10, 11 not checked) | virtual-override |
 | Interfaces and implementation (interface TypeDef, `.implements` with same-module or external interfaces, InterfaceImpl rows II.22.23, signature-matched implementation check) | done | interfaces |
 | Nested types (`nested public\|private\|assembly\|family\|famandassem\|famorassem` inside a class body; NestedClass rows; no namespace on the TypeDef) | done | nested-types |
 | Properties and events (`.property` with `getter`/`setter`, `.event` with `add`/`remove`, in a class body; event type is metadata-only, no delegate TypeDef) | partial | props-events |
@@ -151,10 +151,11 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | DLL output (`IMAGE_FILE_DLL`, `_CorDllMain`)         | n/a     | done    | dll-output |
 | PE32+ (AMD64, ARM64), import stub `movabs`+DIR64    | partial (AMD64 writer via `nano-x64`; ARM64 out of scope) | out of scope |     |
 | AnyCPU, `32BITREQUIRED`, and `32BITPREFERRED` (`.platform anycpu\|x86\|32bitpreferred`) | n/a | done | platform-x86 |
+| PE `IMAGE_FILE_32BIT_MACHINE` (0x0100) is set iff the CLI header has `COMIMAGE_FLAGS_32BITREQUIRED` (II.25.2.2.1). Verified: AnyCPU images have COFF 0x0022 and COR flags 0x9. `32BITPREFERRED` (0x20000) is not in the 2012 spec and is taken from the runtime headers | n/a | done | the PE32 fixtures (snapshots regenerated, e.g. arrays-sum, dll-output/library) |
 | Subsystem GUI versus console (`.subsystem console\|windows`) | n/a | done | subsystem-gui |
 | Multiple sections (`.text`, `.rsrc`, `.reloc`, `.sdata`) | partial | partial (`.text`, `.reloc`, `.sdata` when there is static data) | static-data |
 | Sections of any size (no 0x400 limit)                | done    | done    | text-over-400, text-over-2000 |
-| Base relocations generated from fixups               | n/a     | done    | base-relocs |
+| Base relocations generated from fixups               | n/a     | done    | base-relocs. Block layout verified against II.25.3.2: one block per 4K page, dword-aligned blocks, 12-bit page offsets. A fixup's start address selects its block, so a 4-byte or 8-byte field may cross the page end. II.25.3.2 defines only HIGHLOW; DIR64 is PE/COFF and has no alignment rule there, so the import stub's unaligned DIR64 at offset 2 is allowed |
 | Deterministic timestamp and MVID                     | n/a     | done    | nano    |
 | Debug directory and portable PDB                     | out of scope | out of scope |     |
 | Win32 resources (version info, manifest)             | none    | done    | win32-resources |
