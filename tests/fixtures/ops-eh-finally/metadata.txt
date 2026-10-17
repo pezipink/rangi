@@ -1,0 +1,17 @@
+Module rows=1
+  Module[1] Name="ops-eh-finally.exe" Mvid=8009803481886b9b925de15224ebde46
+TypeRef rows=3
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+  TypeRef[3] ResolutionScope=0x23000001 Name="Exception" Namespace="System"
+TypeDef rows=2
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+MethodDef rows=1
+  MethodDef[1] Rva=8684 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=17280100000a18280100000ade0719280100000adc1a280100000a17165b26de071b280100000adcde09261c280100000ade001d280100000a1e280100000ade081f5a280100000adc1f09280100000a17165b26de081f0a280100000adcde0a261f0b280100000ade002a
+MemberRef rows=1
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
