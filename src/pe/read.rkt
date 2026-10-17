@@ -1,12 +1,13 @@
 #lang racket/base
 ; Reads the PE headers of a .exe or .dll (ECMA-335 II.25.2) and maps RVAs to file offsets.
 ; This module knows nothing about CLI metadata. It is part of the lazy reader, so keep it cheap.
-(require "../private/binary.rkt")
+(require "../private/binary.rkt"
+         "constants.rkt")
 (provide read-spec read-pe-headers rva->file-offset)
 
 ; only the first 0x40 bytes are needed; e_lfanew at 0x3C points at the PE header
 (define ms-dos-header-spec
-  '((header 64)))
+  `((header ,dos-header-size)))
 
 (define pe-file-header-spec
   '(
@@ -111,7 +112,9 @@
 (define (read-pe-headers port)
   (define dos-header (read-spec ms-dos-header-spec port))
   ; e_lfanew is the file offset of the PE signature
-  (define pe-offset (bytes->uint-le (subbytes (hash-ref dos-header 'header) #x3C #x40)))
+  (define pe-offset (bytes->uint-le (subbytes (hash-ref dos-header 'header)
+                                              e-lfanew-offset
+                                              (+ e-lfanew-offset e-lfanew-size))))
   (file-position port pe-offset)
   (define pe-headers (make-hash))
   (hash-set! pe-headers 'ms-dos dos-header)
@@ -121,7 +124,7 @@
   ; the magic tells PE32 and PE32+ apart
   (define magic (bytes->uint-le (peek-bytes 2 0 port)))
   (hash-set! pe-headers 'pe-opt
-             (read-spec (if (= magic #x20B) pe32plus-opt-header-spec pe-opt-header-spec) port))
+             (read-spec (if (= magic pe32plus-magic) pe32plus-opt-header-spec pe-opt-header-spec) port))
   ; section headers follow the optional header, whose real size is recorded in the file header
   (file-position port (+ opt-start opt-header-size))
   (define num-secs (bytes->uint-le (hash-ref (hash-ref pe-headers 'pe) 'num-secs)))

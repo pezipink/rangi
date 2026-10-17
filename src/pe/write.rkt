@@ -1,22 +1,20 @@
 #lang racket/base
 ; Writes a placed image as a PE32 or PE32+ file (PE/COFF, ECMA-335 II.25.2).
 (require "../private/binary.rkt"
+         "constants.rkt"
          "layout.rkt")
 (provide write-pe-image)
 
-; DOS stub with the standard 0x80 e_lfanew and the "This program cannot be run" message.
+; DOS stub with the standard e_lfanew and the "This program cannot be run" message.
 (define dos-header
-  (let ([b (make-bytes #x84 0)])
+  (let ([b (make-bytes dos-and-signature-size 0)])
     (bytes-copy! b 0 (bytes #x4D #x5A #x90 #x00 #x03 #x00 #x00 #x00 #x04 #x00 #x00 #x00
                             #xFF #xFF #x00 #x00 #xB8 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x40))
-    (bytes-copy! b #x3C (le #x80 4))
-    (bytes-copy! b #x40 (bytes #x0E #x1F #xBA #x0E #x00 #xB4 #x09 #xCD #x21 #xB8 #x01 #x4C #xCD #x21))
+    (bytes-copy! b e-lfanew-offset (le pe-header-offset e-lfanew-size))
+    (bytes-copy! b dos-header-size (bytes #x0E #x1F #xBA #x0E #x00 #xB4 #x09 #xCD #x21 #xB8 #x01 #x4C #xCD #x21))
     (bytes-copy! b #x4E (string->bytes/utf-8 "This program cannot be run in DOS mode.\r\r\n$"))
-    (bytes-copy! b #x80 (bytes #x50 #x45 #x00 #x00))
+    (bytes-copy! b pe-header-offset pe-signature-bytes)
     b))
-
-(define code-flag #x20)
-(define init-data-flag #x40)
 
 ; entry: name of the chunk the entry point jumps to
 ; dirs: alist of data directory index -> name of the chunk it covers
@@ -35,7 +33,7 @@
     buf)
 
   (define (section-header ps)
-    (bytes-append (pad-to (string->bytes/utf-8 (placed-section-name ps)) 8)
+    (bytes-append (pad-to (string->bytes/utf-8 (placed-section-name ps)) section-name-size)
                   (le (placed-section-vsize ps) 4) (le (placed-section-rva ps) 4)
                   (le (placed-section-raw-size ps) 4) (le (placed-section-raw-ptr ps) 4)
                   (le 0 4) (le 0 4) (le 0 2) (le 0 2) (le (placed-section-chars ps) 4)))
@@ -50,33 +48,38 @@
 
   (define dir-bytes
     (apply bytes-append
-           (for/list ([i (in-range 16)])
+           (for/list ([i (in-range number-of-data-dirs)])
              (define d (assv i dirs))
              (if d
                  (bytes-append (le (rva-of (cdr d)) 4)
                                (le (chunk-size (placement-chunk (lookup-placement img (cdr d)))) 4))
-                 (make-bytes 8 0)))))
+                 (make-bytes data-dir-entry-size 0)))))
 
   (define coff-header
     (bytes-append (le (image-params-machine params) 2) (le (length secs) 2) (le 0 4) (le 0 4) (le 0 4)
-                  (le (if pe32+? #xF0 #xE0) 2) (le (image-params-characteristics params) 2)))
+                  (le (if pe32+? pe32plus-opt-header-size pe32-opt-header-size) 2)
+                  (le (image-params-characteristics params) 2)))
   ; PE32+ has no BaseOfData and 8-byte ImageBase and stack/heap fields (II.25.2.3.2)
   (define opt-header
     (bytes-append
-     (le (if pe32+? #x20B #x10B) 2) (bytes 6 5)
-     (le (flagged-sum code-flag) 4) (le (flagged-sum init-data-flag) 4) (le 0 4)
-     (le (rva-of entry) 4) (le (first-flagged-rva code-flag) 4)
-     (if pe32+? #"" (le (first-flagged-rva init-data-flag) 4))
+     (le (if pe32+? pe32plus-magic pe32-magic) 2)
+     (bytes linker-major-version linker-minor-version)
+     (le (flagged-sum scn-cnt-code) 4) (le (flagged-sum scn-cnt-initialized-data) 4) (le 0 4)
+     (le (rva-of entry) 4) (le (first-flagged-rva scn-cnt-code) 4)
+     (if pe32+? #"" (le (first-flagged-rva scn-cnt-initialized-data) 4))
      (if pe32+? (le (image-params-image-base params) 8) (le (image-params-image-base params) 4))
      (le (image-params-section-align params) 4)
      (le (image-params-file-align params) 4)
-     (le 4 2) (le 0 2) (le 0 2) (le 0 2) (le 4 2) (le 0 2) (le 0 4)
+     (le os-major-version 2) (le 0 2) (le 0 2) (le 0 2)
+     (le subsystem-major-version 2) (le 0 2) (le 0 4)
      (le (placed-image-size-of-image img) 4) (le headers-size 4) (le 0 4)
      (le (image-params-subsystem params) 2) (le (image-params-dll-characteristics params) 2)
      (if pe32+?
-         (bytes-append (le #x100000 8) (le #x1000 8) (le #x100000 8) (le #x1000 8))
-         (bytes-append (le #x100000 4) (le #x1000 4) (le #x100000 4) (le #x1000 4)))
-     (le 0 4) (le 16 4)
+         (bytes-append (le stack-reserve-size 8) (le stack-commit-size 8)
+                       (le heap-reserve-size 8) (le heap-commit-size 8))
+         (bytes-append (le stack-reserve-size 4) (le stack-commit-size 4)
+                       (le heap-reserve-size 4) (le heap-commit-size 4)))
+     (le 0 4) (le number-of-data-dirs 4)
      dir-bytes))
 
   (define pe-header

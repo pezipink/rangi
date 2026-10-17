@@ -2,6 +2,7 @@
 ; Section and chunk layout for PE images (ECMA-335 II.25.2 and II.25.3).
 ; This module knows nothing about CLI metadata. The structs are in model.rkt.
 (require "../private/binary.rkt"
+         "constants.rkt"
          "model.rkt")
 (provide (all-from-out "model.rkt")
          chunk-size fixup-size render-chunk
@@ -46,11 +47,13 @@
     (bytes-copy! bs off (subbytes (sha256-bytes input) 0 16)))
   bs)
 
-; DOS header with PE signature (0x84) + COFF header (20) + optional header
-; (224 bytes for PE32, 240 for PE32+)
+; DOS header with PE signature + COFF header + optional header (PE32 or PE32+)
 (define (fixed-header-size params)
-  (+ #x84 20 (if (eq? (image-params-format params) 'pe32+) 240 224)))
-(define section-header-size 40)
+  (+ dos-and-signature-size
+     coff-header-size
+     (if (eq? (image-params-format params) 'pe32+)
+         pe32plus-opt-header-size
+         pe32-opt-header-size)))
 
 ; places chunks in order inside a section starting at rva and raw at file offset raw;
 ; returns the placements and the section's virtual size
