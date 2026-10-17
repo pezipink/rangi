@@ -6,7 +6,8 @@
 (require racket/list racket/port racket/string
          "../../src/cli-reader.rkt" "metadata-dump.rkt"
          (only-in "../../src/il/opcodes.rkt" opcode-table opcode-size opcode-value opcode-operand)
-         (only-in "../../src/il/encode.rkt" operand-width))
+         (only-in "../../src/il/encode.rkt" operand-width)
+         (only-in "../../src/cli/schema.rkt" table-by-id table-sorted))
 (provide lint-image)
 
 (struct section (name va vsize raw-size raw-ptr chars))
@@ -324,9 +325,13 @@
     (for/sum ([td (in-list tds)]) (* (table-data-row-count td) (table-data-row-size td))))
 
   (expect fail! (< valid (expt 2 45)) "Valid mask ~x has bits above II.22" valid)
-  ; the writer keeps rows in insertion order and marks no table as sorted
-  (expect fail! (zero? sorted)
-          "Sorted mask is ~x; the writer keeps insertion order and sets no Sorted bits" sorted)
+  ; II.22: a Sorted bit is set exactly for the present tables the schema marks sorted
+  (define expected-sorted
+    (for/sum ([i (in-list present)]
+              #:when (let ([t (table-by-id i)]) (and t (table-sorted t))))
+      (arithmetic-shift 1 i)))
+  (expect fail! (= sorted expected-sorted)
+          "Sorted mask is ~x; the present sorted tables give ~x" sorted expected-sorted)
   (expect fail! (= (if (bitwise-bit-set? heap-bits 0) 4 2) (asm-reader-string-index-size rdr))
           "string index width disagrees with the reader")
   (expect fail! (= (if (bitwise-bit-set? heap-bits 2) 4 2) (asm-reader-blob-index-size rdr))
