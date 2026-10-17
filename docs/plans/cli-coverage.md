@@ -132,7 +132,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | P/Invoke                                                   | none    |         |
 | Multiple assembly references with versions and public key tokens | none |       |
 | Entry point token taken from `.entrypoint`                 | done    | nano    |
-| `<Module>` members move to a generated `Program` class (`parse-il`). Helpers must live in a named class, not `<Module>` | done | nano |
+| `<Module>` members move to a generated `Program` class (`parse-il`). Helpers must live in a named class, not `<Module>`. Kept for now; future option: resolve `<Module>` references to `Program` (changes snapshots) | done | nano |
 | Static data (`.data`, FieldRVA)                            | none    |         |
 | Embedded managed resources                                 | none    |         |
 
