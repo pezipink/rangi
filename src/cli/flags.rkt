@@ -10,6 +10,7 @@
          pa-reserved3 pa-reserved4 pa-reserved-mask
          field-attributes-flags
          param-attributes-flags
+         native-type-code
          pinvoke-attributes-flags
          generic-param-attributes-flags)
 
@@ -78,6 +79,18 @@
   (for/fold ([acc 0]) ([k (in-list kws)])
     (bitwise-ior acc (cond [(assq k param-keywords) => cdr]
                            [else (error 'flags "unsupported parameter flag ~a" k)]))))
+
+; The NATIVE_TYPE values for simple marshaling (II.23.4), keyed by the primitive's ilasm name.
+; A FieldMarshal blob for one of these is the single byte of its value (II.23.2.6).
+(define native-type-codes
+  '((bool . #x02) (int8 . #x03) (uint8 . #x04) (int16 . #x05) (uint16 . #x06)
+    (int32 . #x07) (uint32 . #x08) (int64 . #x09) (uint64 . #x0A)
+    (float32 . #x0B) (float64 . #x0C)))
+
+; The NATIVE_TYPE byte for a primitive name, or #f when the name has no simple native type.
+(define (native-type-code name)
+  (cond [(assq name native-type-codes) => cdr]
+        [else #f]))
 
 ; II.23.1.8 PInvokeAttributes, the MappingFlags column of an ImplMap row (II.22.22).
 ; charset is 'ansi, 'unicode, 'auto, or #f for NotSpecified. conv is the calling convention keyword.

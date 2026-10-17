@@ -72,6 +72,11 @@
      (qualified (field-of row "Namespace") (field-of row "Name"))]
     [(= tag #x04) (named "Field")]
     [(= tag #x06) (named "MethodDef")]
+    [(= tag #x08)
+     (define row (row-of tables "Param" idx))
+     (if row
+         (format "Param:~a:~a" (field-of row "Sequence") (field-of row "Name"))
+         tok)]
     [(= tag #x0A) (named "MemberRef")]
     [(= tag #x23) (format "[~a]" (named "AssemblyRef"))]
     [else tok]))
@@ -133,8 +138,22 @@
       "]")]
     [else "[]"]))
 
-(define (normalize-value tables key value)
+; ClassLayout.Parent and FieldLayout.Field are plain row numbers, not tokens (II.22.8, II.22.16),
+; so they are named through their rows.
+(define (plain-row-name tables target value key)
+  (define idx (string->number value))
+  (define row (and idx (row-of tables target idx)))
   (cond
+    [(not row) value]
+    [(equal? target "TypeDef") (qualified (field-of row "Namespace") (field-of row key))]
+    [else (field-of row key)]))
+
+(define (normalize-value tables table key value)
+  (cond
+    [(and (equal? table "ClassLayout") (equal? key "Parent"))
+     (plain-row-name tables "TypeDef" value "Name")]
+    [(and (equal? table "FieldLayout") (equal? key "Field"))
+     (plain-row-name tables "Field" value "Name")]
     [(member key '("Extends" "ResolutionScope" "Parent"))
      (token-name tables value)]
     [(equal? key "Fields") (normalize-range tables "Field" value)]
@@ -142,11 +161,11 @@
     [(equal? key "Signature") (normalize-signature tables value)]
     [else value]))
 
-(define (normalize-row tables pairs)
+(define (normalize-row tables table pairs)
   (string-join
    (for/list ([kv (in-list pairs)]
               #:unless (member (car kv) dropped-keys))
-     (string-append (car kv) "=" (normalize-value tables (car kv) (cdr kv))))
+     (string-append (car kv) "=" (normalize-value tables table (car kv) (cdr kv))))
    " "))
 
 ; returns the normalised dump as a string, with the rows of each table sorted
@@ -160,7 +179,7 @@
       (define rows (hash-ref tables table (hash)))
       (define lines
         (sort (for/list ([(idx pairs) (in-hash rows)])
-                (string-append "  " (normalize-row tables pairs)))
+                (string-append "  " (normalize-row tables table pairs)))
               string<?))
       (cons (format "~a rows=~a" table (cdr h)) lines)))
    "\n"))

@@ -1,0 +1,34 @@
+Module rows=1
+  Module[1] Name="class-layout.exe" Mvid=63c5342b78cb70433e0bb2737fd27fb5
+TypeRef rows=3
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+  TypeRef[3] ResolutionScope=0x23000001 Name="ValueType" Namespace="System"
+TypeDef rows=4
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=273 Name="Overlay" Namespace="" Extends=0x01000003 Fields=[1..2] Methods=[]
+  TypeDef[4] Flags=265 Name="Packed" Namespace="" Extends=0x01000003 Fields=[3..4] Methods=[]
+Field rows=4
+  Field[1] Flags=6 Name="lo" Signature=0608
+  Field[2] Flags=6 Name="hi" Signature=0608
+  Field[3] Flags=6 Name="a" Signature=0608
+  Field[4] Flags=4102 Name="b" Signature=0608
+MethodDef rows=1
+  MethodDef[1] Rva=8824 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=12001d7d0100000412001f237d0200000412007b01000004280100000a12007b02000004280100000a12011f287d030000041201187d0400000412017b03000004280100000a12017b04000004280100000a2a
+MemberRef rows=1
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+FieldMarshal rows=1
+  FieldMarshal[1] Parent=0x04000004 NativeType=07
+ClassLayout rows=2
+  ClassLayout[1] PackingSize=4 ClassSize=8 Parent=3
+  ClassLayout[2] PackingSize=2 ClassSize=12 Parent=4
+FieldLayout rows=2
+  FieldLayout[1] Offset=0 Field=1
+  FieldLayout[2] Offset=4 Field=2
+StandAloneSig rows=1
+  StandAloneSig[1] Signature=0702110c1110
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

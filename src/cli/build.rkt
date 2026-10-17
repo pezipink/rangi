@@ -86,6 +86,10 @@
   ; one NestedClass row per nested TypeDef (II.22.32); sort-tables! orders them by NestedClass
   (for ([td (in-list tds)] [rid (in-naturals 1)] #:when (tdef-enclosing td))
     (add-row! tb 'nestedclass rid (tdef-enclosing td)))
+  ; ClassLayout rows (II.22.8) for the classes with .pack or .size, keyed by TypeDef rid
+  (for ([td (in-list tds)] [rid (in-naturals 1)] #:when (tdef-layout td))
+    (add-row! tb 'classlayout (classlayout-pack (tdef-layout td)) (classlayout-size (tdef-layout td))
+              rid))
   (for ([f (in-list (append-map tdef-fields tds))])
     (add-row! tb 'field (fdef-flags f) (s (fdef-name f)) (b (fdef-sig f))))
   ; Constant rows (II.22.9) point back at their Field row by its 1-based rid
@@ -94,6 +98,15 @@
     (add-row! tb 'constant (car (fdef-const f)) 0
               (coded-encode 'hasconstant 'field rid)
               (b (cdr (fdef-const f)))))
+  ; FieldLayout rows (II.22.16) give the offset of each field of an explicit class
+  (for ([f (in-list (append-map tdef-fields tds))] [rid (in-naturals 1)]
+        #:when (fdef-offset f))
+    (add-row! tb 'fieldlayout (fdef-offset f) rid))
+  ; FieldMarshal rows (II.22.9) give the native type of a marshaled field as a one-byte blob
+  (for ([f (in-list (append-map tdef-fields tds))] [rid (in-naturals 1)]
+        #:when (fdef-marshal f))
+    (add-row! tb 'fieldmarshal (coded-encode 'hasfieldmarshal 'field rid)
+              (b (bytes (fdef-marshal f)))))
   ; FieldRVA rows (II.22.18) give the RVA of each static field's initial data
   (for ([f (in-list (append-map tdef-fields tds))] [rid (in-naturals 1)]
         #:when (fdef-data f))
@@ -102,9 +115,17 @@
     ; a body-less (abstract) method has RVA 0 (II.22.26)
     ; P/Invoke methods are preservesig (MethodImplAttributes 0x0080, II.23.1.11), so the native
     ; return value is not read as an HRESULT
+    ; ParamList is the next free Param rid (II.22.26), so the method's Param rows follow it
     (add-row! tb 'methoddef (if (mdef-body m) (rva-ref (method-sym i)) 0)
               (bitwise-ior (if (mdef-pinvoke m) #x80 0) (mdef-impl m)) (mdef-flags m)
-              (s (mdef-name m)) (b (mdef-sig m)) 1))
+              (s (mdef-name m)) (b (mdef-sig m)) (add1 (table-row-count tb 'param)))
+    ; Param rows (II.22.33) and the default values of their Constant rows (II.22.9)
+    (for ([pd (in-list (mdef-params m))])
+      (add-row! tb 'param (paramdef-flags pd) (paramdef-sequence pd) (s (paramdef-name pd)))
+      (when (paramdef-const pd)
+        (add-row! tb 'constant (car (paramdef-const pd)) 0
+                  (coded-encode 'hasconstant 'param (table-row-count tb 'param))
+                  (b (cdr (paramdef-const pd)))))))
   ; P/Invoke: one ModuleRef per DLL, numbered in first-use order (II.22.31), and one ImplMap
   ; row per P/Invoke MethodDef (II.22.22). The rid is the MethodDef's 1-based rid.
   (define moduleref-rids (make-hash))

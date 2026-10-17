@@ -1,0 +1,29 @@
+Module rows=1
+  Module[1] Name="param-constants.exe" Mvid=0024874036126ea0fff2740eb2e89f0d
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=3
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Calc" Namespace="" Extends=0x01000001 Fields=[1..1] Methods=[2..3]
+Field rows=1
+  Field[1] Flags=32854 Name="Limit" Signature=0608
+MethodDef rows=3
+  MethodDef[1] Rva=8816 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1f6417182802000006280100000a161f28182802000006280100000a1f092803000006280100000a2a
+  MethodDef[2] Rva=8860 ImplFlags=0 Flags=22 Name="Add" Signature=000308080808 Params=[1..2] Il=03045802582a
+  MethodDef[3] Rva=8868 ImplFlags=0 Flags=22 Name="Wide" Signature=00010804 Params=[3..3] Il=022a
+Param rows=3
+  Param[1] Flags=1 Sequence=2 Name="a"
+  Param[2] Flags=4112 Sequence=3 Name="b"
+  Param[3] Flags=4112 Sequence=1 Name="w"
+MemberRef rows=1
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+Constant rows=3
+  Constant[1] Type=8 Parent=0x04000001 Value=2a000000
+  Constant[2] Type=8 Parent=0x08000002 Value=05000000
+  Constant[3] Type=4 Parent=0x08000003 Value=fd
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

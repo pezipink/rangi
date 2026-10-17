@@ -8,7 +8,8 @@
                   encode-typespec encode-type encode-field-sig encode-property-sig primitive-names
                   element-codes)
          (only-in "flags.rkt" field-attributes-flags generic-param-attributes-flags fa-hasdefault
-                  fa-hasfieldrva pinvoke-attributes-flags)
+                  fa-hasfieldrva fa-hasfieldmarshal pinvoke-attributes-flags param-attributes-flags
+                  pa-hasdefault native-type-code)
          (only-in "../il/encode.rkt" find-opcode opcode-named)
          (only-in "../il/opcodes.rkt" opcode-operand opcode-type)
          (only-in racket/string string-prefix?)
@@ -29,7 +30,9 @@
          (struct-out propevents)
          (struct-out propdef)
          (struct-out evdef)
-         (struct-out methodsem))
+         (struct-out methodsem)
+         (struct-out paramdef)
+         (struct-out classlayout))
 
 ; The CLI-level program: flags are bits, signatures and bodies are bytes, and
 ; references are rids. asm-refs rows are (name version token), where version is four ints and
@@ -76,16 +79,28 @@
 (struct customattr (parent ctor value))
 ; fields are the TypeDef's Field rows, in row order (II.22.15). extends is (typedef . rid),
 ; (typeref . rid), or #f for an interface or <Module> (II.22.37). enclosing is the TypeDef rid of
-; the enclosing class for a nested type, or #f (II.22.32).
-(struct tdef (flags name ns extends methods fields enclosing))
-(struct mdef (name flags sig body entry? pinvoke impl))
+; the enclosing class for a nested type, or #f (II.22.32). layout is #f, or a classlayout for a
+; class with .pack or .size (II.22.8).
+(struct tdef (flags name ns extends methods fields enclosing layout))
+; ClassLayout row (II.22.8): pack and size are the PackingSize and ClassSize, where a missing
+; .pack or .size is written as 0.
+(struct classlayout (pack size))
+; params are the Param rows of this method, in sequence order (II.22.33). Only named parameters
+; have one.
+(struct mdef (name flags sig body entry? pinvoke impl params))
+; A Param row (II.22.33): sequence is the 1-based parameter number, flags are the ParameterAttributes
+; bits, and name is the string. const is #f, or (element-code . value-bytes) for a default, which
+; is the Constant row of this parameter (II.22.9).
+(struct paramdef (sequence flags name const))
 ; A P/Invoke method's ImplMap data (II.22.22): dll is the ModuleRef name, import-name is the
 ; entry point, and flags are the PInvokeAttributes MappingFlags (II.23.1.8).
 (struct pinvokeinfo (dll import-name flags))
 ; A Field row (II.22.15): flags are FieldAttributes bits, sig is a FieldSig blob. const is #f, or
 ; (element-code . value-bytes) for a literal field's Constant row (II.22.9). data is #f, or the
 ; initial value bytes of a FieldRVA field (II.22.18), which lives in the image's data area.
-(struct fdef (name flags sig const data))
+; offset is #f, or the byte offset of the field in an explicit class (FieldLayout, II.22.16).
+; marshal is #f, or the NATIVE_TYPE byte of its FieldMarshal row (II.22.9, II.23.2.6).
+(struct fdef (name flags sig const data offset marshal))
 
 ; class-rids maps a module class name to its TypeDef rid. class-arities maps the same names to the
 ; number of type parameters. method-rids maps (list class name ret params), as written in the
@@ -930,6 +945,15 @@
                     (method-flags (method-decl-flags m))))
   (check-virtual-attributes! class-name name (method-decl-flags m))
   (define params (method-decl-params m))
+  ; Param rows (II.22.33) for the named parameters; the sequence is the 1-based parameter number
+  (define paramdefs
+    (for/list ([pd (in-list (method-decl-param-decls m))] [i (in-naturals 1)] #:when pd)
+      (define default (param-decl-default pd))
+      (paramdef i
+                (bitwise-ior (param-attributes-flags (param-decl-flags pd))
+                             (if default pa-hasdefault 0))
+                (symbol->string (param-decl-name pd))
+                (and default (literal-constant (car default) (cdr default))))))
   (define ld (method-decl-locals m))
   (define local-types (if ld (map local-var-type (locals-decl-vars ld)) '()))
   (define init? (and ld (locals-decl-init? ld)))
@@ -975,7 +999,8 @@
          body
          (method-decl-entry? m)
          pinvoke
-         (if (method-decl-runtime? m) runtime-impl-flags 0))
+         (if (method-decl-runtime? m) runtime-impl-flags 0)
+         paramdefs)
    (gparam-rows cx scope (cons 'methoddef rid) gparams)))
 
 ; first-rid is the MethodDef rid of the first method of this class. Methods named in special are
@@ -1022,10 +1047,20 @@
                  (field-decl-name fd) e prim))]
        [_ (error 'rangi "literal field ~a has type ~s, which cannot be an enum constant"
                  (field-decl-name fd) t)])
-     (define size (case prim [(int8 uint8) 1] [(int16 uint16) 2] [(int32 uint32) 4] [else 8]))
-     (cons (cdr (assq prim element-codes))
-           (apply bytes (for/list ([i (in-range size)])
-                          (bitwise-and (arithmetic-shift v (* -8 i)) #xFF))))]))
+     (literal-constant prim v)]))
+
+; The Constant value bytes of an integral literal (II.22.9): the element type code of prim and the
+; value as little-endian bytes of prim's size (II.23.1.15).
+(define (literal-constant prim v)
+  (define size (case prim [(int8 uint8) 1] [(int16 uint16) 2] [(int32 uint32) 4] [else 8]))
+  (cons (cdr (assq prim element-codes))
+        (apply bytes (for/list ([i (in-range size)])
+                       (bitwise-and (arithmetic-shift v (* -8 i)) #xFF)))))
+
+; The ClassLayout of a class with .pack or .size (II.22.8), or #f. A missing part is written as 0.
+(define (class-layout-of cls)
+  (define layout (class-decl-layout cls))
+  (and layout (classlayout (or (car layout) 0) (or (cdr layout) 0))))
 
 ; The initial value of a FieldRVA field (II.22.18): the bytes of the .data block it names. Only a
 ; static field can have one (II.16), and a literal takes its value from a Constant row instead.
@@ -1383,15 +1418,20 @@
         (for/list ([fd (in-list (class-decl-fields cls))])
           (define const (field-constant fd class-decls))
           (define data (field-data fd data-decls))
+          (define marshal (and (field-decl-marshal fd)
+                               (native-type-code (field-decl-marshal fd))))
           (fdef (symbol->string (field-decl-name fd))
                 ; a Constant row requires fdHasDefault (II.23.1.5); a FieldRVA row requires
-                ; fdHasFieldRVA (II.23.1.5)
+                ; fdHasFieldRVA (II.23.1.5); a FieldMarshal row requires fdHasFieldMarshal
                 (bitwise-ior (field-attributes-flags (field-decl-flags fd))
                              (if const fa-hasdefault 0)
-                             (if data fa-hasfieldrva 0))
+                             (if data fa-hasfieldrva 0)
+                             (if marshal fa-hasfieldmarshal 0))
                 (encode-field-sig (lower-type cx (cons arity 0) (field-decl-type fd)))
                 const
-                data)))
+                data
+                (field-decl-offset fd)
+                marshal)))
       (define-values (mdefs rows)
         (parameterize ([current-class-name name])
           (encode-methods cx name arity next-rid (class-decl-methods cls) #:special (accessor-names cls))))
@@ -1399,7 +1439,7 @@
         (gparam-rows cx (cons arity 0) (cons 'typedef (hash-ref class-rids name))
                      (class-decl-gparams cls)))
       (values (cons (tdef (typedef-flags flags (and enclosing #t)) short ns extends mdefs fdefs
-                          enclosing-rid)
+                          enclosing-rid (class-layout-of cls))
                     tdefs)
               (cons (append class-gps rows) gps)
               (+ next-rid (length mdefs)))))

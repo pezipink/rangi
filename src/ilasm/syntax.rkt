@@ -3,7 +3,8 @@
          racket/list
          racket/file
          "../cli-reader.rkt"
-         (only-in "../cli/sigs.rkt" primitive-names))
+         (only-in "../cli/sigs.rkt" primitive-names)
+         (only-in "../cli/flags.rkt" native-type-code))
 (provide parse-il
          tyvar-ref
          (struct-out module-model)
@@ -18,6 +19,7 @@
          (struct-out resource-decl)
          (struct-out win32-resource-decl)
          (struct-out method-decl)
+         (struct-out param-decl)
          (struct-out pinvoke-decl)
          (struct-out generic-param)
          (struct-out locals-decl)
@@ -43,8 +45,9 @@
 ; implements is a list of interface names in source order, each as in extends (II.22.23).
 ; customs is the list of custom-decl written in the class body (II.22.10 with a TypeDef parent).
 ; props and events are the prop-decl and event-decl of the class, in source order.
+; layout is #f, or (pack . size) from .pack and .size (ClassLayout, II.22.8). Either part may be #f.
 (struct class-decl (flags name gparams extends methods fields enclosing overrides implements
-                    customs props events))
+                    customs props events layout))
 ; A .override directive (II.22.27 MethodImpl): owner is the base class as in extends, name, ret and
 ; params are the base method's signature. The body is the method of the same name and signature in
 ; the class that declares the override.
@@ -66,7 +69,9 @@
 ; A field (II.22.15). flags are FieldAttributes keywords; type is a type form (II.22.15).
 ; init is #f, or (prim . value) for a literal field: an integral primitive and its integer value.
 ; at is #f, or the name of a data-decl whose bytes are the field's initial value (FieldRVA, II.22.18).
-(struct field-decl (flags type name init at) #:transparent)
+; offset is #f, or the byte offset of an instance field in an explicit class (FieldLayout, II.22.16).
+; marshal is #f, or the primitive name of a simple native type (FieldMarshal, II.22.9, II.23.2.6).
+(struct field-decl (flags type name init at offset marshal) #:transparent)
 ; A data block (II.16): name is the symbol a field's `at` refers to, bytes its initial value.
 (struct data-decl (name bytes) #:transparent)
 ; An embedded managed resource (II.22.24 ManifestResource, II.25.3.3): name is the symbol the
@@ -79,9 +84,13 @@
 ; pinvoke is #f, or the pinvoke-decl of a pinvokeimpl method (II.15.5). customs is the list of
 ; custom-decl written in the method body (II.22.10 with a MethodDef parent). runtime? is #t for a
 ; method whose body the runtime provides, written (runtime managed). It has no body and is only
-; allowed in a delegate class (II.14.6).
+; allowed in a delegate class (II.14.6). param-decls is a list parallel to params: #f for an
+; unnamed parameter, or the param-decl of a named one (Param, II.22.33).
 (struct method-decl (flags ret name gparams params code maxstack entry? locals handlers pinvoke customs
-                     runtime?))
+                     runtime? param-decls))
+; A named parameter (II.22.33). flags are ParameterAttributes keywords (in, out, opt, ...). default is
+; #f, or (prim . value) for an integral default, which becomes a Constant row (II.22.9).
+(struct param-decl (flags name default) #:transparent)
 ; A P/Invoke declaration (II.22.22 ImplMap): dll is the module name string, conv is a calling
 ; convention keyword (winapi, cdecl, stdcall, thiscall or fastcall), charset is 'ansi, 'unicode,
 ; 'auto or #f, lasterr? is the SupportsLastError flag, and entry is the entry-point symbol or #f
@@ -294,10 +303,33 @@
         (values #f #f #f #f '())
         (split-directives body-il)))
   (check-type name ret ncls nmth)
-  (for ([p (in-list params)]) (check-type name p ncls nmth))
-  (method-decl prefix ret name gparams params code maxstack entry?
+  (define-values (ptypes pdecls)
+    (for/lists (types decls) ([p (in-list params)]) (split-param name p)))
+  (for ([p (in-list ptypes)]) (check-type name p ncls nmth))
+  (method-decl prefix ret name gparams ptypes code maxstack entry?
                (parse-locals name raw-locals ncls nmth) handlers pinvoke
-               (map (λ (n) (parse-custom name n)) body-customs) runtime?))
+               (map (λ (n) (parse-custom name n)) body-customs) runtime?
+               pdecls))
+
+; A parameter is a type form, or (param (flags ...) type name [= (prim value)]) for a named one
+; (II.22.33). Returns the type form and the param-decl (#f when unnamed). A default must have the
+; parameter's own integral type and fit its range (II.22.9 Constant).
+(define (split-param who p)
+  (match p
+    [(list 'param (? list? flags) ty (? symbol? pname))
+     (values ty (param-decl flags pname #f))]
+    [(list 'param (? list? flags) ty (? symbol? pname) '= (list (? symbol? prim) (? exact-integer? v)))
+     (define range (assq prim integral-ranges))
+     (unless range
+       (error 'rangi "parameter ~a.~a has non-integral default type ~a" who pname prim))
+     (unless (eq? ty prim)
+       (error 'rangi "default for parameter ~a.~a is ~a but the parameter is ~a" who pname prim ty))
+     (unless (<= (cadr range) v (cddr range))
+       (error 'rangi "default ~a out of range for ~a parameter ~a.~a" v prim who pname))
+     (values ty (param-decl flags pname (cons prim v)))]
+    [(list 'param _ ...)
+     (error 'rangi "malformed parameter in ~a: ~s" who p)]
+    [_ (values p #f)]))
 
 (define (pinvoke-form? x)
   (and (pair? x) (eq? (car x) 'pinvokeimpl)))
@@ -398,6 +430,20 @@
     (int64 -9223372036854775808 . 9223372036854775807) (uint64 0 . 18446744073709551615)))
 
 ; A literal field (II.22.9) is static and has a value; a value is only allowed on a literal.
+; (.field (flags) (marshal NATIVE) type name ...) gives an instance or static field a simple native
+; type (FieldMarshal, II.22.9). NATIVE must be one of the primitives in native-type-code.
+(define (parse-field-with-marshal class-name node ncls)
+  (match node
+    [(list '.field (? list? flags) (list 'marshal (? symbol? native)) type (? symbol? name) more ...)
+     (unless (native-type-code native)
+       (error 'rangi "field ~a.~a: ~a is not a simple native type for marshal" class-name name native))
+     (when (memq 'literal flags)
+       (error 'rangi "literal field ~a.~a cannot have a marshal clause" class-name name))
+     (struct-copy field-decl
+                  (parse-field class-name (list* '.field flags type name more) ncls)
+                  [marshal native])]
+    [_ (parse-field class-name node ncls)]))
+
 (define (parse-field class-name node ncls)
   (match node
     [(list '.field (? list? flags) type (? symbol? name))
@@ -405,7 +451,18 @@
      (when (eq? type 'void) (error 'rangi "field ~a.~a cannot be void" class-name name))
      (when (memq 'literal flags)
        (error 'rangi "literal field ~a.~a needs a value" class-name name))
-     (field-decl flags type name #f #f)]
+     (field-decl flags type name #f #f #f #f)]
+    ; FieldLayout (II.22.16): the byte offset of an instance field of an explicit class. The class
+    ; check is made in flatten-class, where the class flags are known.
+    [(list '.field (? list? flags) type (? symbol? name) 'offset (? exact-nonnegative-integer? off))
+     (check-type name type ncls 0)
+     (when (eq? type 'void) (error 'rangi "field ~a.~a cannot be void" class-name name))
+     (when (memq 'static flags)
+       (error 'rangi "field ~a.~a has an offset but is static; only instance fields have offsets"
+              class-name name))
+     (unless (<= off #xFFFFFFFF)
+       (error 'rangi "offset ~a of field ~a.~a exceeds 32 bits" off class-name name))
+     (field-decl flags type name #f #f off #f)]
     [(list '.field (? list? flags) type (? symbol? name) '= (list (? symbol? prim) (? exact-integer? v)))
      (check-type name type ncls 0)
      (define range (assq prim integral-ranges))
@@ -415,7 +472,7 @@
        (error 'rangi "value ~a out of range for ~a in ~a.~a" v prim class-name name))
      (unless (and (memq 'literal flags) (memq 'static flags))
        (error 'rangi "a value needs a static literal field, ~a.~a is not" class-name name))
-     (field-decl flags type name (cons prim v) #f)]
+     (field-decl flags type name (cons prim v) #f #f #f)]
     ; FieldRVA (II.22.18): the field's initial value is the named .data block. The static check
     ; is made in lower, where the FieldRVA row is built.
     [(list '.field (? list? flags) type (? symbol? name) 'at (? symbol? dname))
@@ -425,7 +482,7 @@
        (error 'rangi "literal field ~a.~a cannot have data at ~a" class-name name dname))
      (unless (memq 'static flags)
        (error 'rangi "FieldRVA field ~a.~a must be static" class-name name))
-     (field-decl flags type name #f dname)]
+     (field-decl flags type name #f dname #f #f)]
     [_ (error 'rangi "malformed .field in ~a: ~s" class-name node)]))
 
 ; (.property [instance] [specialname] [rtspecialname] type Name (param types) (getter M) (setter M)
@@ -683,7 +740,11 @@
   (define members (filter (λ (node) (not (nested-class-node? node))) body))
   (define fields
     (for/list ([node (in-list members)] #:when (and (pair? node) (eq? (car node) '.field)))
-      (parse-field name node ncls)))
+      (parse-field-with-marshal name node ncls)))
+  (for ([f (in-list fields)] #:when (field-decl-offset f))
+    (unless (memq 'explicit flags)
+      (error 'rangi "field ~a.~a has an offset but ~a is not explicit" name (field-decl-name f) name)))
+  (define layout (parse-class-layout name flags members))
   (define overrides
     (for/list ([node (in-list members)] #:when (and (pair? node) (eq? (car node) '.override)))
       (parse-override name node ncls)))
@@ -702,7 +763,7 @@
     (for/list ([node (in-list members)]
                #:unless (and (pair? node)
                              (memq (car node) '(.field .override .implements .custom
-                                                .property .event))))
+                                                .property .event .pack .size))))
       (parse-method name node ncls)))
   (define customs
     (for/list ([node (in-list members)] #:when (custom-node? node))
@@ -725,9 +786,33 @@
              (method-decl-name m) name)))
   (when delegate? (check-delegate name flags methods))
   (cons (class-decl flags name gparams ext methods fields enclosing overrides implements customs
-                    props events)
+                    props events layout)
         (append* (for/list ([node (in-list body)] #:when (nested-class-node? node))
                    (flatten-class (nested-class-raw node) name)))))
+
+; .pack N and .size N in a class body give its ClassLayout (II.22.8). Each may appear at most once.
+; Packing must be a power of two up to 128 (II.22.8 PackingSize), and a class with a layout must
+; be explicit or sequential, since auto layout lets the runtime choose.
+(define class-packing-sizes '(0 1 2 4 8 16 32 64 128))
+(define (parse-class-layout name flags members)
+  (define (layout-part head)
+    (match (filter (λ (n) (and (pair? n) (eq? (car n) head))) members)
+      ['() #f]
+      [(list (list _ (? exact-nonnegative-integer? v)))
+       (when (and (eq? head '.size) (> v #xFFFFFFFF))
+         (error 'rangi "~a ~a in ~a exceeds 32 bits" head v name))
+       (when (and (eq? head '.pack) (not (memv v class-packing-sizes)))
+         (error 'rangi ".pack ~a in ~a is not a packing size (0, 1, 2, 4, ..., 128)" v name))
+       v]
+      [(list node) (error 'rangi "malformed ~a in ~a: ~s" head name node)]
+      [_ (error 'rangi "duplicate ~a in ~a" head name)]))
+  (define pack (layout-part '.pack))
+  (define size (layout-part '.size))
+  (cond
+    [(not (or pack size)) #f]
+    [(not (or (memq 'explicit flags) (memq 'sequential flags)))
+     (error 'rangi "class ~a has .pack or .size and so needs an explicit or sequential layout" name)]
+    [else (cons pack size)]))
 
 (define (parse-il program)
   (define asm-refs '())

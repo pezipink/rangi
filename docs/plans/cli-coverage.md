@@ -20,15 +20,15 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x05 | MethodPtr              | partial | n/a     | Count only                                               |         |
 | 0x06 | MethodDef              | partial | partial | Flags from keywords; ImplFlags 0; ParamList hardcoded to 1; same-module `call` targets (`(call ret (Class) name (params))`, static only; forward calls and recursion) | calls-multi |
 | 0x07 | ParamPtr               | partial | n/a     | Count only                                               |         |
-| 0x08 | Param                  | none    | none    | Needed for parameter names and `[out]`                   |         |
+| 0x08 | Param                  | done    | done    | One row per named param, in method order; Sequence 1-based; flags from `(param [in] [out] [opt] TY NAME [= value])`; unnamed params get no row | param-constants |
 | 0x09 | InterfaceImpl          | partial | partial | Sorted; `.implements` rows (same-module and external interfaces); no interface inheritance | interfaces |
 | 0x0A | MemberRef              | partial | partial | Parent is the TypeRef of the call target                 |         |
-| 0x0B | Constant               | none    | none    | Sorted                                                   |         |
+| 0x0B | Constant               | done    | done    | Sorted; literal fields and param default values (II.23.1.15 blobs); parent is Field or Param; fdHasDefault/pa-hasdefault set | param-constants |
 | 0x0C | CustomAttribute        | partial | partial | Sorted by Parent; `.custom` on assembly, class, and method parents; Module parent not supported. Value blobs are literal bytes (II.23.3 prolog checked), not typed | custom-attrs |
-| 0x0D | FieldMarshal           | none    | none    | Sorted                                                   |         |
-| 0x0E | DeclSecurity           | none    | none    | Sorted                                                   |         |
-| 0x0F | ClassLayout            | none    | none    | Sorted; needed for explicit and sequential structs       |         |
-| 0x10 | FieldLayout            | none    | none    | Sorted                                                   |         |
+| 0x0D | FieldMarshal           | done    | done    | Sorted; simple form only: one NATIVE_TYPE (II.23.4) per field, `(.field (marshal NATIVE) TY name)`; no arrays, no custom marshalers | param-constants |
+| 0x0E | DeclSecurity           | none    | none    | Out of scope for P5: needs permission-set blobs (XML or binary, II.22.11 and II.23.3)  |         |
+| 0x0F | ClassLayout            | done    | done    | Sorted; `.pack` (0,1,2,4,...,128) and `.size` on explicit or sequential classes (II.22.8) | class-layout |
+| 0x10 | FieldLayout            | done    | done    | Sorted; one row per field with `offset N` in an explicit class (II.22.16)  | class-layout |
 | 0x11 | StandAloneSig          | partial | partial | Reader parses it; row helper added; LocalVarSig blobs in `sigs.rkt`; `calli` pending | ops-locals-args |
 | 0x12 | EventMap               | done    | done    | Sorted by parent                                         | props-events |
 | 0x13 | EventPtr               | partial | n/a     | Count only                                               |         |
@@ -50,9 +50,9 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x23 | AssemblyRef            | partial | partial | Name, version, and public key token come from `.assembly extern` (II.22.5); Flags and HashValue are zero, and full public keys are not written | asm-refs-versioned |
 | 0x24 | AssemblyRefProcessor   | partial | n/a     | Count only                                               |         |
 | 0x25 | AssemblyRefOS          | partial | n/a     | Count only                                               |         |
-| 0x26 | File                   | none    | none    | Multi-module assemblies                                  |         |
-| 0x27 | ExportedType           | none    | none    | Type forwarders                                          |         |
-| 0x28 | ManifestResource       | none    | none    | Embedded resources                                       |         |
+| 0x26 | File                   | none    | none    | Out of scope for P5: multi-module assemblies (needs `.file` and a second module)  |         |
+| 0x27 | ExportedType           | none    | none    | Out of scope for P5: type forwarders are not cheap (needs `.exptype` syntax and the implementation ref coded index), so not started | |
+| 0x28 | ManifestResource       | done    | done    | Embedded managed resources; covered by `managed-resources`                  | managed-resources |
 | 0x29 | NestedClass            | partial | done    | Sorted by NestedClass; one row per nested type, from textual nested `.class`; read back via `read-row` only | nested-types |
 | 0x2A | GenericParam           | partial | partial | Sorted; written for module generic methods; secondary sort key unverified | generic-calls |
 | 0x2B | MethodSpec             | partial | partial | Generic method instantiation; written for `call` with `inst`. Rows match SRM on mscorlib (656) | generic-calls |
@@ -99,8 +99,8 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 |-------------------------------------------------|--------------|---------|
 | TypeAttributes (visibility, layout, semantics)  | partial (from keywords) |         |
 | MethodAttributes and MethodImplAttributes       | partial (from keywords; `virtual`, `newslot`, `final`, `abstract` done, see `virtual-override`) | virtual-override |
-| FieldAttributes                                 | constants only (`flags.rkt`), not wired to ilasm | |
-| ParamAttributes                                 | constants only (`flags.rkt`), not wired to ilasm | |
+| FieldAttributes                                 | partial (`literal` and `static` keywords, `fdHasDefault` for literals, `fdHasFieldMarshal` and offsets for `.field` forms) | param-constants, class-layout |
+| ParamAttributes                                 | partial (`in`, `out`, `opt`, HasDefault, HasFieldMarshal; `(param ...)` syntax) | param-constants |
 | AssemblyFlags and AssemblyHashAlgorithm         | none         |         |
 | PInvokeAttributes                               | partial (calling convention, charset, SupportsLastError from `pinvokeimpl`; `flags.rkt`). Values verified against II.23.1.8 (cdecl 0x0200, stdcall 0x0300, winapi = CallConvPlatformapi 0x0100, thiscall 0x0400, fastcall 0x0500). BestFit and ThrowOnUnmappableChar are not in the 2012 spec and are not written | pinvoke |
 | GenericParamAttributes                          | partial (`class`, `valuetype`, `.ctor` specials; variance not). Values verified against II.23.1.7: class 0x0004, valuetype (NotNullableValueTypeConstraint) 0x0008, .ctor 0x0010. Covariant and contravariant are not written, and no GenericParamConstraint row is emitted for `valuetype` | generic-types |
