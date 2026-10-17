@@ -6,7 +6,7 @@ ms.date: 2026-10-17
 
 ## Current state
 
-`encode-il` in `src/cli/lower.rkt`, fed by `parse-il` (through `lower-module`), handles four forms: `ret` (0x2A), `add` (0x58), `ldc.i4` (0x20, always a 4-byte operand), and `call` to a `MemberRef` or `MethodDef` (0x28). Any other instruction raises `unsupported IL instruction`, so nothing is skipped silently. `.locals`, labels, and exception handling are not supported yet.
+`encode-il` in `src/cli/lower.rkt`, fed by `parse-il` (through `lower-module`), handles four forms: `ret` (0x2A), `add` (0x58), `ldc.i4` (0x20, always a 4-byte operand), and `call` to a `MemberRef` (0x28) or a same-module `MethodDef` (0x28, token `0x06000000 | rid`, written as `(call ret (Class) name (params))`). `callvirt` on a same-module method is rejected, because all local methods are static. Any other instruction raises `unsupported IL instruction`, so nothing is skipped silently. `.locals`, labels, and exception handling are not supported yet.
 
 ## Target size
 
