@@ -1,0 +1,41 @@
+Module rows=1
+  Module[1] Name="props-events.exe" Mvid=9e3475c5d91070bad0471e28b7af483c
+TypeRef rows=3
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+  TypeRef[3] ResolutionScope=0x23000001 Name="EventHandler" Namespace="System"
+TypeDef rows=3
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Box" Namespace="" Extends=0x01000001 Fields=[1..1] Methods=[2..6]
+Field rows=1
+  Field[1] Flags=1 Name="_value" Signature=0608
+MethodDef rows=6
+  MethodDef[1] Rva=8964 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=73020000060a061f2a6f04000006066f03000006280100000a061d6f04000006066f03000006280100000a2a
+  MethodDef[2] Rva=9020 ImplFlags=0 Flags=6150 Name=".ctor" Signature=200001 Params=[] Il=02280200000a2a
+  MethodDef[3] Rva=9028 ImplFlags=0 Flags=2054 Name="get_Value" Signature=200008 Params=[] Il=027b010000042a
+  MethodDef[4] Rva=9036 ImplFlags=0 Flags=2054 Name="set_Value" Signature=20010108 Params=[] Il=02037d010000042a
+  MethodDef[5] Rva=9048 ImplFlags=0 Flags=2054 Name="add_Changed" Signature=200101120d Params=[] Il=2a
+  MethodDef[6] Rva=9052 ImplFlags=0 Flags=2054 Name="remove_Changed" Signature=200101120d Params=[] Il=2a
+MemberRef rows=2
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+  MemberRef[2] Parent=0x01000001 Name=".ctor" Signature=200001
+StandAloneSig rows=1
+  StandAloneSig[1] Signature=0701120c
+EventMap rows=1
+  EventMap[1] Parent=3 Events=[1..1]
+Event rows=1
+  Event[1] Flags=0 Name="Changed" Type=0x01000003
+PropertyMap rows=1
+  PropertyMap[1] Parent=3 Properties=[1..1]
+Property rows=1
+  Property[1] Flags=0 Name="Value" Type=280008
+MethodSemantics rows=4
+  MethodSemantics[1] Semantics=8 Method=5 Association=0x14000001
+  MethodSemantics[2] Semantics=16 Method=6 Association=0x14000001
+  MethodSemantics[3] Semantics=2 Method=3 Association=0x17000001
+  MethodSemantics[4] Semantics=1 Method=4 Association=0x17000001
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

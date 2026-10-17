@@ -30,13 +30,13 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x0F | ClassLayout            | none    | none    | Sorted; needed for explicit and sequential structs       |         |
 | 0x10 | FieldLayout            | none    | none    | Sorted                                                   |         |
 | 0x11 | StandAloneSig          | partial | partial | Reader parses it; row helper added; LocalVarSig blobs in `sigs.rkt`; `calli` pending | ops-locals-args |
-| 0x12 | EventMap               | none    | none    |                                                          |         |
+| 0x12 | EventMap               | done    | done    | Sorted by parent                                         | props-events |
 | 0x13 | EventPtr               | partial | n/a     | Count only                                               |         |
-| 0x14 | Event                  | none    | none    |                                                          |         |
-| 0x15 | PropertyMap            | none    | none    |                                                          |         |
+| 0x14 | Event                  | done    | done    | Sorted; type is a TypeRef (no delegate TypeDef yet)      | props-events |
+| 0x15 | PropertyMap            | done    | done    | Sorted by parent                                         | props-events |
 | 0x16 | PropertyPtr            | partial | n/a     | Count only                                               |         |
-| 0x17 | Property               | none    | none    |                                                          |         |
-| 0x18 | MethodSemantics        | none    | none    | Sorted                                                   |         |
+| 0x17 | Property               | done    | done    | Flags 0; PropertySig with HASTHIS for instance properties | props-events |
+| 0x18 | MethodSemantics        | done    | done    | Sorted by association; getter, setter, add, remove       | props-events |
 | 0x19 | MethodImpl             | partial | partial | Sorted; `.override` rows (same-module and external base); interface implementation not | virtual-override |
 | 0x1A | ModuleRef              | partial | done    | One row per P/Invoke DLL, first-use order (II.22.31)     | pinvoke |
 | 0x1B | TypeSpec               | partial | partial | Row helper and `read-row`; blob via `sigs.rkt` and reader; generic instance types | generic-calls |
@@ -80,7 +80,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | `VARARG` call convention and sentinel                            | none | none    |         |
 | Generic method sig (`GENERIC`, `GenParamCount`) (II.23.2.1)      | partial | partial | generic-calls |
 | FieldSig (0x06)                                                  | partial | partial | unit tests only (`field-sigs-test.rkt`) |
-| PropertySig (0x08)                                               | none | none    |         |
+| PropertySig (0x08)                                               | partial | partial | props-events (instance, no params) |
 | LocalVarSig (0x07), including `PINNED` and `BYREF` (II.23.2.6)   | partial | partial | ops-locals-args |
 | StandAloneMethodSig for `calli`                                  | none | none    |         |
 | Primitive element types (`BOOLEAN` through `U`, `STRING`, `OBJECT`) | partial | partial | |
@@ -128,7 +128,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | `.override Base::M` (same-module base or external base MemberRef), MethodImpl row (II.22.27) | done (base must be an ancestor; external base's virtual flag not checked) | virtual-override |
 | Interfaces and implementation (interface TypeDef, `.implements` with same-module or external interfaces, InterfaceImpl rows II.22.23, signature-matched implementation check) | done | interfaces |
 | Nested types (`nested public\|private\|assembly\|family\|famandassem\|famorassem` inside a class body; NestedClass rows; no namespace on the TypeDef) | done | nested-types |
-| Properties and events                                      | none    |         |
+| Properties and events (`.property` with `getter`/`setter`, `.event` with `add`/`remove`, in a class body; event type is metadata-only, no delegate TypeDef) | partial | props-events |
 | Generic types and methods (generic instances, same-module generic calls) | partial | generic-calls |
 | Single-dimension arrays (`newarr`, `ldelem`, `stelem`, `ldlen`; `ldelema` unit-tested only) | done | arrays-sum |
 | Multi-dimensional arrays `(array ELEM RANK)` with `.ctor`, `Get`, `Set`, `Address` as `call instance` on a TypeSpec parent (II.14.2, II.23.2.13); bounded form (sizes, lower bounds) rejected | done | multidim-arrays |
