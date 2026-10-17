@@ -1,5 +1,5 @@
 Module rows=1
-  Module[1] Name="generic-types.exe" Mvid=88910a050c4b073302ee25f51eb1278d
+  Module[1] Name="generic-types.exe" Mvid=14b7797f1c0f018e1b258d3cfc6b7267
 TypeRef rows=2
   TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
   TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
@@ -14,28 +14,32 @@ Field rows=2
   Field[1] Flags=6 Name="Value" Signature=061300
   Field[2] Flags=6 Name="Value" Signature=061300
 MethodDef rows=8
-  MethodDef[1] Rva=9016 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1f29730100000a0a066f0200000a280300000a7303000006730400000a0b076f0500000a6f02000006280300000a2a
+  MethodDef[1] Rva=9048 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1f29730100000a0a066f0200000a280300000a7303000006730400000a0b076f0500000a6f02000006280300000a2a
   MethodDef[2] Rva=0 ImplFlags=0 Flags=1350 Name="Area" Signature=200008 Params=[]
-  MethodDef[3] Rva=9076 ImplFlags=0 Flags=6150 Name=".ctor" Signature=200001 Params=[] Il=02280600000a2a
-  MethodDef[4] Rva=9084 ImplFlags=0 Flags=326 Name="Area" Signature=200008 Params=[] Il=1a2a
-  MethodDef[5] Rva=9088 ImplFlags=0 Flags=6150 Name=".ctor" Signature=2001011300 Params=[] Il=02280600000a02037d010000042a
-  MethodDef[6] Rva=9104 ImplFlags=0 Flags=6 Name="Get" Signature=20001300 Params=[] Il=027b010000042a
-  MethodDef[7] Rva=9112 ImplFlags=0 Flags=6150 Name=".ctor" Signature=2001011300 Params=[] Il=02280600000a02037d020000042a
-  MethodDef[8] Rva=9128 ImplFlags=0 Flags=6 Name="Get" Signature=20001300 Params=[] Il=027b020000042a
+  MethodDef[3] Rva=9108 ImplFlags=0 Flags=6150 Name=".ctor" Signature=200001 Params=[] Il=02280600000a2a
+  MethodDef[4] Rva=9116 ImplFlags=0 Flags=326 Name="Area" Signature=200008 Params=[] Il=1a2a
+  MethodDef[5] Rva=9120 ImplFlags=0 Flags=6150 Name=".ctor" Signature=2001011300 Params=[] Il=02280600000a02037d0700000a2a
+  MethodDef[6] Rva=9136 ImplFlags=0 Flags=6 Name="Get" Signature=20001300 Params=[] Il=027b0700000a2a
+  MethodDef[7] Rva=9144 ImplFlags=0 Flags=6150 Name=".ctor" Signature=2001011300 Params=[] Il=02280600000a02037d0800000a2a
+  MethodDef[8] Rva=9160 ImplFlags=0 Flags=6 Name="Get" Signature=20001300 Params=[] Il=027b0800000a2a
 InterfaceImpl rows=1
   InterfaceImpl[1] Class=4 Interface=0x02000003
-MemberRef rows=6
+MemberRef rows=8
   MemberRef[1] Parent=0x1b000001 Name=".ctor" Signature=2001011300
   MemberRef[2] Parent=0x1b000001 Name="Get" Signature=20001300
   MemberRef[3] Parent=0x01000002 Name="WriteLine" Signature=00010108
   MemberRef[4] Parent=0x1b000002 Name=".ctor" Signature=2001011300
   MemberRef[5] Parent=0x1b000002 Name="Get" Signature=20001300
   MemberRef[6] Parent=0x01000001 Name=".ctor" Signature=200001
+  MemberRef[7] Parent=0x1b000003 Name="Value" Signature=061300
+  MemberRef[8] Parent=0x1b000004 Name="Value" Signature=061300
 StandAloneSig rows=1
   StandAloneSig[1] Signature=07021512140108151218011210
-TypeSpec rows=2
+TypeSpec rows=4
   TypeSpec[1] Signature=1512140108
   TypeSpec[2] Signature=151218011210
+  TypeSpec[3] Signature=151214011300
+  TypeSpec[4] Signature=151218011300
 Assembly rows=1
   Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
 AssemblyRef rows=1

@@ -38,7 +38,7 @@
 // Size of code:                   0x00000600
 // Size of init.data:              0x00000200
 // Size of uninit.data:            0x00000000
-// Addr. of entry point:           0x000023fc
+// Addr. of entry point:           0x0000241c
 // Base of code:                   0x00002000
 // Base of data:                   0x00004000
 // Section alignment:              0x00002000
@@ -61,7 +61,7 @@
 // Loader flags:                   0x00000000
 // Directories:                    0x00000010
 // 0x00000000 [0x00000000] address [size] of Export Directory:          
-// 0x000023b0 [0x00000028] address [size] of Import Directory:          
+// 0x000023d0 [0x00000028] address [size] of Import Directory:          
 // 0x00000000 [0x00000000] address [size] of Resource Directory:        
 // 0x00000000 [0x00000000] address [size] of Exception Directory:       
 // 0x00000000 [0x00000000] address [size] of Security Directory:        
@@ -79,7 +79,7 @@
 
 // Image sections:
 //              .text
-//              0x00000402 Virtual Size
+//              0x00000422 Virtual Size
 //              0x00002000 Virtual Address
 //              0x00000600 Size of Raw Data
 //              0x00000200 Pointer to Raw Data
@@ -110,13 +110,13 @@
 //              0x00002000 Page RVA
 //              0x0000000c Block Size
 //              0x00000002 Number of Entries
-//              Entry 1: Type 0x3 Offset 0x000003fe
+//              Entry 1: Type 0x3 Offset 0x0000041e
 //              Entry 2: Type 0x0 Offset 0x00000000
 
 // Import Address Table
 //     DLL : mscoree.dll
 //              0x00002000 Import Address Table
-//              0x000023ee Import Name Table
+//              0x0000240e Import Name Table
 //              0          Time Date Stamp
 //              0          Index of First Forwarder Reference
 //
@@ -133,7 +133,7 @@
 // Header size:                        0x00000048
 // Major runtime version:              0x0002
 // Minor runtime version:              0x0000
-// 0x00002050 [0x000002e8] address [size] of Metadata Directory:        
+// 0x00002050 [0x00000308] address [size] of Metadata Directory:        
 // Flags:                              0x00000001
 // Entry point token:                  0x06000001
 // 0x00000000 [0x00000000] address [size] of Resources Directory:       
@@ -156,23 +156,23 @@
 //                  0x0005 Number of Streams
 //    Stream 1:
 //              0x0000006c Offset
-//              0x000001a0 Size
+//              0x000001b0 Size
 //              '#~' Name
 //    Stream 2:
-//              0x0000020c Offset
+//              0x0000021c Offset
 //              0x0000008c Size
 //              '#Strings' Name
 //    Stream 3:
-//              0x00000298 Offset
+//              0x000002a8 Offset
 //              0x00000004 Size
 //              '#US' Name
 //    Stream 4:
-//              0x0000029c Offset
+//              0x000002ac Offset
 //              0x00000010 Size
 //              '#GUID' Name
 //    Stream 5:
-//              0x000002ac Offset
-//              0x0000003c Size
+//              0x000002bc Offset
+//              0x0000004c Size
 //              '#Blob' Name
 
 //    Metadata Stream Header:
@@ -196,33 +196,33 @@
 // PE additional info   : 132               ( 5.16%)
 // Num.of PE sections   : 2
 // CLR header size     : 72                 ( 2.81%)
-// CLR meta-data size  : 744                (29.06%)
+// CLR meta-data size  : 776                (30.31%)
 // CLR additional info : 0                  ( 0.00%)
 // CLR method headers  : 18                 ( 0.70%)
 // Managed code         : 98                ( 3.83%)
 // Data                 : 512               (20.00%)
-// Unaccounted          : 472               (18.44%)
+// Unaccounted          : 440               (17.19%)
 
 // Num.of PE sections   : 2
 //   .text    - 1536
 //   .reloc   - 512
 
-// CLR meta-data size  : 744
+// CLR meta-data size  : 776
 //   Module        -    1 (10 bytes)
 //   TypeDef       -    6 (84 bytes)      1 interfaces, 0 explicit layout
 //   TypeRef       -    2 (12 bytes)
 //   MethodDef     -    8 (112 bytes)     1 abstract, 0 native, 7 bodies
 //   FieldDef      -    2 (12 bytes)      0 constant
-//   MemberRef     -    6 (36 bytes)
+//   MemberRef     -    8 (48 bytes)
 //   StandAloneSig -    1 (2 bytes)
 //   InterfaceImpl -    1 (4 bytes)
-//   TypeSpec      -    2 (4 bytes)
+//   TypeSpec      -    4 (8 bytes)
 //   Assembly      -    1 (22 bytes)
 //   AssemblyRef   -    1 (20 bytes)
 //   GenericParam  -    2 (16 bytes)
 //   GenericParamConstraint-    1 (4 bytes)
 //   Strings       -   139 bytes
-//   Blobs         -    60 bytes
+//   Blobs         -    76 bytes
 //   UserStrings   -     4 bytes
 //   Guids         -    16 bytes
 //   Uncategorized -   187 bytes
@@ -271,7 +271,7 @@
   // SIG: 00 00 01
   {
     .entrypoint
-    // Method begins at RVA 0x2338
+    // Method begins at RVA 0x2358
     // Code size       47 (0x2f)
     .maxstack  8
     .locals /*11000001*/ init (class Box`1/*02000005*/<int32> V_0,
@@ -313,7 +313,7 @@
           instance void  .ctor() cil managed
   // SIG: 20 00 01
   {
-    // Method begins at RVA 0x2374
+    // Method begins at RVA 0x2394
     // Code size       7 (0x7)
     .maxstack  8
     IL_0000:  /* 02   |                  */ ldarg.0
@@ -325,7 +325,7 @@
           instance int32  Area() cil managed
   // SIG: 20 00 08
   {
-    // Method begins at RVA 0x237c
+    // Method begins at RVA 0x239c
     // Code size       2 (0x2)
     .maxstack  8
     IL_0000:  /* 1A   |                  */ ldc.i4.4
@@ -342,14 +342,14 @@
           instance void  .ctor(!T A_1) cil managed
   // SIG: 20 01 01 13 00
   {
-    // Method begins at RVA 0x2380
+    // Method begins at RVA 0x23a0
     // Code size       14 (0xe)
     .maxstack  8
     IL_0000:  /* 02   |                  */ ldarg.0
     IL_0001:  /* 28   | (0A)000006       */ call       instance void [mscorlib/*23000001*/]System.Object/*01000001*/::.ctor() /* 0A000006 */
     IL_0006:  /* 02   |                  */ ldarg.0
     IL_0007:  /* 03   |                  */ ldarg.1
-    IL_0008:  /* 7D   | (04)000001       */ stfld      !T Box`1/*02000005*/::Value /* 04000001 */
+    IL_0008:  /* 7D   | (0A)000007       */ stfld      !0 class Box`1/*02000005*/<!T>/*1B000003*/::Value /* 0A000007 */
     IL_000d:  /* 2A   |                  */ ret
   } // end of method Box`1::.ctor
 
@@ -357,11 +357,11 @@
           Get() cil managed
   // SIG: 20 00 13 00
   {
-    // Method begins at RVA 0x2390
+    // Method begins at RVA 0x23b0
     // Code size       7 (0x7)
     .maxstack  8
     IL_0000:  /* 02   |                  */ ldarg.0
-    IL_0001:  /* 7B   | (04)000001       */ ldfld      !T Box`1/*02000005*/::Value /* 04000001 */
+    IL_0001:  /* 7B   | (0A)000007       */ ldfld      !0 class Box`1/*02000005*/<!T>/*1B000003*/::Value /* 0A000007 */
     IL_0006:  /* 2A   |                  */ ret
   } // end of method Box`1::Get
 
@@ -375,14 +375,14 @@
           instance void  .ctor(!T A_1) cil managed
   // SIG: 20 01 01 13 00
   {
-    // Method begins at RVA 0x2398
+    // Method begins at RVA 0x23b8
     // Code size       14 (0xe)
     .maxstack  8
     IL_0000:  /* 02   |                  */ ldarg.0
     IL_0001:  /* 28   | (0A)000006       */ call       instance void [mscorlib/*23000001*/]System.Object/*01000001*/::.ctor() /* 0A000006 */
     IL_0006:  /* 02   |                  */ ldarg.0
     IL_0007:  /* 03   |                  */ ldarg.1
-    IL_0008:  /* 7D   | (04)000002       */ stfld      !T Holder`1/*02000006*/::Value /* 04000002 */
+    IL_0008:  /* 7D   | (0A)000008       */ stfld      !0 class Holder`1/*02000006*/<!T>/*1B000004*/::Value /* 0A000008 */
     IL_000d:  /* 2A   |                  */ ret
   } // end of method Holder`1::.ctor
 
@@ -390,11 +390,11 @@
           Get() cil managed
   // SIG: 20 00 13 00
   {
-    // Method begins at RVA 0x23a8
+    // Method begins at RVA 0x23c8
     // Code size       7 (0x7)
     .maxstack  8
     IL_0000:  /* 02   |                  */ ldarg.0
-    IL_0001:  /* 7B   | (04)000002       */ ldfld      !T Holder`1/*02000006*/::Value /* 04000002 */
+    IL_0001:  /* 7B   | (0A)000008       */ ldfld      !0 class Holder`1/*02000006*/<!T>/*1B000004*/::Value /* 0A000008 */
     IL_0006:  /* 2A   |                  */ ret
   } // end of method Holder`1::Get
 

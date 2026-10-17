@@ -351,8 +351,14 @@
   (define sig (bytes-append (bytes #x06) (encode-type (lower-type cx '(0 . 0) type))))
   (token #x0A000000 (member-ref! cx parent name sig)))
 
+; The class whose method bodies are being lowered, so its own fields can be referenced through
+; its instantiation. Set by lower-module around encode-methods.
+(define current-class-name (make-parameter #f))
+
 ; Field token for a field declared in this module (II.22.15): a Field table row. The static
 ; instructions need a static field, and the field and instance instructions need an instance one.
+; An instance field of a generic class, used inside that class, is a MemberRef on the class
+; instantiated over its own type parameters (II.22.25, II.23.2.12), since this is Box<!0>.
 (define (module-field-token cx cls name type op)
   (define hit (hash-ref (ctx-field-rids cx) (cons cls name)
                         (λ () (error 'rangi "no field ~a in ~a" name cls))))
@@ -364,7 +370,20 @@
     (error 'rangi "~a.~a is an instance field; ~a needs a static field" cls name op))
   (when (and (memq op '(ldfld stfld ldflda)) static?)
     (error 'rangi "~a.~a is a static field; ~a needs an instance field" cls name op))
-  (token #x04000000 (vector-ref hit 0)))
+  (define arity (module-class-arity cx cls))
+  (if (and (positive? arity) (not static?) (eq? cls (current-class-name)))
+      (generic-self-field-token cx cls arity name type)
+      (token #x04000000 (vector-ref hit 0))))
+
+; MemberRef (II.22.25) to an instance field through Box<!0, ..., !(n-1)>, the TypeSpec of the
+; class over its own type parameters (II.22.39, II.23.2.12). The FieldSig (II.23.2.4) is in
+; terms of those parameters.
+(define (generic-self-field-token cx cls arity name type)
+  (define self (list 'genericinst (list 'class (cons 'typedef (module-class-rid cx cls)))
+                     (for/list ([i (in-range arity)]) (list 'var i))))
+  (define parent (cons 'typespec (typespec-rid! cx (encode-typespec self))))
+  (define sig (bytes-append (bytes #x06) (encode-type (lower-type cx (cons arity 0) type))))
+  (token #x0A000000 (member-ref! cx parent name sig)))
 
 (define (string-token cx s)
   (unless (string? s) (error 'rangi "ldstr operand must be a string, got ~s" s))
@@ -1359,7 +1378,8 @@
                 const
                 data)))
       (define-values (mdefs rows)
-        (encode-methods cx name arity next-rid (class-decl-methods cls) #:special (accessor-names cls)))
+        (parameterize ([current-class-name name])
+          (encode-methods cx name arity next-rid (class-decl-methods cls) #:special (accessor-names cls))))
       (define class-gps
         (gparam-rows cx (cons arity 0) (cons 'typedef (hash-ref class-rids name))
                      (class-decl-gparams cls)))
