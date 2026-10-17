@@ -1,0 +1,18 @@
+Module rows=1
+  Module[1] Name="switch-dispatch.exe" Mvid=ebc298bb18f97598a22589bb528cff15
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=2
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+MethodDef rows=1
+  MethodDef[1] Rva=8680 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=150a06450300000008000000110000001a00000015280100000a2b191f64280100000a2b101f65280100000a2b071f66280100000a0617580a061a32c51645000000001d280100000a2a
+MemberRef rows=1
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+StandAloneSig rows=1
+  StandAloneSig[1] Signature=070108
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
