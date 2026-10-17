@@ -1,0 +1,23 @@
+Module rows=1
+  Module[1] Name="external-instance-field.exe" Mvid=864dfefb9a92b29273d4f817d0e5819d
+TypeRef rows=3
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Header" Namespace="System.Runtime.Remoting.Messaging"
+  TypeRef[3] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=2
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+MethodDef rows=1
+  MethodDef[1] Rva=8852 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=7201000070720d000070730100000a257b0200000a280300000a2572190000707d0200000a257c0200000a50280300000a25177d0400000a257b0400000a280500000a7b0600000a280700000a2a
+MemberRef rows=7
+  MemberRef[1] Parent=0x01000002 Name=".ctor" Signature=2002010e1c
+  MemberRef[2] Parent=0x01000002 Name="Name" Signature=060e
+  MemberRef[3] Parent=0x01000003 Name="WriteLine" Signature=0001010e
+  MemberRef[4] Parent=0x01000002 Name="MustUnderstand" Signature=0602
+  MemberRef[5] Parent=0x01000003 Name="WriteLine" Signature=00010102
+  MemberRef[6] Parent=0x01000002 Name="Value" Signature=061c
+  MemberRef[7] Parent=0x01000003 Name="WriteLine" Signature=0001011c
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
