@@ -32,7 +32,7 @@ Fixed and covered by tests: the `#-` (uncompressed) stream name, which SRM reads
 
 ### Writer
 
-`parse-il` walks the s-expression program and collects strings, type references, and member references into mutable hashes. `assemble` builds the heaps, assembles IL, and writes the PE file.
+`parse-il` walks the s-expression program and collects strings, type references, and member references into mutable hashes. `plan-image` builds the heaps, assembles IL, and places every chunk with `pe/layout.rkt`. `assemble` then serialises the placed image with `pe/write.rkt`. `image-layout-report` prints the same plan as the layout map that each fixture snapshots as `layout.txt`.
 
 The output is deterministic. Tables and heaps keep insertion order, the MVID is a content hash, and the COFF timestamp is 0. `<Module>` methods move into a generated `Program` class, which clears the PEVerify `0x8013129d` warning. Method bodies use a tiny header when the code is under 64 bytes and `.maxstack` is at most 8, and a fat header otherwise.
 
@@ -50,14 +50,14 @@ The core rule: the PE image layer knows nothing about CLI metadata, and the meta
 
 ```text
 rangi/
-  private/binary.rkt        little/big-endian ints, alignment, compressed ints, byte builders
+  private/binary.rkt        little-endian ints, alignment, pad-to (built)
   pe/
-    model.rkt               image, section, chunk, symbol, fixup structs
-    layout.rkt              assigns file offsets and RVAs; emits a layout map
-    write.rkt               serialises headers, sections, data directories
-    read.rkt                parses headers and sections; rva->offset
-    imports.rkt             mscoree import + IAT + entry stub chunks (x86, x64, AnyCPU)
-    relocs.rkt              base relocation chunk built from fixups
+    model.rkt               (planned) image, section, chunk, symbol, fixup structs; today these live in layout.rkt
+    layout.rkt              chunk and section model; RVAs, file offsets, layout map (built)
+    write.rkt               headers, section table, sections, data directories by chunk name (built)
+    read.rkt                (planned) parses headers and sections; rva->offset
+    imports.rkt             mscoree import, IAT, entry stub chunks (built, x86 only)
+    relocs.rkt              base relocation chunk built from chunk relocs (built)
   cli/
     schema.rkt              table ids, columns, coded indexes (single source of truth)
     heaps.rkt               #Strings, #US, #GUID, #Blob builders with dedup

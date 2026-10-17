@@ -115,8 +115,8 @@ Deviations recorded for P1:
 * mscorlib is compared by public type count only (1521, equal to SRM), because the L3 decoder still throws on tables it does not decode yet (TypeSpec, CustomAttribute, GenericParam, and others). MethodSpec rows are decoded and match SRM (656 rows on mscorlib).
 * The PE32+ reader output was compared with SRM by hand on an `ilasm /X64` image. No fixture covers it yet.
 * [x] V4 L5 invariant checker (`tests/lib/pe-lint.rkt`, `tests/image-lint-test.rkt`); deviations listed under L5
-  * Threshold fixtures `text-over-400` and `text-over-2000` push `.text` past 0x400 and 0x2000, with fat bodies and 4 and 64 methods. `tests/fixtures-test.rkt` asserts each `.text` size. The layout map (V5) is still open.
-* [ ] V5 L2 layout map (lands with restructure R3, when the layout engine exists)
+  * Threshold fixtures `text-over-400` and `text-over-2000` push `.text` past 0x400 and 0x2000, with fat bodies and 4 and 64 methods. `tests/fixtures-test.rkt` asserts each `.text` size. Their layout maps are checked by V5.
+* [x] V5 L2 layout map: `layout-report` in `pe/layout.rkt`, snapshotted as `layout.txt` beside each fixture and checked in `tests/fixtures-test.rkt`. Lists headers, section RVAs, and each chunk's RVA, file offset, size, and alignment.
 * [ ] V6 L8 ilasm differential fixtures for every feature in [cli-coverage.md](cli-coverage.md)
 * [ ] V7 Reader corpus test: run the L3 dump against every assembly in the .NET Framework 4.7.1 reference set and `System.Private.CoreLib`, diffed against SRM
 

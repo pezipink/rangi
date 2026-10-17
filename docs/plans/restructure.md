@@ -28,11 +28,13 @@ Each step ends with `raco test tests/` green. R1 and R2 must not change any emit
 
 ### R3 PE layer and layout engine
 
-* [ ] `pe/model.rkt`: `image` (machine, characteristics, subsystem, dll flags, image base, alignments, PE32 or PE32+), `section` (name, characteristics, chunks), `chunk` (name, alignment, size, writer, symbols, fixups), `fixup` (offset, symbol, kind `rva32`/`va32`/`va64`/`file-offset`).
-* [ ] `pe/layout.rkt`: assign RVAs (section alignment `0x2000`) and file offsets (file alignment `0x200`); compute all optional header size fields; return a layout plus the text map used by snapshot L2.
-* [ ] `pe/write.rkt`: serialise the DOS stub, COFF header, optional header, data directories (by symbol), section table, and sections.
-* [ ] `pe/imports.rkt`: build the import directory, ILT, IAT, hint/name entry for `_CorExeMain` or `_CorDllMain`, the `mscoree.dll` name, and the `FF 25` entry stub as chunks with fixups. The entry stub's absolute operand is a `va32` fixup.
-* [ ] `pe/relocs.rkt`: generate `.reloc` blocks from all `va32`/`va64` fixups.
+Deviations so far: the model structs live in `pe/layout.rkt` rather than `pe/model.rkt`. Chunks carry their fixups as a resolver procedure plus a list of relocation offsets, not a typed `fixup` struct. The fixup kinds `rva32`, `va64`, and `file-offset` are not implemented. Only `va32` is used, for the entry stub and the `.reloc` table.
+
+* [ ] `pe/model.rkt`: `image` (machine, characteristics, subsystem, dll flags, image base, alignments, PE32 or PE32+), `section` (name, characteristics, chunks), `chunk` (name, alignment, size, writer, symbols, fixups), `fixup` (offset, symbol, kind `rva32`/`va32`/`va64`/`file-offset`). Partly done: `image-params`, `section`, `chunk`, and `placed-image` exist in `pe/layout.rkt`.
+* [x] `pe/layout.rkt`: assign RVAs (section alignment `0x2000`) and file offsets (file alignment `0x200`); compute all optional header size fields; return a layout plus the text map used by snapshot L2. The layout map is `layout-report`, snapshotted as `layout.txt` (V5).
+* [x] `pe/write.rkt`: serialise the DOS stub, COFF header, optional header, data directories (by symbol), section table, and sections.
+* [x] `pe/imports.rkt`: build the import directory, ILT, IAT, hint/name entry for `_CorExeMain` or `_CorDllMain`, the `mscoree.dll` name, and the `FF 25` entry stub as chunks with fixups. The entry stub's absolute operand is a `va32` fixup. Built for `_CorExeMain` only, with no x64 or DLL variant.
+* [x] `pe/relocs.rkt`: generate `.reloc` blocks from all `va32`/`va64` fixups. Currently built from relocation offsets on chunks; only `va32` is used.
 * [ ] `pe/read.rkt`: the header parsing currently inside `read-file`, shared with the reader.
 
 ### R4 CLI layer emits chunks

@@ -1,6 +1,6 @@
 #lang racket/base
 ; L4 image hash and L7 execution for every fixture under tests/fixtures/
-(require rackunit racket/file "lib/fixture.rkt" "lib/snapshot.rkt")
+(require rackunit racket/file "lib/fixture.rkt" "lib/snapshot.rkt" "../src/cli-writer.rkt")
 
 ; fixtures that exist to push .text past a layout threshold (roadmap P3); each must stay above it
 (define text-floors (hash "text-over-400" #x400 "text-over-2000" #x2000))
@@ -21,6 +21,8 @@
      name
      (λ (dir exe)
        (check-snapshot (build-path dir "image.sha256") (string-append (sha256-hex exe) "\n"))
+       (define program (call-with-input-file (build-path dir "program.rktd") read))
+       (check-snapshot (build-path dir "layout.txt") (image-layout-report (parse-il program)))
        (define-values (status stdout) (run-image exe))
        (check-equal? status 0 "exit status")
        (check-snapshot (build-path dir "expected-stdout.txt") (normalize-newlines stdout))

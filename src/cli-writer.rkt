@@ -3,24 +3,16 @@
          racket/list
          racket/file
          racket/path
-         "cli-reader.rkt")
-(provide assemble parse-il)
+         "cli-reader.rkt"
+         "private/binary.rkt"
+         "pe/imports.rkt"
+         "pe/layout.rkt"
+         "pe/relocs.rkt"
+         "pe/write.rkt")
+(provide assemble image-layout-report parse-il)
 
 ; ---------------------------------------------------------------------------
 ; byte helpers
-
-(define (le n k)
-  (unless (and (exact-nonnegative-integer? n) (< n (expt 2 (* 8 k))))
-    (error 'rangi "value ~a does not fit in ~a bytes" n k))
-  (define b (make-bytes k 0))
-  (for ([i (in-range k)])
-    (bytes-set! b i (bitwise-and (arithmetic-shift n (* -8 i)) #xFF)))
-  b)
-
-(define (align n a) (* a (quotient (+ n a -1) a)))
-
-(define (pad-to bs n)
-  (bytes-append bs (make-bytes (- (align (bytes-length bs) n) (bytes-length bs)) 0)))
 
 (define (compressed n)
   (cond
@@ -33,31 +25,12 @@
             (bitwise-and n #xFF))]
     [else (error 'rangi "blob of ~a bytes is too large" n)]))
 
-(define (text-va off) (+ text-rva off))
-
 ; ---------------------------------------------------------------------------
-; layout constants
+; layout constants (the PE layout itself lives in pe/)
 
 (define image-base #x400000)
 (define section-align #x2000)
 (define file-align #x200)
-(define headers-size #x200)
-(define text-rva #x2000)
-(define md-off #x50)
-(define cli-off #x08)
-(define hint-name-bytes (bytes-append (le 0 2) #"_CorExeMain\0"))
-(define dll-name-bytes #"mscoree.dll\0")
-
-; DOS stub with the standard 0x80 e_lfanew and the "This program cannot be run" message.
-(define dos-header
-  (let ([b (make-bytes #x84 0)])
-    (bytes-copy! b 0 (bytes #x4D #x5A #x90 #x00 #x03 #x00 #x00 #x00 #x04 #x00 #x00 #x00
-                            #xFF #xFF #x00 #x00 #xB8 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x40))
-    (bytes-copy! b #x3C (le #x80 4))
-    (bytes-copy! b #x40 (bytes #x0E #x1F #xBA #x0E #x00 #xB4 #x09 #xCD #x21 #xB8 #x01 #x4C #xCD #x21))
-    (bytes-copy! b #x4E (string->bytes/utf-8 "This program cannot be run in DOS mode.\r\r\n$"))
-    (bytes-copy! b #x80 (bytes #x50 #x45 #x00 #x00))
-    b))
 
 ; ---------------------------------------------------------------------------
 ; intermediate model
@@ -437,13 +410,22 @@
 ; ---------------------------------------------------------------------------
 ; PE image
 
-(define (section-header name vsize va rawsize rawptr chars)
-  (bytes-append (pad-to (string->bytes/utf-8 name) 8)
-                (le vsize 4) (le va 4) (le rawsize 4) (le rawptr 4)
-                (le 0 4) (le 0 4) (le 0 2) (le 0 2) (le chars 4)))
+(define (method-sym i) (string->symbol (format "method:~a" i)))
 
 (define (assemble p [out-path (make-temporary-file "rangi-~a.exe")])
-  (define file-name (path->string (file-name-from-path out-path)))
+  (write-pe-image (plan-image p (path->string (file-name-from-path out-path))) out-path
+                  #:entry 'entry-stub
+                  #:dirs pe-data-dirs)
+  out-path)
+
+; layout of the image that assemble writes for a file called file-name (V5 snapshots)
+(define (image-layout-report p [file-name "image.exe"])
+  (layout-report (plan-image p file-name)))
+
+(define pe-data-dirs '((1 . import-dir) (5 . reloc) (12 . iat) (14 . cli-header)))
+
+; places every chunk and returns the placed image, without writing a file
+(define (plan-image p file-name)
   (define asm-name (regexp-replace #rx"[.][^.]*$" file-name ""))
   (define mod-name (or (il-program-module-name p) file-name))
   (define entry-rid (il-program-entry-rid p))
@@ -454,92 +436,31 @@
   ; metadata size does not depend on the RVA values, so measure once with zeros
   (define md-len (bytes-length (metadata-bytes p asm-name mod-name (λ (i) 0))))
 
-  (define il-start (+ md-off (align md-len 4)))
-  (define-values (il-offs il-end)
-    (for/fold ([offs '()] [pos il-start]) ([b (in-list bodies)])
-      (define at (align pos 4))
-      (values (cons at offs) (+ at (bytes-length b)))))
-  (define il-vec (list->vector (reverse il-offs)))
-  (define (rva-of i) (text-va (vector-ref il-vec i)))
+  (match-define (list iat import-dir lookup hint-name dll-name entry-stub)
+    (mscoree-chunks image-base))
+  (define cli-header
+    (linked-chunk 'cli-header 4 #x48
+                  (λ (rva-of)
+                    (bytes-append (le #x48 4) (le 2 2) (le 0 2)
+                                  (le (rva-of 'metadata) 4) (le md-len 4)
+                                  (le 1 4)
+                                  (le (bitwise-ior #x06000000 entry-rid) 4)
+                                  (make-bytes 48 0)))))
+  (define metadata
+    (linked-chunk 'metadata 4 md-len
+                  (λ (rva-of)
+                    (metadata-bytes p asm-name mod-name (λ (i) (rva-of (method-sym i)))))))
+  (define body-chunks
+    (for/list ([b (in-list bodies)] [i (in-naturals)])
+      (bytes-chunk (method-sym i) 4 b)))
+  (define text
+    (section ".text" #x60000020
+             (append (list iat cli-header metadata) body-chunks
+                     (list import-dir lookup hint-name dll-name entry-stub))))
 
-  (define import-off (align il-end 4))
-  (define lookup-off (+ import-off #x28))
-  (define hn-off (+ lookup-off 8))
-  (define dll-off (+ hn-off (bytes-length hint-name-bytes)))
-  (define stub-off (align (+ dll-off (bytes-length dll-name-bytes)) 4))
-  (define text-size (+ stub-off 6))
-  (define text-raw (align text-size file-align))
-  (define reloc-rva (+ text-rva (align text-size section-align)))
-  (define size-of-image (+ reloc-rva (align 12 section-align)))
-
-  (define md (metadata-bytes p asm-name mod-name rva-of))
-  (unless (= (bytes-length md) md-len)
-    (error 'rangi "internal error: metadata size changed between passes"))
-
-  (define text (make-bytes text-size 0))
-  (define (put! off bs) (bytes-copy! text off bs))
-  (put! 0 (bytes-append (le (text-va hn-off) 4) (le 0 4)))
-  (put! cli-off (bytes-append (le #x48 4) (le 2 2) (le 0 2)
-                              (le (text-va md-off) 4) (le md-len 4)
-                              (le 1 4)
-                              (le (bitwise-ior #x06000000 entry-rid) 4)
-                              (make-bytes 48 0)))
-  (put! md-off md)
-  (for ([b (in-list bodies)] [i (in-naturals)])
-    (put! (vector-ref il-vec i) b))
-  (put! import-off (bytes-append (le (text-va lookup-off) 4) (le 0 4) (le 0 4)
-                                 (le (text-va dll-off) 4) (le text-rva 4)
-                                 (make-bytes 20 0)))
-  (put! lookup-off (bytes-append (le (text-va hn-off) 4) (le 0 4)))
-  (put! hn-off hint-name-bytes)
-  (put! dll-off dll-name-bytes)
-  ; the entry stub jumps through the IAT slot using its absolute address
-  (put! stub-off (bytes-append (bytes #xFF #x25) (le (+ image-base text-rva) 4)))
-
-  ; one HIGHLOW relocation for the operand of the stub's jump
-  (define reloc-target (+ (text-va stub-off) 2))
-  (define reloc-block
-    (bytes-append (le (bitwise-and reloc-target (bitwise-not #xFFF)) 4)
-                  (le 12 4)
-                  (le (bitwise-ior (arithmetic-shift 3 12) (bitwise-and reloc-target #xFFF)) 2)
-                  (le 0 2)))
-
-  (define coff-header
-    (bytes-append (le #x14C 2) (le 2 2) (le 0 4) (le 0 4) (le 0 4) (le #xE0 2) (le #x102 2)))
-  (define dirs
-    (hash 1 (cons (text-va import-off) #x28)
-          5 (cons reloc-rva 12)
-          12 (cons text-rva 8)
-          14 (cons (text-va cli-off) #x48)))
-  (define dir-bytes
-    (apply bytes-append
-           (for/list ([i (in-range 16)])
-             (let ([d (hash-ref dirs i (cons 0 0))])
-               (bytes-append (le (car d) 4) (le (cdr d) 4))))))
-  (define opt-header
-    (bytes-append
-     (le #x10B 2) (bytes 6 5)
-     (le text-raw 4) (le headers-size 4) (le 0 4)
-     (le (text-va stub-off) 4) (le text-rva 4) (le reloc-rva 4)
-     (le image-base 4) (le section-align 4) (le file-align 4)
-     (le 4 2) (le 0 2) (le 0 2) (le 0 2) (le 4 2) (le 0 2) (le 0 4)
-     (le size-of-image 4) (le headers-size 4) (le 0 4)
-     (le 3 2) (le #x8540 2)
-     (le #x100000 4) (le #x1000 4) (le #x100000 4) (le #x1000 4)
-     (le 0 4) (le 16 4)
-     dir-bytes))
-  (define section-headers
-    (bytes-append
-     (section-header ".text" text-size text-rva text-raw headers-size #x60000020)
-     (section-header ".reloc" 12 reloc-rva headers-size (+ headers-size text-raw) #x42000040)))
-  (define pe-header
-    (bytes-append dos-header coff-header opt-header section-headers))
-
-  (define file-bytes
-    (bytes-append (pad-to pe-header headers-size)
-                  (pad-to text file-align)
-                  (pad-to reloc-block file-align)))
-  (call-with-output-file out-path
-    (λ (out) (write-bytes file-bytes out))
-    #:exists 'truncate/replace)
-  out-path)
+  (define params (image-params image-base section-align file-align))
+  ; the relocation table holds the addresses of .text, so lay out .text before building it
+  (define reloc
+    (section ".reloc" #x42000040
+             (list (base-relocation-chunk (layout-image params (list text))))))
+  (layout-image params (list text reloc)))
