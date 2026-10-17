@@ -57,6 +57,11 @@
      (error 'rangi "~a: empty generic argument list in ~s" who t)]
     [(list (or 'class 'valuetype) (? symbol?) (? list? args))
      (for ([a (in-list args)]) (check-type who a ncls nmth))]
+    ; SZARRAY (II.23.2.12): the element type follows the ARRAY marker
+    [(list 'szarray elem)
+     (when (memq elem '(void typedref))
+       (error 'rangi "~a: array element type cannot be ~a" who elem))
+     (check-type who elem ncls nmth)]
     [_ (error 'rangi "~a: malformed type ~s" who t)]))
 
 (define gp-special-keywords '(class valuetype .ctor))
@@ -95,10 +100,11 @@
      params]))
 
 ; .locals init (...) and .locals (...) are both accepted. An entry is a type, or (TYPE NAME).
-; A (class ...) or (valuetype ...) entry is always a bare type, so it is never read as a name.
+; A (class ...), (valuetype ...) or (szarray ...) entry is always a bare type, so it is never
+; read as a name.
 (define (parse-local-var who node ncls nmth)
   (cond
-    [(and (pair? node) (memq (car node) '(class valuetype)))
+    [(and (pair? node) (memq (car node) '(class valuetype szarray)))
      (check-type who node ncls nmth)
      (local-var node #f)]
     [(and (list? node) (= (length node) 2) (symbol? (cadr node)))
