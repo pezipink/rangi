@@ -20,8 +20,9 @@
 (struct class-decl (flags name gparams methods))
 ; handlers: list of eh-clause in source order. maxstack is #f when there is no .maxstack.
 (struct method-decl (flags ret name gparams params code maxstack entry? locals handlers))
-; exception clause (II.25.4.6): kind is catch, finally or fault. class is (asm ty) for a catch
-; and #f otherwise; the four labels are names without the colon.
+; exception clause (II.25.4.6): kind is catch, finally, fault or filter. class is (asm ty) for a
+; catch, the filter block's label name for a filter, and #f otherwise; the four labels are names
+; without the colon.
 ; try is [try-start, try-end), handler is [handler-start, handler-end).
 (struct eh-clause (kind class try-start try-end handler-start handler-end))
 ; A generic parameter (II.22.20). specials are class, valuetype or .ctor.
@@ -155,8 +156,12 @@
              (? symbol? ts) (? symbol? te) (? symbol? hs) (? symbol? he))
        (values code maxstack entry? raw-locals
                (cons (eh-clause kind #f ts te hs he) handlers))]
+      [(list '.try (list 'filter (? symbol? filter-label))
+             (? symbol? ts) (? symbol? te) (? symbol? hs) (? symbol? he))
+       (values code maxstack entry? raw-locals
+               (cons (eh-clause 'filter filter-label ts te hs he) handlers))]
       [(list '.try _ ...)
-       (error 'rangi "malformed .try ~s (expected (.try (catch (asm ty)) try-start try-end handler-start handler-end), (.try (finally) ...) or (.try (fault) ...))" node)]
+       (error 'rangi "malformed .try ~s (expected (.try (catch (asm ty)) try-start try-end handler-start handler-end), (.try (finally) ...), (.try (fault) ...) or (.try (filter filter-label) ...))" node)]
       [_ (values (cons node code) maxstack entry? raw-locals handlers)])))
 
 ; The 7-element form has no generic parameters. The 8-element form has a (.typarams ...)
