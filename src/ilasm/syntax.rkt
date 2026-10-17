@@ -5,6 +5,7 @@
          "../cli-reader.rkt"
          (only-in "../cli/sigs.rkt" primitive-names))
 (provide parse-il
+         tyvar-ref
          (struct-out module-model)
          (struct-out class-decl)
          (struct-out method-decl)
@@ -39,8 +40,9 @@
   (and m (cons (cadr m) (string->number (caddr m)))))
 
 ; Type forms: a primitive name, a type variable, or (class Name) / (valuetype Name) with
-; optional type arguments as a list, which must not be empty. ncls and nmth are the
-; number of class and method parameters in scope.
+; optional type arguments as a list, which must not be empty. Name is a bare symbol for a
+; type in this module, or (asm ty) for a type in a referenced assembly. ncls and nmth are
+; the number of class and method parameters in scope.
 (define (check-type who t ncls nmth)
   (match t
     [(? symbol?)
@@ -52,10 +54,10 @@
              (unless (< (cdr ref) limit)
                (error 'rangi "~a: type variable ~a out of range (~a declared)" who t limit)))]
        [else (error 'rangi "~a: unknown type ~s" who t)])]
-    [(list (or 'class 'valuetype) (? symbol?)) (void)]
-    [(list (or 'class 'valuetype) (? symbol?) '())
+    [(list (or 'class 'valuetype) (or (? symbol?) (list (? symbol?) (? symbol?)))) (void)]
+    [(list (or 'class 'valuetype) (or (? symbol?) (list (? symbol?) (? symbol?))) '())
      (error 'rangi "~a: empty generic argument list in ~s" who t)]
-    [(list (or 'class 'valuetype) (? symbol?) (? list? args))
+    [(list (or 'class 'valuetype) (or (? symbol?) (list (? symbol?) (? symbol?))) (? list? args))
      (for ([a (in-list args)]) (check-type who a ncls nmth))]
     [_ (error 'rangi "~a: malformed type ~s" who t)]))
 
