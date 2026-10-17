@@ -1,0 +1,25 @@
+Module rows=1
+  Module[1] Name="nested-types.exe" Mvid=e2639b94ea2f4193057af6d14e23f98b
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=3
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=1 Name="Outer" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=2 Name="Inner" Namespace="" Extends=0x01000001 Fields=[1..1] Methods=[2..4]
+Field rows=1
+  Field[1] Flags=6 Name="weight" Signature=0608
+MethodDef rows=4
+  MethodDef[1] Rva=8792 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1f1473020000066f04000006280100000a167302000006251f157d010000046f04000006280100000a1a2803000006280100000a2a
+  MethodDef[2] Rva=8848 ImplFlags=0 Flags=6150 Name=".ctor" Signature=20010108 Params=[] Il=02280200000a02037d010000042a
+  MethodDef[3] Rva=8864 ImplFlags=0 Flags=22 Name="Twice" Signature=00010808 Params=[] Il=0202582a
+  MethodDef[4] Rva=8872 ImplFlags=0 Flags=6 Name="Get" Signature=200008 Params=[] Il=027b010000042a
+MemberRef rows=2
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+  MemberRef[2] Parent=0x01000001 Name=".ctor" Signature=200001
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
+NestedClass rows=1
+  NestedClass[1] Nested=3 Enclosing=2
