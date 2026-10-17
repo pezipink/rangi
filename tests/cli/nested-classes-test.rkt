@@ -101,7 +101,7 @@
   (define m (parse-il (program '(.class (public) Keep []))))
   (define bad (module-model (module-model-asm-refs m)
                             (append (module-model-classes m)
-                                    (list (class-decl '(nested public) 'Inner '() #f '() '() 'Missing '())))
+                                    (list (class-decl '(nested public) 'Inner '() #f '() '() 'Missing '() '())))
                             (module-model-module-name m)
                             (module-model-format m)
                             (module-model-dll? m)

@@ -19,7 +19,8 @@
          (struct-out tdef)
          (struct-out fdef)
          (struct-out mdef)
-         (struct-out methodimpl))
+         (struct-out methodimpl)
+         (struct-out interfaceimpl))
 
 ; The CLI-level program: flags are bits, signatures and bodies are bytes, and
 ; references are rids. asm-refs rows are (name version token), where version is four ints and
@@ -28,13 +29,17 @@
 ; used by ldstr. A memberref parent is a (cons 'typeref|'typespec rid); a methodspec method
 ; is (cons 'methoddef|'memberref rid); a genericparam owner is (cons 'methoddef rid).
 ; subsystem and platform are the module model's names ('console|'windows, 'anycpu|'x86|'32bitpreferred).
-; methodimpls are the MethodImpl rows for .override, in source order.
+; methodimpls are the MethodImpl rows for .override, in source order. interfaceimpls are the
+; InterfaceImpl rows for .implements, in source order.
 (struct cli-program (asm-refs typerefs memberrefs typespecs methodspecs genericparams
                      typedefs module-name entry-rid format standalone-sigs us-heap
-                     subsystem platform methodimpls))
+                     subsystem platform methodimpls interfaceimpls))
 ; A MethodImpl row (II.22.27): class is the TypeDef rid, body is (cons 'methoddef rid) of an
 ; override in that class, and decl is (cons 'methoddef|'memberref rid) of the base method.
 (struct methodimpl (class body decl))
+; An InterfaceImpl row (II.22.23): class is the implementing TypeDef rid, and iface is
+; (cons 'typedef|'typeref rid) of the interface.
+(struct interfaceimpl (class iface))
 ; fields are the TypeDef's Field rows, in row order (II.22.15). extends is (typedef . rid),
 ; (typeref . rid), or #f for an interface or <Module> (II.22.37). enclosing is the TypeDef rid of
 ; the enclosing class for a nested type, or #f (II.22.32).
@@ -993,6 +998,68 @@
                 (cons 'methoddef body-rid)
                 (override-declaration cx owner decls mname ret params))))
 
+; An interface (II.10.1) is an abstract class with the interface flag (II.22.37). It has no base
+; and no .implements, and its methods are abstract, virtual, and instance methods (II.22.26).
+(define (check-interface! cls)
+  (define name (class-decl-name cls))
+  (when (memq 'interface (class-decl-flags cls))
+    (unless (memq 'abstract (class-decl-flags cls))
+      (error 'rangi "interface ~a must be abstract" name))
+    (when (pair? (class-decl-implements cls))
+      (error 'rangi "interface ~a cannot have .implements" name))
+    (for ([md (in-list (class-decl-methods cls))])
+      (define fl (method-decl-flags md))
+      (unless (and (memq 'abstract fl) (memq 'virtual fl) (not (memq 'static fl)))
+        (error 'rangi "interface method ~a.~a must be abstract, virtual, and an instance method"
+               name (method-decl-name md))))))
+
+; The virtual methods of System.Object (II.22.26), which every class without a base inherits.
+(define object-virtuals
+  '((ToString string ()) (Equals boolean (object)) (GetHashCode int32 ()) (Finalize void ())))
+
+; Whether cls, or a same-module base of cls, has a virtual instance method with this name and
+; signature, or inherits one from System.Object. Other external bases cannot be inspected, so the
+; walk accepts them.
+(define (implemented? cls decls mname ret params)
+  (let loop ([c cls])
+    (define md (find-method-decl c mname ret params))
+    (define base (class-decl-extends c))
+    (cond
+      [(and md (memq 'virtual (method-decl-flags md)) (not (memq 'static (method-decl-flags md))))
+       #t]
+      [(not base)
+       (and (for/or ([v (in-list object-virtuals)])
+              (and (equal? mname (car v)) (equal? ret (cadr v)) (equal? params (caddr v))))
+            #t)]
+      [(symbol? base) (loop (hash-ref decls base))]
+      [(eq? (cadr base) 'System.Object)
+       (and (for/or ([v (in-list object-virtuals)])
+              (and (equal? mname (car v)) (equal? ret (cadr v)) (equal? params (caddr v))))
+            #t)]
+      [else #t])))
+
+; InterfaceImpl rows (II.22.23) for the .implements of cls. A same-module interface is a TypeDef,
+; and cls must implement each of its methods. An external interface is a TypeRef, and its methods
+; are not checked.
+(define (lower-implements cx cls decls)
+  (define name (class-decl-name cls))
+  (define class-rid (module-class-rid cx name))
+  (for/list ([i (in-list (class-decl-implements cls))])
+    (cond
+      [(symbol? i)
+       (define target (hash-ref decls i #f))
+       (unless target (error 'rangi "~a implements unknown interface ~a" name i))
+       (unless (memq 'interface (class-decl-flags target))
+         (error 'rangi "~a implements ~a, which is not an interface" name i))
+       (for ([md (in-list (class-decl-methods target))])
+         (unless (implemented? cls decls (method-decl-name md)
+                               (method-decl-ret md) (method-decl-params md))
+           (error 'rangi "~a does not implement ~a.~a" name i (method-decl-name md))))
+       (interfaceimpl class-rid (cons 'typedef (module-class-rid cx i)))]
+      [else
+       (define-values (asm ty) (asm-type-parts i))
+       (interfaceimpl class-rid (cons 'typeref (typeref-rid! cx asm ty 0)))])))
+
 
 (define (lower-module m)
   (define classes (module-model-classes m))
@@ -1030,6 +1097,7 @@
   (define class-decls (for/hasheq ([cls (in-list classes)]) (values (class-decl-name cls) cls)))
   (define data-decls (for/hasheq ([d (in-list (module-model-data m))]) (values (data-decl-name d) d)))
   (for ([cls (in-list classes)]) (check-abstract-members! cls))
+  (for ([cls (in-list classes)]) (check-interface! cls))
   (define-values (tdefs gps)
     (for/fold ([tdefs '()] [gps '()] [next-rid 1]
                #:result (values (reverse tdefs) (append* (reverse gps))))
@@ -1074,6 +1142,9 @@
   (define methodimpls
     (append* (for/list ([cls (in-list classes)] #:unless (null? (class-decl-overrides cls)))
                (lower-overrides cx cls class-decls))))
+  (define interfaceimpls
+    (append* (for/list ([cls (in-list classes)] #:unless (null? (class-decl-implements cls)))
+               (lower-implements cx cls class-decls))))
   (cli-program (for/list ([name (in-list (interner-keys asm-refs))])
                  (define r (findf (λ (r) (equal? (asm-ref-name r) name)) (module-model-asm-refs m)))
                  (list name (asm-ref-version r) (asm-ref-token r)))
@@ -1090,5 +1161,6 @@
                us-heap
                (module-model-subsystem m)
                (module-model-platform m)
-               methodimpls))
+               methodimpls
+               interfaceimpls))
 
