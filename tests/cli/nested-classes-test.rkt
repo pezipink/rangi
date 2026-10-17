@@ -106,7 +106,8 @@
                             (module-model-format m)
                             (module-model-dll? m)
                             (module-model-subsystem m)
-                            (module-model-platform m)))
+                           (module-model-platform m)
+                           (module-model-data m)))
   (check-exn #rx"nested class Inner has no enclosing class Missing"
              (λ () (lower-module bad))))
 
