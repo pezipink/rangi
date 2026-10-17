@@ -117,7 +117,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 |------------------------------------------------------------|---------|---------|
 | Multiple classes with namespaces, class-typed fields, parameters, and returns | done | multi-types |
 | `extends` to a same-module class or an external class (`System.Object` by default), with base ctor chaining and inherited field and method access | done | extends-base |
-| `extends` (`System.ValueType`, `System.Enum`) for value types and enums | none |         |
+| `extends` (`System.ValueType`, `System.Enum`) for value types and enums | partial (value types done: `System.ValueType` base, by-value args and returns, `ldloca`, `initobj`; enums not) | value-types |
 | Static methods, same-module calls (forward and recursive), parameters | done | calls-multi |
 | Static fields (same module)                                | done    | `static-fields` |
 | Instance fields (same module: `ldfld`, `stfld`, `ldflda`), `.ctor` | done | instance-methods, il-all-opcodes |
