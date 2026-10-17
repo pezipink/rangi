@@ -4,7 +4,7 @@
          "../ilasm/syntax.rkt"
          "../private/binary.rkt"
          "heaps.rkt"
-         (only-in "sigs.rkt" encode-localvar-sig)
+         (only-in "sigs.rkt" encode-localvar-sig encode-type primitive-names)
          (only-in "../il/encode.rkt" find-opcode opcode-named)
          (only-in "../il/opcodes.rkt" opcode-operand)
          (only-in "../il/stack.rkt" compute-max-stack effect label-at
@@ -82,12 +82,19 @@
     (bitwise-ior acc (cond [(assq k member-flags) => cdr]
                            [else (error 'rangi "unsupported method flag ~a" k)]))))
 
+; Types that signatures may name: primitives, and SZARRAY of a lowerable type (II.23.2.12).
+; Class and valuetype types are not lowered yet.
+(define (lowerable-type? t)
+  (cond
+    [(symbol? t) (and (memq t primitive-names) #t)]
+    [(and (pair? t) (eq? (car t) 'szarray))
+     (and (not (memq (cadr t) '(void typedref))) (lowerable-type? (cadr t)))]
+    [else #f]))
+
+; The Type blob for one signature position (II.23.2.12)
 (define (type-code t)
-  (case t
-    [(void) #x01]
-    [(int32) #x08]
-    [(object) #x1C]
-    [else (error 'rangi "unsupported type ~s" t)]))
+  (unless (lowerable-type? t) (error 'rangi "unsupported type ~s" t))
+  (encode-type t))
 
 (define (param-code t)
   (when (eq? t 'void) (error 'rangi "void is only valid as a return type"))
@@ -102,8 +109,8 @@
   (unless (list? params) (error 'rangi "malformed parameter list ~s" params))
   (bytes-append (bytes cc)
                 (compress-unsigned (length params))
-                (bytes (type-code ret))
-                (apply bytes-append (for/list ([t (in-list params)]) (bytes (param-code t))))))
+                (type-code ret)
+                (apply bytes-append (for/list ([t (in-list params)]) (param-code t)))))
 
 ; "System.Console" -> ("System" "Console"); a name without a dot has an empty namespace
 (define (split-type-name sym)
@@ -160,7 +167,7 @@
 ; FieldSig (II.23.2.4): 0x06, then the field type
 (define (field-token! cx asm ty name type)
   (bitwise-ior #x0A000000
-               (member-ref! cx asm ty name (bytes-append (bytes #x06) (bytes (value-type-code type "field"))))))
+               (member-ref! cx asm ty name (bytes-append (bytes #x06) (value-type-code type "field")))))
 
 (define (string-token cx s)
   (unless (string? s) (error 'rangi "ldstr operand must be a string, got ~s" s))
@@ -172,7 +179,31 @@
   '(InlineNone ShortInlineI InlineI InlineI8 ShortInlineR InlineR
     ShortInlineVar InlineVar ShortInlineBrTarget InlineBrTarget InlineSwitch))
 
-(define token-instructions '(call callvirt newobj ldfld stfld ldstr))
+(define token-instructions '(call callvirt newobj ldfld stfld ldstr newarr ldelem ldelema stelem))
+
+; Element types for newarr, ldelem, ldelema, and stelem. A primitive name maps to its
+; mscorlib System type (for example int32 -> System.Int32). (mscorlib System.Int32) names a
+; type explicitly. Void, typedref, and array element types are rejected.
+(define primitive-element-types
+  '((boolean . "System.Boolean") (char . "System.Char")
+    (int8 . "System.SByte") (uint8 . "System.Byte")
+    (int16 . "System.Int16") (uint16 . "System.UInt16")
+    (int32 . "System.Int32") (uint32 . "System.UInt32")
+    (int64 . "System.Int64") (uint64 . "System.UInt64")
+    (float32 . "System.Single") (float64 . "System.Double")
+    (intptr . "System.IntPtr") (uintptr . "System.UIntPtr")
+    (object . "System.Object") (string . "System.String")))
+
+(define (element-type-token! cx elem)
+  (match elem
+    [(? symbol?)
+     (define entry (assq elem primitive-element-types))
+     (unless entry (error 'rangi "array element type ~a is not supported" elem))
+     (bitwise-ior #x01000000 (typeref! cx 'mscorlib (string->symbol (cdr entry))))]
+    [(list (? symbol? asm) (? symbol? ty))
+     #:when (not (memq asm '(szarray class valuetype)))
+     (bitwise-ior #x01000000 (typeref! cx asm ty))]
+    [_ (error 'rangi "array element type ~s is not supported" elem)]))
 
 (define (check-passable name)
   (define op (find-opcode name))
@@ -220,6 +251,8 @@
     [(list (and op (or 'ldfld 'stfld)) (list asm ty) (? symbol? name) type)
      (list op (field-token! cx asm ty name type))]
     [(list 'ldstr s) (list 'ldstr (string-token cx s))]
+    [(list (and op (or 'newarr 'ldelem 'ldelema 'stelem)) elem)
+     (list op (element-type-token! cx elem))]
     [(list (? symbol? op) _ ...)
      (when (memq op token-instructions) (error 'rangi "malformed IL instruction ~s" node))
      (check-passable op)
@@ -351,8 +384,8 @@
   (unless (null? (method-decl-gparams m))
     (error 'rangi "generic method ~a is not lowered yet" (method-decl-name m)))
   (for ([t (in-list local-types)])
-    (unless (symbol? t)
-      (error 'rangi "local of type ~s is not supported yet; use a primitive type" t)))
+    (unless (and (not (eq? t 'void)) (lowerable-type? t))
+      (error 'rangi "local of type ~s is not supported yet; use a primitive or array type" t)))
   (define sig (method-sig (method-decl-ret m) params))
   (define-values (asm computed)
     (encode-il cx (method-decl-code m) (length params) (length local-types)
