@@ -4,11 +4,13 @@
          "../ilasm/syntax.rkt"
          "../private/binary.rkt"
          "heaps.rkt"
+         (only-in "sigs.rkt" encode-localvar-sig)
          (only-in "../il/encode.rkt" find-opcode opcode-named)
          (only-in "../il/opcodes.rkt" opcode-operand)
          (only-in "../il/stack.rkt" compute-max-stack effect label-at
                   opcode-pop-count opcode-push-count opcode-flow-kind)
-         (only-in "../il/labels.rkt" assemble-items assembly-code label-symbol? label-name-of))
+         (only-in "../il/labels.rkt" assemble-items assembly-code assembly-label-offset
+                  label-symbol? label-name-of))
 (provide lower-module
          (struct-out cli-program)
          (struct-out tdef)
@@ -115,12 +117,16 @@
 ; ---------------------------------------------------------------------------
 ; instructions and bodies
 
-; MemberRef row (II.22.25): parent type, name, and signature blob. Returns the rid.
-(define (member-ref! cx asm ty name sig)
+; TypeRef row (II.22.38) for a type in an assembly reference. Returns the rid.
+(define (typeref! cx asm ty)
   (define asm-rid (hash-ref (interner-table (ctx-asm-refs cx)) (symbol->string asm) #f))
   (unless asm-rid (error 'rangi "unknown assembly reference ~a" asm))
   (define-values (ns short) (split-type-name ty))
-  (define tr (intern! (ctx-typerefs cx) (list asm-rid ns short)))
+  (intern! (ctx-typerefs cx) (list asm-rid ns short)))
+
+; MemberRef row (II.22.25): parent type, name, and signature blob. Returns the rid.
+(define (member-ref! cx asm ty name sig)
+  (define tr (typeref! cx asm ty))
   (intern! (ctx-memberrefs cx) (list tr (symbol->string name) sig)))
 
 (define (method-token! cx cc ret asm ty name params)
@@ -135,12 +141,6 @@
 (define (string-token cx s)
   (unless (string? s) (error 'rangi "ldstr operand must be a string, got ~s" s))
   (bitwise-ior #x70000000 (heap-add! (ctx-us-heap cx) s)))
-
-; LocalVarSig (II.23.2.6): 0x07, compressed count, then one type per local.
-; Placeholder for the encoder in the other lane; lives here only until the lanes merge.
-(define (encode-localvar-sig types)
-  (apply bytes-append (bytes #x07) (compress-unsigned (length types))
-         (for/list ([t (in-list types)]) (bytes (value-type-code t "local")))))
 
 ; Operand kinds that take no token and no label resolution, so the opcode table
 ; encodes them as written. Token-carrying kinds are lowered by name below.
@@ -226,16 +226,19 @@
          [else (list (cadr item))]))
      (effect name (opcode-pop-count op) (opcode-push-count op) flow targets)]))
 
-; Lowers the instruction list to labels.rkt items and assembles them. Returns the code
-; bytes and the maximum stack depth computed from the control-flow graph.
-(define (encode-il cx code nparams nlocals ret-void?)
+; Lowers the instruction list to labels.rkt items and assembles them. Returns the assembly
+; (code bytes and label offsets) and the maximum stack depth computed from the control-flow
+; graph. Each catch handler starts with one item, the exception object (III.1.7.5, II.25.4.6).
+(define (encode-il cx code nparams nlocals ret-void? handlers)
   (define items
     (for/list ([node (in-list code)]) (lower-instruction cx node nparams nlocals)))
   (define effects
     (for/list ([node (in-list code)] [item (in-list items)])
       (node-effect node item ret-void?)))
-  (values (assembly-code (assemble-items items))
-          (compute-max-stack effects)))
+  (values (assemble-items items)
+          (compute-max-stack effects
+                             #:handlers (for/list ([h (in-list handlers)])
+                                          (cons (eh-clause-handler-start h) 1)))))
 
 ; .maxstack given: it is an explicit override and must be at least the computed depth.
 ; Otherwise the default of 8 is kept unless the code needs more.
@@ -248,39 +251,72 @@
      explicit]
     [else (max 8 computed)]))
 
-; III.1.7.5: a tiny header is possible only without locals, code under 64 bytes,
-; and maxstack 8 or less. Otherwise the fat header is used, with LocalVarSigTok
-; and the InitLocals flag (0x10).
-(define (method-body code maxstack locals-tok init?)
+; III.1.7.5: a tiny header is possible only without locals, exception clauses, code under
+; 64 bytes, and maxstack 8 or less. Otherwise the fat header is used, with LocalVarSigTok
+; and the InitLocals flag (0x10). MoreSects (0x08) announces the EH section after the code.
+(define (method-body code maxstack locals-tok init? eh)
   (cond
-    [(and (zero? locals-tok) (< (bytes-length code) 64) (<= maxstack 8))
+    [(and (not eh) (zero? locals-tok) (< (bytes-length code) 64) (<= maxstack 8))
      (bytes-append (bytes (bitwise-ior (arithmetic-shift (bytes-length code) 2) 2)) code)]
     [else
-     (bytes-append (le (bitwise-ior #x3003 (if init? #x10 0)) 2)
+     (define flags (bitwise-ior #x3003 (if init? #x10 0) (if eh #x08 0)))
+     ; II.25.4.5: the EH section starts on a 4-byte boundary; the fat header is 12 bytes
+     (define pad (if eh (modulo (- 4 (modulo (bytes-length code) 4)) 4) 0))
+     (bytes-append (le flags 2)
                    (le maxstack 2)
                    (le (bytes-length code) 4)
                    (le locals-tok 4)
-                   code)]))
+                   code
+                   (make-bytes pad 0)
+                   (or eh #""))]))
+
+; II.25.4.5, II.25.4.6: one fat EHTable section (Kind 0x01 | FatFormat 0x40, 3-byte DataSize)
+; with a 24-byte clause per catch. Offsets come from the assembled labels.
+(define (eh-section cx asm clauses)
+  (define (at l) (assembly-label-offset asm l))
+  (define clause-bytes
+    (for/list ([c (in-list clauses)])
+      (define ts (at (eh-clause-try-start c)))
+      (define hs (at (eh-clause-handler-start c)))
+      (define class (eh-clause-class c))
+      (define tok (bitwise-ior #x01000000 (typeref! cx (car class) (cadr class))))
+      (bytes-append (le 0 4)                                   ; Flags: catch
+                    (le ts 4)
+                    (le (- (at (eh-clause-try-end c)) ts) 4)
+                    (le hs 4)
+                    (le (- (at (eh-clause-handler-end c)) hs) 4)
+                    (le tok 4))))
+  (define body (apply bytes-append clause-bytes))
+  (bytes-append (bytes #x41) (le (+ 4 (bytes-length body)) 3) body))
 
 (define (encode-method cx m)
   (define flags (method-flags (method-decl-flags m)))
   (define params (method-decl-params m))
-  (define locals (method-decl-locals m))
+  (define ld (method-decl-locals m))
+  (define local-types (if ld (map local-var-type (locals-decl-vars ld)) '()))
+  (define init? (and ld (locals-decl-init? ld)))
+  (define clauses (method-decl-handlers m))
+  (unless (null? (method-decl-gparams m))
+    (error 'rangi "generic method ~a is not lowered yet" (method-decl-name m)))
+  (for ([t (in-list local-types)])
+    (unless (symbol? t)
+      (error 'rangi "local of type ~s is not supported yet; use a primitive type" t)))
   (define sig (method-sig (method-decl-ret m) params))
-  (define-values (code computed)
-    (encode-il cx (method-decl-code m) (length params) (length locals)
-               (eq? (method-decl-ret m) 'void)))
+  (define-values (asm computed)
+    (encode-il cx (method-decl-code m) (length params) (length local-types)
+               (eq? (method-decl-ret m) 'void) clauses))
+  (define code (assembly-code asm))
   (define maxstack (effective-maxstack (method-decl-maxstack m) computed))
   ; StandAloneSig table tag 0x11, II.22.36
   (define locals-tok
-    (if (null? locals)
+    (if (null? local-types)
         0
-        (bitwise-ior #x11000000 (intern! (ctx-standalone-sigs cx) (encode-localvar-sig locals)))))
+        (bitwise-ior #x11000000 (intern! (ctx-standalone-sigs cx) (encode-localvar-sig local-types)))))
   (mdef (symbol->string (method-decl-name m))
         flags
         sig
-        (method-body code maxstack locals-tok
-                     (and (method-decl-init? m) (pair? locals)))
+        (method-body code maxstack locals-tok init?
+                     (and (pair? clauses) (eh-section cx asm clauses)))
         (method-decl-entry? m)))
 
 (define (encode-methods cx class-name methods)
