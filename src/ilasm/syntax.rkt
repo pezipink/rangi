@@ -143,6 +143,14 @@
      (when (memq elem '(void typedref))
        (error 'rangi "~a: array element type cannot be ~a" who elem))
      (check-type who elem ncls nmth)]
+    ; modreq and modopt (II.23.2.7) wrap the type they modify and name a class
+    [(list (or 'modreq 'modopt) (or (? symbol?) (list (? symbol?) (? symbol?))) inner)
+     (check-type who inner ncls nmth)]
+    ; FNPTR (II.23.2.12): a method signature in type position, with an optional ... marker
+    [(list 'fnptr ret (? list? ps))
+     (check-type who ret ncls nmth)
+     (check-vararg-marker who ps)
+     (for ([p (in-list ps)] #:unless (eq? p '...)) (check-type who p ncls nmth))]
     ; ARRAY (II.23.2.13) with zero lower bounds and no sizes: (array ELEM RANK)
     [(list 'array elem (? exact-positive-integer? rank))
      (when (memq elem '(void typedref))
@@ -352,11 +360,19 @@
   (check-type name ret ncls nmth)
   (define-values (ptypes pdecls)
     (for/lists (types decls) ([p (in-list params)]) (split-param name p)))
-  (for ([p (in-list ptypes)]) (check-type name p ncls nmth))
+  (check-vararg-marker name ptypes)
+  (for ([p (in-list ptypes)] #:unless (eq? p '...)) (check-type name p ncls nmth))
   (method-decl prefix ret name gparams ptypes code maxstack entry?
                (parse-locals name raw-locals ncls nmth) handlers pinvoke
                (map (λ (n) (parse-custom name n)) body-customs) runtime?
                pdecls))
+
+; A vararg marker `...` (II.23.2.2) appears at most once, after the fixed parameters.
+(define (check-vararg-marker who types)
+  (define n (count (λ (t) (eq? t '...)) types))
+  (when (> n 1) (error 'rangi "~a: more than one ... vararg marker" who))
+  (when (and (= n 1) (not (eq? (last types) '...)))
+    (error 'rangi "~a: the ... vararg marker must come last" who)))
 
 ; A parameter is a type form, or (param (flags ...) type name [= (prim value)]) for a named one
 ; (II.22.33). Returns the type form and the param-decl (#f when unnamed). A default must have the

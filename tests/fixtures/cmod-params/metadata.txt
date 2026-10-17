@@ -1,0 +1,22 @@
+Module rows=1
+  Module[1] Name="cmod-params.exe" Mvid=19ad5f1b77cd27a3d19f42401c219a36
+TypeRef rows=4
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+  TypeRef[3] ResolutionScope=0x23000001 Name="IsConst" Namespace="System.Runtime.CompilerServices"
+  TypeRef[4] ResolutionScope=0x23000001 Name="IsVolatile" Namespace="System.Runtime.CompilerServices"
+TypeDef rows=3
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Helpers" Namespace="" Extends=0x01000001 Fields=[] Methods=[2..2]
+MethodDef rows=2
+  MethodDef[1] Rva=8788 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1f292802000006280100000a2a
+  MethodDef[2] Rva=8804 ImplFlags=0 Flags=22 Name="Bump" Signature=0001200d081f1108 Params=[1..1] Il=0217582a
+Param rows=1
+  Param[1] Flags=0 Sequence=1 Name="x"
+MemberRef rows=1
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

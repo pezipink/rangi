@@ -43,8 +43,9 @@
   (check-exn exn:fail? (λ () (decode-typespec (bytes #x1D))))
   ; TypeDefOrRefOrSpec tag 3 is unused: (1 << 2) | 3 = 7
   (check-exn exn:fail? (λ () (decode-typespec (bytes #x12 #x07))))
-  ; VARARG calling convention
-  (check-exn exn:fail? (λ () (decode-method-sig (bytes #x05 #x00 #x01))))
+  ; a sentinel must be followed by at least one argument (II.23.2.2), and VARARG cannot be generic
+  (check-exn exn:fail? (λ () (decode-method-sig (bytes #x05 #x00 #x01 #x41))))
+  (check-exn exn:fail? (λ () (decode-method-sig (bytes #x15 #x01 #x00 #x01 #x08))))
   ; GENERIC with zero generic parameters
   (check-exn exn:fail? (λ () (decode-method-sig (bytes #x10 #x00 #x00 #x01))))
   ; LocalVarSig must start with LOCAL_SIG (0x07)

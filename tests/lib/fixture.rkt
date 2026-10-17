@@ -8,9 +8,13 @@
 
 ; Fixtures that neither IL verifier can check. il-unverifiable-opcodes is unverifiable on purpose
 ; (II.1.7.5). il-runtime-only-opcodes uses TypedReference and calli, which ILVerify does not implement
-; and PEVerify rejects. The verifier oracles check these fixtures' metadata only (PEVerify /md) and
-; skip them for ILVerify. Their runtime output is still checked.
-(define unverified-fixtures '("il-unverifiable-opcodes" "il-runtime-only-opcodes"))
+; and PEVerify rejects. calli-fnptr and typedref-param hit the same ILVerify gaps (ImportCalli and
+; TypedReference on .NET Core). vararg-call has a VARARG call site, which ILVerify rejects
+; (the Microsoft ilasm image gets "Vararg call ... not supported"). The verifier oracles check these
+; fixtures' metadata only (PEVerify /md) and skip them for ILVerify. Their runtime output is still checked.
+(define unverified-fixtures
+  '("il-unverifiable-opcodes" "il-runtime-only-opcodes"
+    "calli-fnptr" "typedref-param" "vararg-call"))
 
 (define-runtime-path fixtures-dir "../fixtures")
 

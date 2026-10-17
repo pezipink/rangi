@@ -1,0 +1,23 @@
+Module rows=1
+  Module[1] Name="typedref-param.exe" Mvid=267eff6f11fd20004de6f516adc2b1da
+TypeRef rows=3
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Int32" Namespace="System"
+  TypeRef[3] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=3
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Helpers" Namespace="" Extends=0x01000001 Fields=[] Methods=[2..2]
+MethodDef rows=2
+  MethodDef[1] Rva=8748 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1b0a1200c60200000128020000062a
+  MethodDef[2] Rva=8776 ImplFlags=0 Flags=22 Name="Show" Signature=00010116 Params=[1..1] Il=02c2020000014a280100000a2a
+Param rows=1
+  Param[1] Flags=0 Sequence=1 Name="r"
+MemberRef rows=1
+  MemberRef[1] Parent=0x01000003 Name="WriteLine" Signature=00010108
+StandAloneSig rows=1
+  StandAloneSig[1] Signature=070108
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

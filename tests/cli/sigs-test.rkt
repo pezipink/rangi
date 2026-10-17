@@ -93,6 +93,29 @@
   (check-equal? (encode-method-sig '(szarray int32) '((szarray int32)))
                 (bytes #x00 #x01 #x1D #x08 #x1D #x08)))
 
+(test-case "VARARG: fixed params, then the sentinel, then the extra args (II.23.2.2)"
+  ; VARARG 0x05, ParamCount 2 (fixed + extra), RetType I4, Param I4, SENTINEL 0x41, Param I4
+  (check-equal? (encode-method-sig 'int32 '(int32 ... int32))
+                (bytes #x05 #x02 #x08 #x08 #x41 #x08))
+  (check-equal? (decode-method-sig (encode-method-sig 'int32 '(int32 ... int32)))
+                (method-signature #f #f 0 'int32 '(int32 ... int32))))
+
+(test-case "VARARG with no extras omits the sentinel and keeps the marker"
+  (check-equal? (encode-method-sig 'void '(int32 ...)) (bytes #x05 #x01 #x01 #x08)))
+
+(test-case "modreq and modopt wrap the parameter they modify (II.23.2.7)"
+  ; DEFAULT, ParamCount 1, RetType modopt(void) -> CMOD_OPT 0x20, TypeRef 1 -> 0x05, VOID
+  ; Param CMOD_REQD 0x1F, 0x05, I4
+  (check-equal? (encode-method-sig '(modopt (typeref . 1) void) '((modreq (typeref . 1) int32)))
+                (bytes #x00 #x01 #x20 #x05 #x01 #x1F #x05 #x08))
+  (check-equal? (decode-method-sig (encode-method-sig '(modopt (typeref . 1) void)
+                                                      '((modreq (typeref . 1) int32))))
+                (method-signature #f #f 0 '(modopt (typeref . 1) void) '((modreq (typeref . 1) int32)))))
+
+(test-case "FNPTR wraps a method signature (II.23.2.12)"
+  ; FNPTR 0x1B, then DEFAULT sig: ParamCount 1, RetType VOID, Param I4
+  (check-equal? (encode-type '(fnptr void (int32))) (bytes #x1B #x00 #x01 #x01 #x08)))
+
 (test-case "a jagged array element nests SZARRAY: int32[][] is 1D 1D 08"
   (check-equal? (encode-type '(szarray (szarray int32))) (bytes #x1D #x1D #x08)))
 

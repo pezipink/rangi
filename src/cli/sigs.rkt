@@ -12,9 +12,14 @@
 ;   (array t rank)                    multi-dimensional, zero lower bounds and no sizes (II.23.2.13)
 ;   (array t rank sizes lobounds)     bounded: sizes and lower bounds, each empty or one per dimension
 ;   (pinned t)                        only as a top-level local in a LocalVarSig
+;   (fnptr ret (param ...))           function pointer, a MethodRefSig (II.23.2.12)
+;   ...                               in a parameter list only: the VARARG boundary (II.23.2.2)
 ;
-; Custom modifiers (II.23.2.7) are (modreq tok) or (modopt tok), with tok as above.
-(require "schema.rkt"
+; Custom modifiers (II.23.2.7) are (modreq tok) or (modopt tok), with tok as above. In a field
+; or local they are the separate `mods` argument. In a return or parameter type they wrap the
+; type: (modreq tok T) and (modopt tok T).
+(require racket/list
+         "schema.rkt"
          "../private/binary.rkt")
 (provide element-codes
          callconv-codes
@@ -43,8 +48,8 @@
     (ptr . #x0F) (byref . #x10) (valuetype . #x11) (class . #x12) (var . #x13)
     (genericinst . #x15) (typedref . #x16) (intptr . #x18) (uintptr . #x19)
     (object . #x1C) (array . #x14) (szarray . #x1D) (mvar . #x1E) (pinned . #x45)
-    ; II.23.1.16 custom modifier markers (II.23.2.7)
-    (cmod-reqd . #x1F) (cmod-opt . #x20)))
+    ; II.23.1.16 custom modifier markers (II.23.2.7), the VARARG sentinel (II.23.2.2), FNPTR (II.23.2.12)
+    (cmod-reqd . #x1F) (cmod-opt . #x20) (sentinel . #x41) (fnptr . #x1B)))
 
 ; II.23.2.1, II.23.2.4, II.23.2.6 and II.23.2.15 calling convention bits and signature kinds
 (define callconv-codes
@@ -145,29 +150,70 @@
                       (apply bytes-append (map compress-signed lobounds)))]
        [(byref ptr)
         (bytes-append (bytes (element-code (car t))) (encode-type (cadr t)))]
+       ; FNPTR (II.23.2.12) is followed by a MethodRefSig (II.23.2.1) with no HASTHIS
+       [(fnptr)
+        (bytes-append (bytes (element-code 'fnptr))
+                      (encode-method-sig (cadr t) (caddr t)))]
+       [(modreq modopt)
+        (error 'sigs "custom modifier is only allowed on a return or parameter type: ~s" t)]
        [else (error 'sigs "bad type descriptor ~s" t)])]))
 
 ; II.23.2.14: a TypeSpec blob is one Type
 (define (encode-typespec t) (encode-type t))
 
-; II.23.2.1 MethodDefSig and MethodRefSig. The GENERIC flag and GenParamCount appear
-; only when arity is above zero. VARARG and the sentinel are not supported yet.
+; The VARARG marker `...` in a parameter list splits it: the parameters before it are fixed, and
+; those after it are the extra arguments of a call site. At most one marker is allowed.
+(define (split-vararg params)
+  (define n (count (λ (p) (eq? p '...)) params))
+  (cond
+    [(zero? n) (values params '() #f)]
+    [(> n 1) (error 'sigs "a signature has at most one ...: ~s" params)]
+    [else
+     (define i (index-of params '...))
+     (values (take params i) (drop params (add1 i)) #t)]))
+
+; The type under any custom modifiers, for the void check
+(define (unmodified t)
+  (if (and (pair? t) (memq (car t) '(modreq modopt)) (= (length t) 3))
+      (unmodified (caddr t))
+      t))
+
+; A return or parameter type, which may be wrapped in custom modifiers (II.23.2.7). The
+; modifiers come first in the blob, outermost first.
+(define (encode-sig-type t)
+  (cond
+    [(and (pair? t) (memq (car t) '(modreq modopt)) (= (length t) 3))
+     (bytes-append (bytes (element-code (if (eq? (car t) 'modreq) 'cmod-reqd 'cmod-opt)))
+                   (typedeforref-bytes (cadr t))
+                   (encode-sig-type (caddr t)))]
+    [else (encode-type t)]))
+
+; II.23.2.1 MethodDefSig and MethodRefSig. The GENERIC flag and GenParamCount appear only when
+; arity is above zero. A VARARG signature (II.23.2.2) sets the VARARG calling convention. A call
+; site with extra arguments adds the SENTINEL (II.23.2.2) before them, and ParamCount counts both.
 (define (encode-method-sig ret params
                            #:hasthis? [hasthis? #f]
                            #:explicitthis? [explicitthis? #f]
                            #:generic-arity [arity 0])
-  (for ([p (in-list params)])
-    (when (eq? p 'void) (error 'sigs "void is not a parameter type")))
+  (define-values (fixed extras vararg?) (split-vararg params))
+  (when (and vararg? (> arity 0))
+    (error 'sigs "a generic method cannot take a variable argument list"))
+  (for ([p (in-list (append fixed extras))])
+    (when (eq? (unmodified p) 'void) (error 'sigs "void is not a parameter type")))
   (define cc
     (bitwise-ior (if hasthis? (callconv-code 'hasthis) 0)
                  (if explicitthis? (callconv-code 'explicitthis) 0)
-                 (if (> arity 0) (callconv-code 'generic) 0)))
+                 (if (> arity 0) (callconv-code 'generic) 0)
+                 (if vararg? (callconv-code 'vararg) 0)))
   (apply bytes-append
-         (bytes cc)
-         (if (> arity 0) (compress-unsigned arity) #"")
-         (compress-unsigned (length params))
-         (encode-type ret)
-         (map encode-type params)))
+         (append
+          (list (bytes cc)
+                (if (> arity 0) (compress-unsigned arity) #"")
+                (compress-unsigned (+ (length fixed) (length extras)))
+                (encode-sig-type ret))
+          (map encode-sig-type fixed)
+          (if (null? extras) '() (list (bytes (element-code 'sentinel))))
+          (map encode-sig-type extras))))
 
 ; II.23.2.5 PropertySig: PROPERTY (plus HASTHIS for an instance property), ParamCount, the
 ; property Type, then the index Types. Its layout matches MethodDefSig, so no GENERIC bit.
@@ -290,6 +336,10 @@
                 t))]
        [(var mvar) (list name (sig-compressed who port))]
        [(szarray byref ptr) (list name (sig-type who port))]
+       ; II.23.2.12 FNPTR is a MethodRefSig with no HASTHIS, EXPLICITTHIS or GENERIC
+       [(fnptr)
+        (define m (sig-method who port #:fnptr? #t))
+        (list 'fnptr (method-signature-ret m) (method-signature-params m))]
        [(array)
         (define elem (sig-type who port))
         (when (memq elem '(void typedref)) (error who "ARRAY element type cannot be ~a" elem))
@@ -346,34 +396,62 @@
      (when (eq? t 'void) (error who "void is not a field type"))
      (field-signature mods t))))
 
+; II.23.2.1 MethodDefSig / MethodRefSig, with VARARG (II.23.2.2) and FNPTR (II.23.2.12). A
+; sentinel before an extra argument is read as the `...` marker, and a VARARG signature with no
+; extras has the marker last.
+(define (sig-method who port #:fnptr? [fnptr? #f])
+  (define cc (sig-byte who port))
+  (define kind (bitwise-and cc #x0F))
+  (unless (and (memv kind '(0 5)) (zero? (bitwise-and cc #x80)))
+    (error who "unsupported calling convention 0x~a" (number->string cc 16)))
+  (when (and fnptr? (positive? (bitwise-and cc #x70)))
+    (error who "FNPTR signature cannot be HASTHIS, EXPLICITTHIS or GENERIC: 0x~a"
+           (number->string cc 16)))
+  (define vararg? (= kind 5))
+  (define generic? (positive? (bitwise-and cc #x10)))
+  (when (and generic? vararg?)
+    (error who "a generic signature cannot be VARARG"))
+  (define arity
+    (cond
+      [generic?
+       (let ([a (sig-compressed who port)])
+         (when (zero? a) (error who "GENERIC signature with zero generic parameters"))
+         a)]
+      [else 0]))
+  (define nparams (sig-compressed who port))
+  (define ret (sig-with-mods who port))
+  (define sentinel (cdr (assq 'sentinel element-codes)))
+  (define-values (params marked?)
+    (for/fold ([acc '()] [marked? #f]) ([i (in-range nparams)])
+      (define sentinel-here? (and vararg? (not marked?) (eqv? (peek-byte port) sentinel)))
+      (when sentinel-here? (read-byte port))
+      (define p (sig-param who port))
+      (values (cons p (if sentinel-here? (cons '... acc) acc))
+              (or marked? sentinel-here?))))
+  (define all (reverse params))
+  (method-signature (positive? (bitwise-and cc #x20))
+                    (positive? (bitwise-and cc #x40))
+                    arity ret
+                    (if (and vararg? (not marked?)) (append all (list '...)) all)))
+
+; A return type, with its custom modifiers (II.23.2.7) wrapped around it
+(define (sig-with-mods who port)
+  (define mods (sig-custom-mods who port))
+  (define t (sig-type who port))
+  (foldr (λ (m acc) (list (car m) (cadr m) acc)) t mods))
+
+(define (sig-param who port)
+  (define t (sig-with-mods who port))
+  (define inner (let loop ([t t])
+                  (if (and (pair? t) (memq (car t) '(modreq modopt))) (loop (caddr t)) t)))
+  (when (eq? inner 'void) (error who "void is not a parameter type"))
+  t)
+
 ; II.23.2.1 MethodDefSig / MethodRefSig
 (define (decode-method-sig bs)
   (define who 'decode-method-sig)
-  (decode-whole
-   who bs
-   (λ (port)
-     (define cc (sig-byte who port))
-     ; only HASTHIS (0x20), EXPLICITTHIS (0x40) and GENERIC (0x10) are supported; the kind is default
-     (unless (zero? (bitwise-and cc #x8F))
-       (error who "unsupported calling convention 0x~a" (number->string cc 16)))
-     (define generic? (positive? (bitwise-and cc #x10)))
-     (define arity
-       (cond
-         [generic?
-          (let ([a (sig-compressed who port)])
-            (when (zero? a) (error who "GENERIC signature with zero generic parameters"))
-            a)]
-         [else 0]))
-     (define nparams (sig-compressed who port))
-     (define ret (sig-type who port))
-     (define params
-       (for/list ([i (in-range nparams)])
-         (define t (sig-type who port))
-         (when (eq? t 'void) (error who "void is not a parameter type"))
-         t))
-     (method-signature (positive? (bitwise-and cc #x20))
-                       (positive? (bitwise-and cc #x40))
-                       arity ret params))))
+  (decode-whole who bs (λ (port) (sig-method who port))))
+
 
 ; II.23.2.6 LocalVarSig
 (define (decode-localvar-sig bs)

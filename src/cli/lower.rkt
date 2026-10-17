@@ -215,6 +215,12 @@
     [(and (pair? t) (eq? (car t) 'array))
      (list* 'array (lower-type cx scope (cadr t)) (cddr t))]
     [(and (pair? t) (eq? (car t) 'byref)) (list 'byref (lower-type cx scope (cadr t)))]
+    ; (modreq CLASS T) and (modopt CLASS T), CLASS as a class type (II.23.2.7)
+    [(and (pair? t) (memq (car t) '(modreq modopt)) (= (length t) 3))
+     (define tok (cadr (lower-type cx scope (list 'class (cadr t)))))
+     (list (car t) tok (lower-type cx scope (caddr t)))]
+    [(and (pair? t) (eq? (car t) 'fnptr))
+     (list 'fnptr (lower-type cx scope (cadr t)) (lower-params cx scope (caddr t)))]
     [(and (symbol? t) (tyvar-ref t))
      => (lambda (ref)
           (define mvar? (equal? (car ref) "!!"))
@@ -245,6 +251,10 @@
 (define (lower-args cx scope args)
   (for/list ([a (in-list args)]) (lower-type cx scope a)))
 
+; A parameter list, where the VARARG marker `...` (II.23.2.2) is kept as is
+(define (lower-params cx scope params)
+  (for/list ([p (in-list params)]) (if (eq? p '...) p (lower-type cx scope p))))
+
 ; Primitive or array types, the subset that main's array lowering accepts as an element or
 ; a local.
 (define (lowerable-type? t)
@@ -270,7 +280,7 @@
 (define (method-sig cx scope ret params #:hasthis? [hasthis? #f] #:arity [arity 0])
   (unless (list? params) (error 'rangi "malformed parameter list ~s" params))
   (encode-method-sig (lower-type cx scope ret)
-                     (lower-args cx scope params)
+                     (lower-params cx scope params)
                      #:hasthis? hasthis? #:generic-arity arity))
 
 
@@ -628,12 +638,23 @@
 (define (strip-instance node)
   (if (call-instance-kw? node) (cons (car node) (cddr node)) node))
 
+; A vararg call passes its fixed parameters, the `...` marker, and then the extra arguments.
+; Method declarations are keyed by their fixed parameters and marker, so a call matches on
+; the same prefix and the extras are kept apart (II.23.2.2).
+(define (call-key-params params)
+  (define m (index-of params '...))
+  (if m (take params (add1 m)) params))
+(define (call-extras params)
+  (define m (index-of params '...))
+  (if m (drop params (add1 m)) '()))
+(define (arg-count params) (length (remq '... params)))
+
 (define (call-has-this? cx node)
   (match (strip-instance node)
     [(list (and op (or 'call 'callvirt 'ldftn 'ldvirtftn 'jmp)) ret owner (? symbol? name) params _ ...)
      (cond
        [(same-module-owner? owner)
-        (define hit (hash-ref (ctx-method-rids cx) (list (car owner) name ret params) #f))
+        (define hit (hash-ref (ctx-method-rids cx) (list (car owner) name ret (call-key-params params)) #f))
         (and hit (vector-ref hit 2))]
        [else (or (call-instance-kw? node) (and (memq op '(callvirt ldvirtftn)) #t) (eq? name '.ctor))])]
     [_ #f]))
@@ -648,10 +669,13 @@
      (define inst (inst-arg more node))
      (define callvirt? (and (memq op '(callvirt ldvirtftn)) #t))
      (define this? (call-has-this? cx node))
+     (define extras (call-extras params))
+     (when (and (memq op '(ldftn ldvirtftn jmp)) (memq '... params))
+       (error 'rangi "~a cannot take a vararg signature in ~s" op node))
      (cond
        [(same-module-owner? owner)
         (define cls (car owner))
-        (define hit (hash-ref (ctx-method-rids cx) (list cls name ret params) #f))
+        (define hit (hash-ref (ctx-method-rids cx) (list cls name ret (call-key-params params)) #f))
         (unless hit
           (error 'rangi "no method ~a in ~a with return ~a and parameters ~s" name cls ret params))
         (when (and callvirt? (not this?))
@@ -664,11 +688,21 @@
         (unless (= ninst arity)
           (error 'rangi "~a.~a takes ~a type arguments, but the call gives ~a"
                  cls name arity ninst))
-        (list op
-              (if inst
-                  (token #x2B000000
-                         (methodspec-rid! cx (cons 'methoddef rid) (lower-args cx scope inst)))
-                  (token #x06000000 rid)))]
+        ; extra arguments of a vararg call name the method through a MemberRef whose
+        ; signature carries the sentinel (II.23.2.1, II.23.2.2); the MethodDef is used otherwise
+        (cond
+          [(pair? extras)
+           (when (positive? arity)
+             (error 'rangi "generic vararg call to ~a.~a is not supported" cls name))
+           (define mref (member-ref! cx (cons 'typedef (module-class-rid cx cls)) name
+                                     (method-sig cx scope ret params #:hasthis? this?)))
+           (list op (token #x0A000000 mref))]
+          [else
+           (list op
+                 (if inst
+                     (token #x2B000000
+                            (methodspec-rid! cx (cons 'methoddef rid) (lower-args cx scope inst)))
+                     (token #x06000000 rid)))])]
        [(array-owner? owner)
         (unless (memq op '(call callvirt))
           (error 'rangi "~a is not allowed on an array method in ~s" op node))
@@ -683,6 +717,8 @@
         (define ninst (if inst (length inst) 0))
         ; the callee's !N are the owner's type arguments and !!N its own, so they are
         ; lowered against (owner arity . method arity)
+        (when (and (pair? extras) (positive? ninst))
+          (error 'rangi "generic vararg call to ~a is not supported" name))
         (define sig (method-sig cx (cons nargs ninst) ret params
                                 #:hasthis? this? #:arity ninst))
         (define mref (member-ref! cx parent name sig))
@@ -698,6 +734,8 @@
 (define (newobj-item cx scope node)
   (match node
     [(list 'newobj owner params)
+     (when (memq '... params)
+       (error 'rangi "newobj cannot take a vararg signature in ~s" node))
      (cond
        [(same-module-owner? owner)
         (define cls (car owner))
@@ -730,14 +768,14 @@
     [(and (pair? node) (memq (car node) '(call callvirt)))
      (let ([n (strip-instance node)])
        (effect (car n)
-               (+ (length (list-ref n 4)) (if this? 1 0))
+               (+ (arg-count (list-ref n 4)) (if this? 1 0))
                (if (eq? (cadr n) 'void) 0 1)
                'next '()))]
     [(and (pair? node) (eq? (car node) 'newobj))
      (effect 'newobj (length (caddr node)) 1 'next '())]
     ; calli pops its arguments and the function pointer, and pushes the result unless void
     [(and (pair? node) (eq? (car node) 'calli))
-     (effect 'calli (+ (length (caddr node)) 1) (if (eq? (cadr node) 'void) 0 1) 'next '())]
+     (effect 'calli (+ (arg-count (caddr node)) 1) (if (eq? (cadr node) 'void) 0 1) 'next '())]
     [else
      (define name (if (symbol? item) item (car item)))
      (define op (opcode-named name))
@@ -1003,7 +1041,7 @@
     (when (eq? t 'void) (error 'rangi "local of type void in ~a.~a" class-name name)))
   (define sig (method-sig cx scope (method-decl-ret m) params #:hasthis? instance? #:arity nmth))
   ; arg 0 is this in an instance method, so ldarg indices and the depth analysis count it
-  (define nargs (+ (length params) (if instance? 1 0)))
+  (define nargs (+ (arg-count params) (if instance? 1 0)))
   ; A body-less method is abstract (II.22.26): its RVA is 0 and it has no body.
   (define body
     (and (method-decl-code m)
