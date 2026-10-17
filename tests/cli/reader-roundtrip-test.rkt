@@ -62,6 +62,8 @@
                (list (tdef 1 "C" "N" #f (list (mdef "M" 1 method-sig #f #f))))
                "rangi.dll"
                0
+               #f
+               '()
                #f))
 
 (define (add-generics-rows! tb sh bh)

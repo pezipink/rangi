@@ -83,7 +83,7 @@ Each stream owns files that no other stream touches, so the streams can run in s
 | C | R4 heaps | `src/cli/heaps.rkt`, `tests/cli/heaps-test.rkt` | Done (merged). |
 | D | R6 benchmark: timing of `read-file` plus `get-public-typedefs` on mscorlib | `tests/read-bench-test.rkt` | Done (merged). Timings recorded, not asserted. |
 | E | Decode signatures and heap entries in the L3 dump (not checked yet) | `tests/lib/metadata-dump.rkt` | Unblocked by A2 (merged). Can start now. |
-| F | O4 pure encoders (opcode table and byte encoding) | `src/il/` | Not started. Needs the user's approval. |
+| F | O4 pure encoders (opcode table and byte encoding) | `src/il/` | Partly done (stream/o4). Wired into lowering with `.locals`, maxstack analysis, and opcode batch fixtures (ILVerify and PEVerify clean). Catch-only EH; finally, fault, filter, prefix validation, operand syntax, and the all-opcodes fixture are open. Not merged to main. |
 
 Not parallel:
 

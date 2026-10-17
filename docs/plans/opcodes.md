@@ -59,14 +59,14 @@ Status: label resolution and fixed-point relaxation in `src/il/labels.rkt` (stre
 * [x] Labels are `(label name)` forms or `name:` symbols in the instruction stream.
 * [x] Assemble with all branches short, measure, then iteratively widen any branch whose offset does not fit in int8 until a fixed point. Long forms are never shrunk back, which guarantees termination.
 * [x] Provide macro forms that pick the shortest encoding: `ldc.i4` -> `ldc.i4.m1`, `ldc.i4.0`-`ldc.i4.8`, `ldc.i4.s`, `ldc.i4`; `ldloc`/`stloc`/`ldarg`/`starg`/`ldloca`/`ldarga` -> `.0`-`.3`, `.s`, long. Keep explicit forms available for exact control. (Selectors `encode-ldc-i4` and `encode-var-access` in `src/il/encode.rkt`; not yet exposed as front-end names.)
-* [ ] Replace today's `ldc.i` with the `ldc.i4` macro; add `ldc.i8`, `ldc.r4`, `ldc.r8`.
+* [x] Replace today's `ldc.i` with the `ldc.i4` macro; add `ldc.i8`, `ldc.r4`, `ldc.r8`.
 
 ### O4 Method bodies (II.25.4)
 
-* [ ] Tiny header when code is under 64 bytes, maxstack is at most 8, there are no locals, and there are no exception handlers. Otherwise use a fat header: flags `0x3003` with `InitLocals` as needed, maxstack, code size, and a `LocalVarSigTok`. Fat headers without locals are covered by `text-over-400` and `text-over-2000`; `InitLocals` and `LocalVarSigTok` are not.
-* [ ] `.locals` -> local variable signature blob (`0x07`) -> StandAloneSig row -> token.
+* [x] Tiny header when code is under 64 bytes, maxstack is at most 8, there are no locals, and there are no exception handlers. Otherwise use a fat header: flags `0x3003` with `InitLocals` as needed, maxstack, code size, and a `LocalVarSigTok`. Fat headers without locals are covered by `text-over-400` and `text-over-2000`; `InitLocals` and `LocalVarSigTok` are covered by `ops-locals-args` and `ops-branch`.
+* [x] `.locals` -> local variable signature blob (`0x07`) -> StandAloneSig row -> token.
 * [ ] Exception handling sections (`.try`, `catch`, `finally`, `fault`, `filter`) with small (12-byte) or fat (24-byte) clause encoding chosen by offset sizes. Each section is 4-byte aligned after the code.
-* [ ] Compute maxstack by abstract interpretation over the opcode table's stack behaviour and the control flow graph, unless `.maxstack` is given. Report stack underflow and inconsistent depths at merge points as assembly errors.
+* [x] Compute maxstack by abstract interpretation over the opcode table's stack behaviour and the control flow graph, unless `.maxstack` is given. Report stack underflow and inconsistent depths at merge points as assembly errors. An explicit `.maxstack` must be at least the computed depth (`tests/il/stack-test.rkt`).
 * [ ] Prefix validation: `unaligned.`, `volatile.`, `tail.`, `constrained.`, `readonly.`, and `no.` must precede an instruction they apply to.
 
 ### O5 Verification

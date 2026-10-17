@@ -35,10 +35,10 @@
 // Magic:                          0x010b
 // Major linker version:           0x06
 // Minor linker version:           0x05
-// Size of code:                   0x00000600
+// Size of code:                   0x00000400
 // Size of init.data:              0x00000200
 // Size of uninit.data:            0x00000000
-// Addr. of entry point:           0x00002480
+// Addr. of entry point:           0x00002378
 // Base of code:                   0x00002000
 // Base of data:                   0x00004000
 // Section alignment:              0x00002000
@@ -61,7 +61,7 @@
 // Loader flags:                   0x00000000
 // Directories:                    0x00000010
 // 0x00000000 [0x00000000] address [size] of Export Directory:          
-// 0x00002434 [0x00000028] address [size] of Import Directory:          
+// 0x0000232c [0x00000028] address [size] of Import Directory:          
 // 0x00000000 [0x00000000] address [size] of Resource Directory:        
 // 0x00000000 [0x00000000] address [size] of Exception Directory:       
 // 0x00000000 [0x00000000] address [size] of Security Directory:        
@@ -79,9 +79,9 @@
 
 // Image sections:
 //              .text
-//              0x00000486 Virtual Size
+//              0x0000037e Virtual Size
 //              0x00002000 Virtual Address
-//              0x00000600 Size of Raw Data
+//              0x00000400 Size of Raw Data
 //              0x00000200 Pointer to Raw Data
 //              0x00000000 Pointer to Relocations
 //              0x00000000 Pointer to Linenumbers
@@ -96,7 +96,7 @@
 //              0x0000000c Virtual Size
 //              0x00004000 Virtual Address
 //              0x00000200 Size of Raw Data
-//              0x00000800 Pointer to Raw Data
+//              0x00000600 Pointer to Raw Data
 //              0x00000000 Pointer to Relocations
 //              0x00000000 Pointer to Linenumbers
 //                  0x0000 Number of Relocations
@@ -110,13 +110,13 @@
 //              0x00002000 Page RVA
 //              0x0000000c Block Size
 //              0x00000002 Number of Entries
-//              Entry 1: Type 0x3 Offset 0x00000482
+//              Entry 1: Type 0x3 Offset 0x0000037a
 //              Entry 2: Type 0x0 Offset 0x00000000
 
 // Import Address Table
 //     DLL : mscoree.dll
 //              0x00002000 Import Address Table
-//              0x00002472 Import Name Table
+//              0x0000236a Import Name Table
 //              0          Time Date Stamp
 //              0          Index of First Forwarder Reference
 //
@@ -191,20 +191,20 @@
 // Export Address Table Jumps:
 // No data.
 
-// File size            : 2560
-// PE header size       : 512 (456 used)    (20.00%)
-// PE additional info   : 132               ( 5.16%)
+// File size            : 2048
+// PE header size       : 512 (456 used)    (25.00%)
+// PE additional info   : 132               ( 6.45%)
 // Num.of PE sections   : 2
-// CLR header size     : 72                 ( 2.81%)
-// CLR meta-data size  : 508                (19.84%)
+// CLR header size     : 72                 ( 3.52%)
+// CLR meta-data size  : 508                (24.80%)
 // CLR additional info : 0                  ( 0.00%)
-// CLR method headers  : 38                 ( 1.48%)
-// Managed code         : 437               (17.07%)
-// Data                 : 512               (20.00%)
-// Unaccounted          : 349               (13.63%)
+// CLR method headers  : 27                 ( 1.32%)
+// Managed code         : 188               ( 9.18%)
+// Data                 : 512               (25.00%)
+// Unaccounted          : 97                ( 4.74%)
 
 // Num.of PE sections   : 2
-//   .text    - 1536
+//   .text    - 1024
 //   .reloc   - 512
 
 // CLR meta-data size  : 508
@@ -221,13 +221,13 @@
 //   Guids         -    16 bytes
 //   Uncategorized -   162 bytes
 
-// CLR method headers : 38
+// CLR method headers : 27
 //   Num.of method bodies  - 5
-//   Num.of fat headers    - 3
-//   Num.of tiny headers   - 2
+//   Num.of fat headers    - 2
+//   Num.of tiny headers   - 3
 
-// Managed code : 437
-//   Ave method size - 87
+// Managed code : 188
+//   Ave method size - 37
 // Classes defined in this module:
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Class Program                        (auto) (ansi) 
@@ -264,89 +264,89 @@
   {
     .entrypoint
     // Method begins at RVA 0x224c
-    // Code size       245 (0xf5)
+    // Code size       117 (0x75)
     .maxstack  2
-    IL_0000:  /* 20   | 01000000         */ ldc.i4     0x1
-    IL_0005:  /* 20   | 02000000         */ ldc.i4     0x2
+    IL_0000:  /* 17   |                  */ ldc.i4.1
+    IL_0001:  /* 18   |                  */ ldc.i4.2
+    IL_0002:  /* 58   |                  */ add
+    IL_0003:  /* 19   |                  */ ldc.i4.3
+    IL_0004:  /* 58   |                  */ add
+    IL_0005:  /* 1A   |                  */ ldc.i4.4
+    IL_0006:  /* 58   |                  */ add
+    IL_0007:  /* 1B   |                  */ ldc.i4.5
+    IL_0008:  /* 58   |                  */ add
+    IL_0009:  /* 1C   |                  */ ldc.i4.6
     IL_000a:  /* 58   |                  */ add
-    IL_000b:  /* 20   | 03000000         */ ldc.i4     0x3
-    IL_0010:  /* 58   |                  */ add
-    IL_0011:  /* 20   | 04000000         */ ldc.i4     0x4
-    IL_0016:  /* 58   |                  */ add
-    IL_0017:  /* 20   | 05000000         */ ldc.i4     0x5
-    IL_001c:  /* 58   |                  */ add
-    IL_001d:  /* 20   | 06000000         */ ldc.i4     0x6
-    IL_0022:  /* 58   |                  */ add
-    IL_0023:  /* 20   | 07000000         */ ldc.i4     0x7
-    IL_0028:  /* 58   |                  */ add
-    IL_0029:  /* 20   | 08000000         */ ldc.i4     0x8
-    IL_002e:  /* 58   |                  */ add
-    IL_002f:  /* 20   | 09000000         */ ldc.i4     0x9
-    IL_0034:  /* 58   |                  */ add
-    IL_0035:  /* 20   | 0A000000         */ ldc.i4     0xa
-    IL_003a:  /* 58   |                  */ add
-    IL_003b:  /* 20   | 0B000000         */ ldc.i4     0xb
-    IL_0040:  /* 58   |                  */ add
-    IL_0041:  /* 20   | 0C000000         */ ldc.i4     0xc
-    IL_0046:  /* 58   |                  */ add
-    IL_0047:  /* 20   | 0D000000         */ ldc.i4     0xd
-    IL_004c:  /* 58   |                  */ add
-    IL_004d:  /* 20   | 0E000000         */ ldc.i4     0xe
-    IL_0052:  /* 58   |                  */ add
-    IL_0053:  /* 20   | 0F000000         */ ldc.i4     0xf
-    IL_0058:  /* 58   |                  */ add
-    IL_0059:  /* 20   | 10000000         */ ldc.i4     0x10
-    IL_005e:  /* 58   |                  */ add
-    IL_005f:  /* 20   | 11000000         */ ldc.i4     0x11
-    IL_0064:  /* 58   |                  */ add
-    IL_0065:  /* 20   | 12000000         */ ldc.i4     0x12
-    IL_006a:  /* 58   |                  */ add
-    IL_006b:  /* 20   | 13000000         */ ldc.i4     0x13
-    IL_0070:  /* 58   |                  */ add
-    IL_0071:  /* 20   | 14000000         */ ldc.i4     0x14
-    IL_0076:  /* 58   |                  */ add
-    IL_0077:  /* 20   | 15000000         */ ldc.i4     0x15
-    IL_007c:  /* 58   |                  */ add
-    IL_007d:  /* 20   | 16000000         */ ldc.i4     0x16
-    IL_0082:  /* 58   |                  */ add
-    IL_0083:  /* 20   | 17000000         */ ldc.i4     0x17
-    IL_0088:  /* 58   |                  */ add
-    IL_0089:  /* 20   | 18000000         */ ldc.i4     0x18
-    IL_008e:  /* 58   |                  */ add
-    IL_008f:  /* 20   | 19000000         */ ldc.i4     0x19
-    IL_0094:  /* 58   |                  */ add
-    IL_0095:  /* 20   | 1A000000         */ ldc.i4     0x1a
-    IL_009a:  /* 58   |                  */ add
-    IL_009b:  /* 20   | 1B000000         */ ldc.i4     0x1b
-    IL_00a0:  /* 58   |                  */ add
-    IL_00a1:  /* 20   | 1C000000         */ ldc.i4     0x1c
-    IL_00a6:  /* 58   |                  */ add
-    IL_00a7:  /* 20   | 1D000000         */ ldc.i4     0x1d
-    IL_00ac:  /* 58   |                  */ add
-    IL_00ad:  /* 20   | 1E000000         */ ldc.i4     0x1e
-    IL_00b2:  /* 58   |                  */ add
-    IL_00b3:  /* 20   | 1F000000         */ ldc.i4     0x1f
-    IL_00b8:  /* 58   |                  */ add
-    IL_00b9:  /* 20   | 20000000         */ ldc.i4     0x20
-    IL_00be:  /* 58   |                  */ add
-    IL_00bf:  /* 20   | 21000000         */ ldc.i4     0x21
-    IL_00c4:  /* 58   |                  */ add
-    IL_00c5:  /* 20   | 22000000         */ ldc.i4     0x22
-    IL_00ca:  /* 58   |                  */ add
-    IL_00cb:  /* 20   | 23000000         */ ldc.i4     0x23
-    IL_00d0:  /* 58   |                  */ add
-    IL_00d1:  /* 20   | 24000000         */ ldc.i4     0x24
-    IL_00d6:  /* 58   |                  */ add
-    IL_00d7:  /* 20   | 25000000         */ ldc.i4     0x25
-    IL_00dc:  /* 58   |                  */ add
-    IL_00dd:  /* 20   | 26000000         */ ldc.i4     0x26
-    IL_00e2:  /* 58   |                  */ add
-    IL_00e3:  /* 20   | 27000000         */ ldc.i4     0x27
-    IL_00e8:  /* 58   |                  */ add
-    IL_00e9:  /* 20   | 28000000         */ ldc.i4     0x28
-    IL_00ee:  /* 58   |                  */ add
-    IL_00ef:  /* 28   | (0A)000001       */ call       void [mscorlib/*23000001*/]System.Console/*01000002*/::WriteLine(int32) /* 0A000001 */
-    IL_00f4:  /* 2A   |                  */ ret
+    IL_000b:  /* 1D   |                  */ ldc.i4.7
+    IL_000c:  /* 58   |                  */ add
+    IL_000d:  /* 1E   |                  */ ldc.i4.8
+    IL_000e:  /* 58   |                  */ add
+    IL_000f:  /* 1F   | 09               */ ldc.i4.s   9
+    IL_0011:  /* 58   |                  */ add
+    IL_0012:  /* 1F   | 0A               */ ldc.i4.s   10
+    IL_0014:  /* 58   |                  */ add
+    IL_0015:  /* 1F   | 0B               */ ldc.i4.s   11
+    IL_0017:  /* 58   |                  */ add
+    IL_0018:  /* 1F   | 0C               */ ldc.i4.s   12
+    IL_001a:  /* 58   |                  */ add
+    IL_001b:  /* 1F   | 0D               */ ldc.i4.s   13
+    IL_001d:  /* 58   |                  */ add
+    IL_001e:  /* 1F   | 0E               */ ldc.i4.s   14
+    IL_0020:  /* 58   |                  */ add
+    IL_0021:  /* 1F   | 0F               */ ldc.i4.s   15
+    IL_0023:  /* 58   |                  */ add
+    IL_0024:  /* 1F   | 10               */ ldc.i4.s   16
+    IL_0026:  /* 58   |                  */ add
+    IL_0027:  /* 1F   | 11               */ ldc.i4.s   17
+    IL_0029:  /* 58   |                  */ add
+    IL_002a:  /* 1F   | 12               */ ldc.i4.s   18
+    IL_002c:  /* 58   |                  */ add
+    IL_002d:  /* 1F   | 13               */ ldc.i4.s   19
+    IL_002f:  /* 58   |                  */ add
+    IL_0030:  /* 1F   | 14               */ ldc.i4.s   20
+    IL_0032:  /* 58   |                  */ add
+    IL_0033:  /* 1F   | 15               */ ldc.i4.s   21
+    IL_0035:  /* 58   |                  */ add
+    IL_0036:  /* 1F   | 16               */ ldc.i4.s   22
+    IL_0038:  /* 58   |                  */ add
+    IL_0039:  /* 1F   | 17               */ ldc.i4.s   23
+    IL_003b:  /* 58   |                  */ add
+    IL_003c:  /* 1F   | 18               */ ldc.i4.s   24
+    IL_003e:  /* 58   |                  */ add
+    IL_003f:  /* 1F   | 19               */ ldc.i4.s   25
+    IL_0041:  /* 58   |                  */ add
+    IL_0042:  /* 1F   | 1A               */ ldc.i4.s   26
+    IL_0044:  /* 58   |                  */ add
+    IL_0045:  /* 1F   | 1B               */ ldc.i4.s   27
+    IL_0047:  /* 58   |                  */ add
+    IL_0048:  /* 1F   | 1C               */ ldc.i4.s   28
+    IL_004a:  /* 58   |                  */ add
+    IL_004b:  /* 1F   | 1D               */ ldc.i4.s   29
+    IL_004d:  /* 58   |                  */ add
+    IL_004e:  /* 1F   | 1E               */ ldc.i4.s   30
+    IL_0050:  /* 58   |                  */ add
+    IL_0051:  /* 1F   | 1F               */ ldc.i4.s   31
+    IL_0053:  /* 58   |                  */ add
+    IL_0054:  /* 1F   | 20               */ ldc.i4.s   32
+    IL_0056:  /* 58   |                  */ add
+    IL_0057:  /* 1F   | 21               */ ldc.i4.s   33
+    IL_0059:  /* 58   |                  */ add
+    IL_005a:  /* 1F   | 22               */ ldc.i4.s   34
+    IL_005c:  /* 58   |                  */ add
+    IL_005d:  /* 1F   | 23               */ ldc.i4.s   35
+    IL_005f:  /* 58   |                  */ add
+    IL_0060:  /* 1F   | 24               */ ldc.i4.s   36
+    IL_0062:  /* 58   |                  */ add
+    IL_0063:  /* 1F   | 25               */ ldc.i4.s   37
+    IL_0065:  /* 58   |                  */ add
+    IL_0066:  /* 1F   | 26               */ ldc.i4.s   38
+    IL_0068:  /* 58   |                  */ add
+    IL_0069:  /* 1F   | 27               */ ldc.i4.s   39
+    IL_006b:  /* 58   |                  */ add
+    IL_006c:  /* 1F   | 28               */ ldc.i4.s   40
+    IL_006e:  /* 58   |                  */ add
+    IL_006f:  /* 28   | (0A)000001       */ call       void [mscorlib/*23000001*/]System.Console/*01000002*/::WriteLine(int32) /* 0A000001 */
+    IL_0074:  /* 2A   |                  */ ret
   } // end of method Program::main
 
 } // end of class Program
@@ -358,36 +358,36 @@
           M0_0() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2350
-    // Code size       18 (0x12)
+    // Method begins at RVA 0x22d0
+    // Code size       6 (0x6)
     .maxstack  9
-    IL_0000:  /* 20   | 01000000         */ ldc.i4     0x1
-    IL_0005:  /* 20   | 02000000         */ ldc.i4     0x2
-    IL_000a:  /* 58   |                  */ add
-    IL_000b:  /* 20   | 03000000         */ ldc.i4     0x3
-    IL_0010:  /* 58   |                  */ add
-    IL_0011:  /* 2A   |                  */ ret
+    IL_0000:  /* 17   |                  */ ldc.i4.1
+    IL_0001:  /* 18   |                  */ ldc.i4.2
+    IL_0002:  /* 58   |                  */ add
+    IL_0003:  /* 19   |                  */ ldc.i4.3
+    IL_0004:  /* 58   |                  */ add
+    IL_0005:  /* 2A   |                  */ ret
   } // end of method T0::M0_0
 
   .method /*06000003*/ public static int32 
           M0_1() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2370
-    // Code size       36 (0x24)
+    // Method begins at RVA 0x22e4
+    // Code size       12 (0xc)
     .maxstack  8
-    IL_0000:  /* 20   | 01000000         */ ldc.i4     0x1
-    IL_0005:  /* 20   | 02000000         */ ldc.i4     0x2
+    IL_0000:  /* 17   |                  */ ldc.i4.1
+    IL_0001:  /* 18   |                  */ ldc.i4.2
+    IL_0002:  /* 58   |                  */ add
+    IL_0003:  /* 19   |                  */ ldc.i4.3
+    IL_0004:  /* 58   |                  */ add
+    IL_0005:  /* 1A   |                  */ ldc.i4.4
+    IL_0006:  /* 58   |                  */ add
+    IL_0007:  /* 1B   |                  */ ldc.i4.5
+    IL_0008:  /* 58   |                  */ add
+    IL_0009:  /* 1C   |                  */ ldc.i4.6
     IL_000a:  /* 58   |                  */ add
-    IL_000b:  /* 20   | 03000000         */ ldc.i4     0x3
-    IL_0010:  /* 58   |                  */ add
-    IL_0011:  /* 20   | 04000000         */ ldc.i4     0x4
-    IL_0016:  /* 58   |                  */ add
-    IL_0017:  /* 20   | 05000000         */ ldc.i4     0x5
-    IL_001c:  /* 58   |                  */ add
-    IL_001d:  /* 20   | 06000000         */ ldc.i4     0x6
-    IL_0022:  /* 58   |                  */ add
-    IL_0023:  /* 2A   |                  */ ret
+    IL_000b:  /* 2A   |                  */ ret
   } // end of method T0::M0_1
 
 } // end of class T0
@@ -399,64 +399,64 @@
           M1_0() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2398
-    // Code size       60 (0x3c)
+    // Method begins at RVA 0x22f4
+    // Code size       22 (0x16)
     .maxstack  8
-    IL_0000:  /* 20   | 01000000         */ ldc.i4     0x1
-    IL_0005:  /* 20   | 02000000         */ ldc.i4     0x2
+    IL_0000:  /* 17   |                  */ ldc.i4.1
+    IL_0001:  /* 18   |                  */ ldc.i4.2
+    IL_0002:  /* 58   |                  */ add
+    IL_0003:  /* 19   |                  */ ldc.i4.3
+    IL_0004:  /* 58   |                  */ add
+    IL_0005:  /* 1A   |                  */ ldc.i4.4
+    IL_0006:  /* 58   |                  */ add
+    IL_0007:  /* 1B   |                  */ ldc.i4.5
+    IL_0008:  /* 58   |                  */ add
+    IL_0009:  /* 1C   |                  */ ldc.i4.6
     IL_000a:  /* 58   |                  */ add
-    IL_000b:  /* 20   | 03000000         */ ldc.i4     0x3
-    IL_0010:  /* 58   |                  */ add
-    IL_0011:  /* 20   | 04000000         */ ldc.i4     0x4
-    IL_0016:  /* 58   |                  */ add
-    IL_0017:  /* 20   | 05000000         */ ldc.i4     0x5
-    IL_001c:  /* 58   |                  */ add
-    IL_001d:  /* 20   | 06000000         */ ldc.i4     0x6
-    IL_0022:  /* 58   |                  */ add
-    IL_0023:  /* 20   | 07000000         */ ldc.i4     0x7
-    IL_0028:  /* 58   |                  */ add
-    IL_0029:  /* 20   | 08000000         */ ldc.i4     0x8
-    IL_002e:  /* 58   |                  */ add
-    IL_002f:  /* 20   | 09000000         */ ldc.i4     0x9
-    IL_0034:  /* 58   |                  */ add
-    IL_0035:  /* 20   | 0A000000         */ ldc.i4     0xa
-    IL_003a:  /* 58   |                  */ add
-    IL_003b:  /* 2A   |                  */ ret
+    IL_000b:  /* 1D   |                  */ ldc.i4.7
+    IL_000c:  /* 58   |                  */ add
+    IL_000d:  /* 1E   |                  */ ldc.i4.8
+    IL_000e:  /* 58   |                  */ add
+    IL_000f:  /* 1F   | 09               */ ldc.i4.s   9
+    IL_0011:  /* 58   |                  */ add
+    IL_0012:  /* 1F   | 0A               */ ldc.i4.s   10
+    IL_0014:  /* 58   |                  */ add
+    IL_0015:  /* 2A   |                  */ ret
   } // end of method T1::M1_0
 
   .method /*06000005*/ public static int32 
           M1_1() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x23d8
-    // Code size       78 (0x4e)
-    .maxstack  2
-    IL_0000:  /* 20   | 01000000         */ ldc.i4     0x1
-    IL_0005:  /* 20   | 02000000         */ ldc.i4     0x2
+    // Method begins at RVA 0x230c
+    // Code size       31 (0x1f)
+    .maxstack  8
+    IL_0000:  /* 17   |                  */ ldc.i4.1
+    IL_0001:  /* 18   |                  */ ldc.i4.2
+    IL_0002:  /* 58   |                  */ add
+    IL_0003:  /* 19   |                  */ ldc.i4.3
+    IL_0004:  /* 58   |                  */ add
+    IL_0005:  /* 1A   |                  */ ldc.i4.4
+    IL_0006:  /* 58   |                  */ add
+    IL_0007:  /* 1B   |                  */ ldc.i4.5
+    IL_0008:  /* 58   |                  */ add
+    IL_0009:  /* 1C   |                  */ ldc.i4.6
     IL_000a:  /* 58   |                  */ add
-    IL_000b:  /* 20   | 03000000         */ ldc.i4     0x3
-    IL_0010:  /* 58   |                  */ add
-    IL_0011:  /* 20   | 04000000         */ ldc.i4     0x4
-    IL_0016:  /* 58   |                  */ add
-    IL_0017:  /* 20   | 05000000         */ ldc.i4     0x5
-    IL_001c:  /* 58   |                  */ add
-    IL_001d:  /* 20   | 06000000         */ ldc.i4     0x6
-    IL_0022:  /* 58   |                  */ add
-    IL_0023:  /* 20   | 07000000         */ ldc.i4     0x7
-    IL_0028:  /* 58   |                  */ add
-    IL_0029:  /* 20   | 08000000         */ ldc.i4     0x8
-    IL_002e:  /* 58   |                  */ add
-    IL_002f:  /* 20   | 09000000         */ ldc.i4     0x9
-    IL_0034:  /* 58   |                  */ add
-    IL_0035:  /* 20   | 0A000000         */ ldc.i4     0xa
-    IL_003a:  /* 58   |                  */ add
-    IL_003b:  /* 20   | 0B000000         */ ldc.i4     0xb
-    IL_0040:  /* 58   |                  */ add
-    IL_0041:  /* 20   | 0C000000         */ ldc.i4     0xc
-    IL_0046:  /* 58   |                  */ add
-    IL_0047:  /* 20   | 0D000000         */ ldc.i4     0xd
-    IL_004c:  /* 58   |                  */ add
-    IL_004d:  /* 2A   |                  */ ret
+    IL_000b:  /* 1D   |                  */ ldc.i4.7
+    IL_000c:  /* 58   |                  */ add
+    IL_000d:  /* 1E   |                  */ ldc.i4.8
+    IL_000e:  /* 58   |                  */ add
+    IL_000f:  /* 1F   | 09               */ ldc.i4.s   9
+    IL_0011:  /* 58   |                  */ add
+    IL_0012:  /* 1F   | 0A               */ ldc.i4.s   10
+    IL_0014:  /* 58   |                  */ add
+    IL_0015:  /* 1F   | 0B               */ ldc.i4.s   11
+    IL_0017:  /* 58   |                  */ add
+    IL_0018:  /* 1F   | 0C               */ ldc.i4.s   12
+    IL_001a:  /* 58   |                  */ add
+    IL_001b:  /* 1F   | 0D               */ ldc.i4.s   13
+    IL_001d:  /* 58   |                  */ add
+    IL_001e:  /* 2A   |                  */ ret
   } // end of method T1::M1_1
 
 } // end of class T1

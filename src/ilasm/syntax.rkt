@@ -10,13 +10,18 @@
          (struct-out method-decl)
          (struct-out generic-param)
          (struct-out locals-decl)
-         (struct-out local-var))
+         (struct-out local-var)
+         (struct-out eh-clause))
 
 ; The front end's output. It holds names and instructions as written, with no tokens,
 ; heap indexes, or flag bits. cli/lower.rkt resolves those.
 (struct module-model (asm-refs classes module-name format))
 (struct class-decl (flags name gparams methods))
-(struct method-decl (flags ret name gparams params code maxstack entry? locals))
+; handlers: list of eh-clause in source order. maxstack is #f when there is no .maxstack.
+(struct method-decl (flags ret name gparams params code maxstack entry? locals handlers))
+; catch clause (II.25.4.6): class is (asm ty); the four labels are names without the colon.
+; try is [try-start, try-end), handler is [handler-start, handler-end).
+(struct eh-clause (class try-start try-end handler-start handler-end))
 ; A generic parameter (II.22.20). specials are class, valuetype or .ctor.
 ; constraints are type forms (II.22.21).
 (struct generic-param (name specials constraints) #:transparent)
@@ -117,21 +122,29 @@
     (error 'rangi "~a: duplicate local ~a" who (check-duplicates names)))
   parsed)
 
-; .entrypoint, .maxstack and .locals are directives inside a body, so they are lifted out of the code
+; .entrypoint, .maxstack, .locals and .try are directives inside a body, so they are lifted
+; out of the code. maxstack is #f when there is no .maxstack, so lowering can tell an explicit
+; value from the default.
 (define (split-directives il)
-  (for/fold ([code '()] [maxstack 8] [entry? #f] [raw-locals #f]
-             #:result (values (reverse code) maxstack entry? raw-locals))
+  (for/fold ([code '()] [maxstack #f] [entry? #f] [raw-locals #f] [handlers '()]
+             #:result (values (reverse code) maxstack entry? raw-locals (reverse handlers)))
             ([node (in-list il)])
     (match node
-      [(list '.entrypoint) (values code maxstack #t raw-locals)]
+      [(list '.entrypoint) (values code maxstack #t raw-locals handlers)]
       [(list '.maxstack n)
        (unless (and (exact-nonnegative-integer? n) (< n #x10000))
          (error 'rangi "invalid .maxstack ~s" n))
-       (values code n entry? raw-locals)]
+       (values code n entry? raw-locals handlers)]
       [(cons '.locals _)
        (when raw-locals (error 'rangi "duplicate .locals"))
-       (values code maxstack entry? node)]
-      [_ (values (cons node code) maxstack entry? raw-locals)])))
+       (values code maxstack entry? node handlers)]
+      [(list '.try (list 'catch (list (? symbol? asm) (? symbol? ty)))
+             (? symbol? ts) (? symbol? te) (? symbol? hs) (? symbol? he))
+       (values code maxstack entry? raw-locals
+               (cons (eh-clause (list asm ty) ts te hs he) handlers))]
+      [(list '.try _ ...)
+       (error 'rangi "malformed .try ~s (expected (.try (catch (asm ty)) try-start try-end handler-start handler-end))" node)]
+      [_ (values (cons node code) maxstack entry? raw-locals handlers)])))
 
 ; The 7-element form has no generic parameters. The 8-element form has a (.typarams ...)
 ; list before the parameter list.
@@ -148,11 +161,11 @@
   (unless (list? params) (error 'rangi "malformed parameter list on ~a: ~s" name params))
   (define gparams (parse-typarams name tp ncls (typarams-count tp)))
   (define nmth (length gparams))
-  (define-values (code maxstack entry? raw-locals) (split-directives il))
+  (define-values (code maxstack entry? raw-locals handlers) (split-directives il))
   (check-type name ret ncls nmth)
   (for ([p (in-list params)]) (check-type name p ncls nmth))
   (method-decl prefix ret name gparams params code maxstack entry?
-               (parse-locals name raw-locals ncls nmth)))
+               (parse-locals name raw-locals ncls nmth) handlers))
 
 (define (parse-il program)
   (define asm-refs '())
