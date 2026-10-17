@@ -9,6 +9,7 @@
          (struct-out module-model)
          (struct-out asm-ref)
          (struct-out class-decl)
+         (struct-out override-decl)
          (struct-out field-decl)
          (struct-out method-decl)
          (struct-out generic-param)
@@ -26,7 +27,12 @@
 (struct asm-ref (name version token) #:transparent)
 ; extends is the base type as written: a bare symbol for a class in this module, (asm ty) for an
 ; external class, or #f for the default System.Object (II.22.37).
-(struct class-decl (flags name gparams extends methods fields))
+; overrides is a list of override-decl, in source order.
+(struct class-decl (flags name gparams extends methods fields overrides))
+; A .override directive (II.22.27 MethodImpl): owner is the base class as in extends, name, ret and
+; params are the base method's signature. The body is the method of the same name and signature in
+; the class that declares the override.
+(struct override-decl (owner name ret params) #:transparent)
 ; A field (II.22.15). flags are FieldAttributes keywords; type is a type form (II.22.15).
 ; init is #f, or (prim . value) for a literal field: an integral primitive and its integer value.
 (struct field-decl (flags type name init) #:transparent)
@@ -177,25 +183,54 @@
       [_ (values (cons node code) maxstack entry? raw-locals handlers)])))
 
 ; The 7-element form has no generic parameters. The 8-element form has a (.typarams ...)
-; list before the parameter list.
+; list before the parameter list. The 5-element form has no body and no implementation flags:
+; only an abstract method may omit its body (II.22.26 MethodAttributes Abstract).
 (define (parse-method class-name node ncls)
-  (define-values (tp prefix ret name params suffix il)
+  (define-values (tp prefix ret name params suffix il bodiless?)
     (match node
       [(list '.method prefix ret name params suffix il)
-       (values #f prefix ret name params suffix il)]
+       (values #f prefix ret name params suffix il #f)]
       [(list '.method prefix ret name (and tp (cons '.typarams _)) params suffix il)
-       (values tp prefix ret name params suffix il)]
+       (values tp prefix ret name params suffix il #f)]
+      [(list '.method prefix ret name params)
+       (values #f prefix ret name params #f #f #t)]
       [_ (error 'rangi "malformed .method in ~a: ~s" class-name node)]))
-  (unless (and (list? suffix) (= (length suffix) 2) (memq 'cil suffix) (memq 'managed suffix))
-    (error 'rangi "unsupported implementation flags ~s on ~a" suffix name))
+  (define abstract? (and (memq 'abstract prefix) #t))
+  (cond
+    [(and bodiless? (not abstract?))
+     (error 'rangi "method ~a in ~a has no body; only abstract methods may omit it" name class-name)]
+    [(and abstract? (not bodiless?))
+     (error 'rangi "abstract method ~a in ~a cannot have a body" name class-name)])
+  (unless bodiless?
+    (unless (and (list? suffix) (= (length suffix) 2) (memq 'cil suffix) (memq 'managed suffix))
+      (error 'rangi "unsupported implementation flags ~s on ~a" suffix name)))
   (unless (list? params) (error 'rangi "malformed parameter list on ~a: ~s" name params))
   (define gparams (parse-typarams name tp ncls (typarams-count tp)))
   (define nmth (length gparams))
-  (define-values (code maxstack entry? raw-locals handlers) (split-directives il))
+  (define-values (code maxstack entry? raw-locals handlers)
+    (if bodiless?
+        (values #f #f #f #f '())
+        (split-directives il)))
   (check-type name ret ncls nmth)
   (for ([p (in-list params)]) (check-type name p ncls nmth))
   (method-decl prefix ret name gparams params code maxstack entry?
                (parse-locals name raw-locals ncls nmth) handlers))
+
+; .override Owner::M ret params, or .override (asm ty) M ret params for a base in another assembly.
+(define (parse-override class-name node ncls)
+  (define-values (owner name ret params)
+    (match node
+      [(list '.override (? symbol? qual) ret (? list? params))
+       (define m (regexp-match #rx"^([^:]+)::([^:]+)$" (symbol->string qual)))
+       (unless m
+         (error 'rangi "malformed .override in ~a: ~s (expected Owner::Name)" class-name node))
+       (values (string->symbol (cadr m)) (string->symbol (caddr m)) ret params)]
+      [(list '.override (list (? symbol?) (? symbol?)) (? symbol? name) ret (? list? params))
+       (values (cadr node) name ret params)]
+      [_ (error 'rangi "malformed .override in ~a: ~s" class-name node)]))
+  (check-type name ret ncls 0)
+  (for ([p (in-list params)]) (check-type name p ncls 0))
+  (override-decl owner name ret params))
 
 ; (.field (flags ...) type name) or (.field (flags ...) type name = (prim value)). Field types may
 ; use the class's type variables !N (II.23.2.12).
@@ -336,6 +371,9 @@
   ; since the CLR rejects entry points declared on <Module>.
   (define module-cls
     (or (findf (class-named? '<Module>) raw-classes) (list '() '<Module> #f #f '())))
+  (when (for/or ([node (in-list (list-ref module-cls 4))])
+          (and (pair? node) (eq? (car node) '.override)))
+    (error 'rangi ".override is not allowed in <Module>"))
   (define others (remove module-cls raw-classes))
   (define module-body (list-ref module-cls 4))
   (define moved? (pair? module-body))
@@ -356,12 +394,16 @@
       (define fields
         (for/list ([node (in-list body)] #:when (and (pair? node) (eq? (car node) '.field)))
           (parse-field name node ncls)))
+      (define overrides
+        (for/list ([node (in-list body)] #:when (and (pair? node) (eq? (car node) '.override)))
+          (parse-override name node ncls)))
       (define methods
-        (for/list ([node (in-list body)] #:unless (and (pair? node) (eq? (car node) '.field)))
+        (for/list ([node (in-list body)]
+                   #:unless (and (pair? node) (memq (car node) '(.field .override))))
           (parse-method name node ncls)))
       (when (check-duplicates (map field-decl-name fields))
         (error 'rangi "duplicate field ~a in ~a" (check-duplicates (map field-decl-name fields)) name))
-      (class-decl flags name gparams ext methods fields)))
+      (class-decl flags name gparams ext methods fields overrides)))
 
   (define entries
     (for*/list ([c (in-list classes)] [m (in-list (class-decl-methods c))] #:when (method-decl-entry? m))

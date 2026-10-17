@@ -54,9 +54,8 @@
   (define mod-name (or (cli-program-module-name p) file-name))
   (define entry-rid (cli-program-entry-rid p))
   (define fmt (cli-program-format p))
-  (define bodies
-    (for*/list ([td (in-list (cli-program-typedefs p))] [m (in-list (tdef-methods td))])
-      (mdef-body m)))
+  (define all-mdefs
+    (for*/list ([td (in-list (cli-program-typedefs p))] [m (in-list (tdef-methods td))]) m))
 
   (define md (build-metadata p asm-name mod-name))
   (match-define (list iat import-dir lookup hint-name dll-name entry-stub)
@@ -66,8 +65,8 @@
                       #:entry-rid entry-rid
                       #:flags (cli-platform-flags (cli-program-platform p))))
   (define body-chunks
-    (for/list ([b (in-list bodies)] [i (in-naturals)])
-      (chunk (method-sym i) dword-align b '())))
+    (for/list ([m (in-list all-mdefs)] [i (in-naturals)] #:when (mdef-body m))
+      (chunk (method-sym i) dword-align (mdef-body m) '())))
   (define text
     (section ".text" section-chars-text
              (append (list iat cli-header md) body-chunks

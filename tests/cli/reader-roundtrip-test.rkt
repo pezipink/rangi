@@ -69,7 +69,8 @@
                '()
                #f
                'console
-               'anycpu))
+               'anycpu
+               '()))
 
 (define (add-generics-rows! tb sh bh)
   (add-typespec-row! tb bh (encode-typespec '(genericinst (class (typeref . 1)) (int32 (var 0)))))
