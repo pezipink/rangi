@@ -7,6 +7,9 @@
 ; read-only accessors for tests that decode table rows. row decoding stays out of the reader,
 ; so the lazy path used by the macro expander is unchanged.
 (provide read-file get-public-typedefs read-assembly-meta read-row read-metadata-root
+         row-column row-column-raw table-row-count table-sorted?
+         table-layout layout-count layout-column-index layout-raw
+         asm-reader-cache asm-reader-sorted-mask set-asm-reader-sorted-mask!
          (struct-out method-signature)
          decode-typespec decode-method-sig decode-localvar-sig decode-method-instantiation
          asm-reader-raw asm-reader-string-index-size asm-reader-blob-index-size
@@ -80,6 +83,13 @@
 
    ; function that resolves an rva
    [resolve-rva #:auto]
+
+   ; II.24.2.6 Sorted: bit n is set when table n is sorted by its key column
+   [sorted-mask #:auto]
+
+   ; hasheq of everything derived from the bytes on first use: column layouts and the scanned
+   ; indexes in index.rkt. Its lifetime is this reader's; read-file always starts a fresh one.
+   [cache #:auto]
    
   ) 
   #:mutable
@@ -222,8 +232,10 @@
   ; bit vector of present tables
   (define valid (read-bytes 8 port))
   (define valid-int (bytes->uint-le valid))
-  ; bit vector of sorted tables (not sure about this? the spec doesn't describe it?)
+  ; bit vector of sorted tables (II.24.2.6 Sorted)
   (define sorted (read-bytes 8 port))
+  (set-asm-reader-sorted-mask! rdr (bytes->uint-le sorted))
+  (set-asm-reader-cache! rdr (make-hasheq))
 
   ; calculate the number of present tables
   ; this is the number of bits set in valid.
@@ -497,6 +509,9 @@
   )
 
 (define (get-public-typedefs rdr)
+  (hash-ref! (asm-reader-cache rdr) 'public-typedefs (λ () (scan-public-typedefs rdr))))
+
+(define (scan-public-typedefs rdr)
   ; we need this to be as fast as possible so we'll write a manual version.
   ; the first 4 bytes are the TypeAttributes, and the first bit is set if the
   ; type is public.  because it is little-endian, that is the fist byte in the
@@ -547,59 +562,135 @@
 ;   u8/u16/u32 -> integer, string -> string, guid -> 16 bytes (#f when null),
 ;   blob -> bytes without its length prefix (#f when null),
 ;   (index t) -> rid (0 when null), (coded k) -> (cons target-name rid) (#f when null).
-; the fast paths (get-public-typedefs) do not use this.
 (define (read-row rdr name rid)
-  (define t (or (table-by-name name) (error 'read-row "unknown table ~a" name)))
-  (define td (hash-ref (asm-reader-table-attributes rdr) name #f))
-  (unless td (error 'read-row "table ~a is not present" name))
-  (unless (<= 1 rid (table-data-row-count td))
+  (define layout (table-layout rdr name))
+  (define base (row-offset rdr layout name rid))
+  (for/vector #:length (vector-length (layout-columns layout))
+              ([c (in-vector (layout-columns layout))])
+    (decode-column rdr c (raw-uint (asm-reader-raw rdr) (+ base (col-offset c)) (col-width c)))))
+
+; One column of a table as laid out in this image: its byte offset in the row, its width, and
+; its schema kind. coded is the coded-kind for a (coded k) column, else #f.
+(struct col (name offset width kind coded))
+; A table's columns, its row size and count, and where its rows start in the raw bytes.
+(struct layout (columns by-name start size count))
+
+; The layout of a table, computed once per reader (II.24.2.6 row layout from schema.rkt).
+; Raises when the table is unknown or absent.
+(define (table-layout rdr name)
+  (define cache (hash-ref! (asm-reader-cache rdr) 'layouts make-hasheq))
+  (or (hash-ref cache name #f)
+      (let* ([t (or (table-by-name name) (error 'read-row "unknown table ~a" name))]
+             [td (or (hash-ref (asm-reader-table-attributes rdr) name #f)
+                     (error 'read-row "table ~a is not present" name))]
+             [ss (asm-reader-string-index-size rdr)]
+             [bs (asm-reader-blob-index-size rdr)]
+             [gs (asm-reader-guid-index-size rdr)]
+             [rows-of (λ (n) (table-row-count rdr n))]
+             [cols (for/fold ([acc '()] [offset 0] #:result (list->vector (reverse acc)))
+                             ([c (in-list (table-columns t))])
+                     (define kind (column-kind c))
+                     (define width (column-width kind ss bs gs rows-of))
+                     (values (cons (col (column-name c) offset width kind
+                                        (and (pair? kind) (eq? (car kind) 'coded)
+                                             (coded-kind-by-name (cadr kind))))
+                                   acc)
+                             (+ offset width)))]
+             [l (layout cols
+                        (for/hasheq ([c (in-vector cols)] [i (in-naturals)]) (values (col-name c) i))
+                        (table-data-start-offset td) (table-data-row-size td)
+                        (table-data-row-count td))])
+        (hash-set! cache name l)
+        l)))
+
+(define (row-offset rdr l name rid)
+  (unless (and (exact-integer? rid) (<= 1 rid (layout-count l)))
     (error 'read-row "row ~a out of range for ~a" rid name))
-  (define ss (asm-reader-string-index-size rdr))
-  (define bs (asm-reader-blob-index-size rdr))
-  (define gs (asm-reader-guid-index-size rdr))
-  (define (rows-of n)
-    (let ([other (hash-ref (asm-reader-table-attributes rdr) n #f)])
-      (if other (table-data-row-count other) 0)))
-  (define port (open-input-bytes (asm-reader-raw rdr)))
-  (file-position port (+ (table-data-start-offset td) (* (- rid 1) (table-data-row-size td))))
-  (define (read-heap-index width)
-    (read-uint-le width port))
-  (define (blob-at heap index)
-    (if (zero? index)
-        #f
-        (let* ([b0 (bytes-ref heap index)]
-               [len-size (cond [(zero? (bitwise-and b0 #x80)) 1]
-                               [(= (bitwise-and b0 #xC0) #x80) 2]
-                               [else 4])]
-               [len (for/fold ([acc (bitwise-and b0 (case len-size [(1) #x7F] [(2) #x3F] [else #x1F]))])
-                              ([i (in-range 1 len-size)])
-                      (+ (* acc 256) (bytes-ref heap (+ index i))))]
-               [start (+ index len-size)])
-          (subbytes heap start (+ start len)))))
-  (for/vector ([c (in-list (table-columns t))])
-    (define kind (column-kind c))
-    (define width (column-width kind ss bs gs rows-of))
-    (cond
-      [(symbol? kind)
-       (case kind
-         [(string) ((asm-reader-get-string rdr) (read-heap-index width))]
-         [(guid) (let ([index (read-heap-index width)])
-                   (if (zero? index)
-                       #f
-                       (subbytes (asm-reader-guid-heap rdr) (* (- index 1) 16) (* index 16))))]
-         [(blob) (blob-at (asm-reader-blob-heap rdr) (read-heap-index width))]
-         [else (read-uint-le width port)])]
-      [(eq? (car kind) 'index) (read-heap-index width)]
-      [else
-       (let ([value (read-heap-index width)])
-         (if (zero? value)
-             #f
-             (let-values ([(target rid) (coded-decode (coded-kind-by-name (cadr kind)) value)])
-               (unless target (error 'read-row "unused tag in ~a" (cadr kind)))
-               (cons target rid))))])))
+  (+ (layout-start l) (* (- rid 1) (layout-size l))))
+
+; Rows in a table, 0 when it is absent.
+(define (table-row-count rdr name)
+  (define td (hash-ref (asm-reader-table-attributes rdr) name #f))
+  (if td (table-data-row-count td) 0))
+
+(define (raw-uint raw offset width)
+  (case width
+    [(1) (bytes-ref raw offset)]
+    [(2) (integer-bytes->integer raw #f #f offset (+ offset 2))]
+    [else (integer-bytes->integer raw #f #f offset (+ offset 4))]))
+
+(define (layout-col rdr l name column)
+  (cond
+    [(exact-nonnegative-integer? column) (vector-ref (layout-columns l) column)]
+    [(hash-ref (layout-by-name l) column #f) => (λ (i) (vector-ref (layout-columns l) i))]
+    [else (error 'row-column "~a has no column ~a" name column)]))
+
+; The undecoded value of one column, read straight from the raw bytes: a heap offset, a rid, or
+; an encoded coded index (II.24.2.6). column is a schema column name or a 0-based position.
+; Sorted tables are ordered by these raw values, so binary searches compare them.
+(define (row-column-raw rdr name rid column)
+  (define l (table-layout rdr name))
+  (define c (layout-col rdr l name column))
+  (raw-uint (asm-reader-raw rdr) (+ (row-offset rdr l name rid) (col-offset c)) (col-width c)))
+
+; One column decoded as read-row decodes it.
+(define (row-column rdr name rid column)
+  (define l (table-layout rdr name))
+  (define c (layout-col rdr l name column))
+  (decode-column rdr c
+                 (raw-uint (asm-reader-raw rdr) (+ (row-offset rdr l name rid) (col-offset c))
+                           (col-width c))))
+
+(define (decode-column rdr c value)
+  (define kind (col-kind c))
+  (cond
+    [(symbol? kind)
+     (case kind
+       [(string) ((asm-reader-get-string rdr) value)]
+       [(guid) (if (zero? value)
+                   #f
+                   (subbytes (asm-reader-guid-heap rdr) (* (- value 1) 16) (* value 16)))]
+       [(blob) (blob-at (asm-reader-blob-heap rdr) value)]
+       [else value])]
+    [(col-coded c)
+     (if (zero? value)
+         #f
+         (let-values ([(target rid) (coded-decode (col-coded c) value)])
+           (unless target (error 'read-row "unused tag in ~a" (cadr kind)))
+           (cons target rid)))]
+    [else value]))
+
+; II.24.2.4: a blob is prefixed by its compressed length
+(define (blob-at heap index)
+  (if (zero? index)
+      #f
+      (let* ([b0 (bytes-ref heap index)]
+             [len-size (cond [(zero? (bitwise-and b0 #x80)) 1]
+                             [(= (bitwise-and b0 #xC0) #x80) 2]
+                             [else 4])]
+             [len (for/fold ([acc (bitwise-and b0 (case len-size [(1) #x7F] [(2) #x3F] [else #x1F]))])
+                            ([i (in-range 1 len-size)])
+                    (+ (* acc 256) (bytes-ref heap (+ index i))))]
+             [start (+ index len-size)])
+        (subbytes heap start (+ start len)))))
+
+; Hot-path access for index.rkt: fetch a layout once, then read raw columns with no lookups and
+; no range check. rid must be in 1..(layout-count l).
+(define (layout-column-index l column)
+  (or (hash-ref (layout-by-name l) column #f) (error 'layout "no column ~a" column)))
+
+(define (layout-raw rdr l rid i)
+  (define c (vector-ref (layout-columns l) i))
+  (raw-uint (asm-reader-raw rdr) (+ (layout-start l) (* (- rid 1) (layout-size l)) (col-offset c))
+            (col-width c)))
+
+; True when the header's Sorted mask marks the table as sorted (II.24.2.6).
+(define (table-sorted? rdr name)
+  (define t (table-by-name name))
+  (and t (bitwise-bit-set? (or (asm-reader-sorted-mask rdr) 0) (table-id t))))
 
 ; Reads the bytes of a bare metadata root (the BSJB block that metadata-chunk writes), with
-; offsets relative to byte 0. Like read-file, this does not cache anything.
+; offsets relative to byte 0. Like read-file, this returns a fresh reader with empty caches.
 (define (read-metadata-root bs)
   (define rdr (asm-reader))
   (set-asm-reader-raw! rdr bs)

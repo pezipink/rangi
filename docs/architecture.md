@@ -31,12 +31,14 @@ Baseline behaviour: `racket experiments/nano.rkt` writes a 2048-byte image that 
 
 `read-file` reads the whole file into a byte string, then parses the DOS header, COFF header, PE32 optional header, section headers, CLI header, metadata root, and stream headers. It copies each heap, computes heap index widths, simple and coded index widths, then the row size and file offset of every table. Rows are decoded only on demand.
 
+The reader keeps the raw bytes, and caches every scanned index on itself (`asm-reader-cache`), so the cache lives exactly as long as the reader. Column layouts are computed once per table, and `row-column` and `row-column-raw` read single columns straight from the raw bytes. `src/cli/index.rkt` builds lookups on top of this. `find-typedef` and `find-exported-type` use a name hash built on first use. Member, param, property and event ranges follow II.22.37, II.22.26, II.22.35 and II.22.12, and `method-owner` and `field-owner` binary search TypeDef. `rows-with-key` binary searches the tables the spec keeps sorted (falling back to a cached hash when the Sorted bit is clear), and it backs nested types, interfaces, generic parameters, method semantics and custom attributes. Pointer tables (`#-` streams) are not mapped by the ranges yet.
+
 Known defects:
 
 * The `HeapSizes` bit 0x20 is not defined by the spec or by SRM, and the reader does not handle it.
 * Row layouts are written by hand and duplicated in the writer.
 
-Fixed and covered by tests: the `#-` (uncompressed) stream name, which SRM reads as a table stream with the same row layout (it accepts pointer tables there); unknown streams such as `#!` (in NGEN native images), which are skipped as SRM does (`default: continue`); the HeapSizes extra-data bit 0x40, where the 4 bytes after the row counts are read and discarded as SRM does (`tests/stream-variants-test.rkt`). PE32+ parsing, the table-id switch for the pointer, ENC, and Assembly processor/OS tables (previously an error), `standalonesig`, `HasCustomAttribute` (`declsecurity`), public type visibility (`flags & 0x7`), the port leak, and the missing-Assembly case (`read-assembly-meta` returns `#f`). `read-file` reads the file once and does not cache, so each call costs one read.
+Fixed and covered by tests: the `#-` (uncompressed) stream name, which SRM reads as a table stream with the same row layout (it accepts pointer tables there); unknown streams such as `#!` (in NGEN native images), which are skipped as SRM does (`default: continue`); the HeapSizes extra-data bit 0x40, where the 4 bytes after the row counts are read and discarded as SRM does (`tests/stream-variants-test.rkt`). PE32+ parsing, the table-id switch for the pointer, ENC, and Assembly processor/OS tables (previously an error), `standalonesig`, `HasCustomAttribute` (`declsecurity`), public type visibility (`flags & 0x7`), the port leak, and the missing-Assembly case (`read-assembly-meta` returns `#f`). `read-file` reads the file once and does not cache across calls: each call costs one read and returns a fresh reader with empty indexes.
 
 ### Writer
 
@@ -78,6 +80,7 @@ rangi/
     tokens.rkt              token encode/decode, coded index encode/decode
     header.rkt              CLI header (II.25.3.3) chunk
     reader.rkt              lazy metadata reader built on schema.rkt
+    index.rkt               cached lookups over a reader: names, member ranges, sorted-table search
   il/
     opcodes.rkt             Partition III opcode table (data)
     encode.rkt              operand encoders driven by opcodes.rkt (built, wired to the writer)
