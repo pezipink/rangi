@@ -374,30 +374,57 @@
 ; instructions need a static field, and the field and instance instructions need an instance one.
 ; An instance field of a generic class, used inside that class, is a MemberRef on the class
 ; instantiated over its own type parameters (II.22.25, II.23.2.12), since this is Box<!0>.
-(define (module-field-token cx cls name type op)
+; args is #f for the bare class name. Otherwise it is the list of type arguments of a generic
+; instance Box<args>, in the caller's scope, and the field type is the declared type with the
+; class's !N replaced by those arguments.
+(define (module-field-token cx scope cls args name type op)
   (define hit (hash-ref (ctx-field-rids cx) (cons cls name)
                         (λ () (error 'rangi "no field ~a in ~a" name cls))))
   (define declared (vector-ref hit 1))
   (define static? (vector-ref hit 2))
-  (unless (equal? declared type)
-    (error 'rangi "field ~a.~a has type ~s, not ~s" cls name declared type))
+  (define arity (module-class-arity cx cls))
+  (when (and args (not (= arity (length args))))
+    (error 'rangi "class ~a takes ~a type arguments, got ~a" cls arity (length args)))
+  (define expected (if args (instantiate-class-type declared args) declared))
+  (unless (equal? expected type)
+    (error 'rangi "field ~a.~a has type ~s, not ~s" cls name expected type))
   (when (and (memq op '(ldsfld stsfld ldsflda)) (not static?))
     (error 'rangi "~a.~a is an instance field; ~a needs a static field" cls name op))
   (when (and (memq op '(ldfld stfld ldflda)) static?)
     (error 'rangi "~a.~a is a static field; ~a needs an instance field" cls name op))
-  (define arity (module-class-arity cx cls))
-  (if (and (positive? arity) (not static?) (eq? cls (current-class-name)))
-      (generic-self-field-token cx cls arity name type)
-      (token #x04000000 (vector-ref hit 0))))
+  (cond
+    [args (generic-field-token cx scope cls args name declared)]
+    [(and (positive? arity) (not static?))
+     (unless (eq? cls (current-class-name))
+       (error 'rangi "field ~a of generic class ~a needs type arguments outside ~a" name cls cls))
+     (generic-field-token cx (cons arity 0) cls
+                          (for/list ([i (in-range arity)]) (string->symbol (format "!~a" i)))
+                          name declared)]
+    [else (token #x04000000 (vector-ref hit 0))]))
 
-; MemberRef (II.22.25) to an instance field through Box<!0, ..., !(n-1)>, the TypeSpec of the
-; class over its own type parameters (II.22.39, II.23.2.12). The FieldSig (II.23.2.4) is in
-; terms of those parameters.
-(define (generic-self-field-token cx cls arity name type)
-  (define self (list 'genericinst (list 'class (cons 'typedef (module-class-rid cx cls)))
-                     (for/list ([i (in-range arity)]) (list 'var i))))
-  (define parent (cons 'typespec (typespec-rid! cx (encode-typespec self))))
-  (define sig (bytes-append (bytes #x06) (encode-type (lower-type cx (cons arity 0) type))))
+; The declared field type with the class's !N replaced by args (the i-th argument for !i).
+; Method variables (!!N) and the other class types are left alone apart from their arguments.
+(define (instantiate-class-type t args)
+  (define (inst t) (instantiate-class-type t args))
+  (cond
+    [(and (symbol? t) (tyvar-ref t))
+     => (λ (ref) (if (equal? (car ref) "!") (list-ref args (cdr ref)) t))]
+    [(and (pair? t) (memq (car t) '(szarray byref))) (list (car t) (inst (cadr t)))]
+    [(and (pair? t) (eq? (car t) 'array)) (list 'array (inst (cadr t)) (caddr t))]
+    [(and (pair? t) (memq (car t) '(class valuetype)) (pair? (cddr t)))
+     (list (car t) (cadr t) (map inst (caddr t)))]
+    [else t]))
+
+; MemberRef (II.22.25) to an instance field of the generic instance cls<args>: the parent is the
+; TypeSpec of that instantiation (II.22.39, II.23.2.12), and the FieldSig (II.23.2.4) is the
+; declared type in terms of the class's own !N, lowered in the class's scope.
+(define (generic-field-token cx scope cls args name declared)
+  (define parent-sig
+    (list 'genericinst (list 'class (cons 'typedef (module-class-rid cx cls)))
+          (lower-args cx scope args)))
+  (define parent (cons 'typespec (typespec-rid! cx (encode-typespec parent-sig))))
+  (define arity (module-class-arity cx cls))
+  (define sig (bytes-append (bytes #x06) (encode-type (lower-type cx (cons arity 0) declared))))
   (token #x0A000000 (member-ref! cx parent name sig)))
 
 (define (string-token cx s)
@@ -496,7 +523,12 @@
     [(list (and op (or 'ldfld 'stfld 'ldflda 'ldsfld 'stsfld 'ldsflda)) (list asm ty) (? symbol? name) type)
      (list op (field-token! cx asm ty name type))]
     [(list (and op (or 'ldfld 'stfld 'ldflda 'ldsfld 'stsfld 'ldsflda)) (? symbol? cls) (? symbol? name) type)
-     (list op (module-field-token cx cls name type op))]
+     (list op (module-field-token cx scope cls #f name type op))]
+    [(list (and op (or 'ldfld 'stfld 'ldflda)) (list 'class (list (? symbol? cls)) (? pair? args))
+           (? symbol? name) type)
+     (list op (module-field-token cx scope cls args name type op))]
+    [(list (and op (or 'ldfld 'stfld 'ldflda 'ldsfld 'stsfld 'ldsflda)) (list 'class _ ...) _ ...)
+     (error 'rangi "field access through an external generic instance is not supported in ~s" node)]
     [(list 'ldstr s) (list 'ldstr (string-token cx s))]
     [(list (and op (or 'newarr 'ldelem 'ldelema 'stelem)) elem)
      (list op (element-type-token! cx elem))]

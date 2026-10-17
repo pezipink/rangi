@@ -1,0 +1,41 @@
+Module rows=1
+  Module[1] Name="generic-field-access.exe" Mvid=b60058408cf62074cf838a01ce7ec25a
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=5
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=161 Name="IArea" Namespace="" Extends=0x00000000 Fields=[] Methods=[2..2]
+  TypeDef[4] Flags=1 Name="Square" Namespace="" Extends=0x01000001 Fields=[] Methods=[3..4]
+  TypeDef[5] Flags=1 Name="Box`1" Namespace="" Extends=0x01000001 Fields=[1..1] Methods=[5..5]
+Field rows=1
+  Field[1] Flags=6 Name="Value" Signature=061300
+MethodDef rows=5
+  MethodDef[1] Rva=8944 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1f29730100000a0a061f2a7d0200000a067b0200000a280300000a067c0200000a1d54067b0200000a280300000a7303000006730400000a0b077b0500000a6f02000006280300000a2a
+  MethodDef[2] Rva=0 ImplFlags=0 Flags=1350 Name="Area" Signature=200008 Params=[]
+  MethodDef[3] Rva=9032 ImplFlags=0 Flags=6150 Name=".ctor" Signature=200001 Params=[] Il=02280600000a2a
+  MethodDef[4] Rva=9040 ImplFlags=0 Flags=326 Name="Area" Signature=200008 Params=[] Il=1a2a
+  MethodDef[5] Rva=9044 ImplFlags=0 Flags=6150 Name=".ctor" Signature=2001011300 Params=[] Il=02280600000a02037d0700000a2a
+InterfaceImpl rows=1
+  InterfaceImpl[1] Class=4 Interface=0x02000003
+MemberRef rows=7
+  MemberRef[1] Parent=0x1b000001 Name=".ctor" Signature=2001011300
+  MemberRef[2] Parent=0x1b000001 Name="Value" Signature=061300
+  MemberRef[3] Parent=0x01000002 Name="WriteLine" Signature=00010108
+  MemberRef[4] Parent=0x1b000002 Name=".ctor" Signature=2001011300
+  MemberRef[5] Parent=0x1b000002 Name="Value" Signature=061300
+  MemberRef[6] Parent=0x01000001 Name=".ctor" Signature=200001
+  MemberRef[7] Parent=0x1b000003 Name="Value" Signature=061300
+StandAloneSig rows=1
+  StandAloneSig[1] Signature=07021512140108151214011210
+TypeSpec rows=3
+  TypeSpec[1] Signature=1512140108
+  TypeSpec[2] Signature=151214011210
+  TypeSpec[3] Signature=151214011300
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
+GenericParam rows=1
+  GenericParam[1] Number=0 Flags=0 Owner=0x02000005 Name="T"

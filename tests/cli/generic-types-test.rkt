@@ -99,6 +99,46 @@
                          (.extends (mscorlib System.Object))
                          [,base-ctor])))))
 
+(define cell
+  `(.class (public auto ansi) Cell (.typarams (T))
+     (.extends (mscorlib System.Object))
+     [(.field (public) !0 Value)
+      ,base-ctor]))
+
+(define (user-body . body)
+  `(.class (public auto ansi) User
+     (.extends (mscorlib System.Object))
+     [(.method (public static) void Use () (cil managed)
+        { (.maxstack 8) ,@body (ret) })]))
+
+(test-case "a field of a generic instance is accessed from outside its class (II.22.25)"
+  (check-not-exn
+   (λ ()
+     (lower cell (user-body '(ldnull)
+                            '(ldfld (class (Cell) (int32)) Value int32)
+                            '(pop))))))
+
+(test-case "the field type of a generic instance is checked after substitution"
+  (check-exn #rx"field Cell.Value has type int32, not int64"
+             (λ ()
+               (lower cell (user-body '(ldnull)
+                                      '(ldfld (class (Cell) (int32)) Value int64)
+                                      '(pop))))))
+
+(test-case "a generic field access with the wrong number of type arguments is rejected"
+  (check-exn #rx"class Cell takes 1 type arguments, got 2"
+             (λ ()
+               (lower cell (user-body '(ldnull)
+                                      '(ldfld (class (Cell) (int32 int32)) Value int32)
+                                      '(pop))))))
+
+(test-case "a generic field named without type arguments outside its class is rejected"
+  (check-exn #rx"needs type arguments outside Cell"
+             (λ ()
+               (lower cell (user-body '(ldnull)
+                                      '(ldfld Cell Value !0)
+                                      '(pop))))))
+
 (test-case "a generic instance with the wrong number of type arguments is rejected"
   (check-exn #rx"takes 3 type arguments, got 1"
              (λ ()
