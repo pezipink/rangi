@@ -29,8 +29,10 @@ Work is driven by the plans in [docs/plans/](docs/plans/). Start with [roadmap.m
 * Keep the raw PE image layer free of CLI knowledge. The PE layer lays out sections and resolves RVAs; the CLI layer produces metadata, IL, and the CLI header as byte chunks with symbolic fixups. See [restructure.md](docs/plans/restructure.md).
 * Keep one source of truth for metadata table schemas, coded indexes, and opcodes. Both the reader and the writer must consume the same data tables; never hand-copy row layouts again.
 * Output must be deterministic. Never iterate a mutable `hash` to decide row order, heap order, or layout. Use insertion-ordered structures or explicit sorts. Timestamps and MVIDs come from inputs or content hashes, not the clock.
+* The reader stays lazy and fast. The macro expander calls it repeatedly at phase 1, so decode rows on demand. `read-file` must not cache; each call reads the file. Add eager work or caching only with a benchmark.
 * Every change to emitted bytes must be visible in a reviewed snapshot (layout map, metadata dump, image hash). If a snapshot changes, explain why in the commit.
 * Cite the ECMA-335 section (for example `II.22.37`, `II.25.3.3`, `III.3.4`) in comments where code encodes spec rules.
+* Where the ECMA-335 6th edition is silent (`#-`, HeapSizes 0x40), follow System.Reflection.Metadata in dotnet/runtime, not web search summaries. Record findings in [verification.md](docs/plans/verification.md#spec-sources-and-discovery).
 * Do not write outside the repo or the system temp directory. Generated images go under `build/` or a temp directory, never `c:\temp` hardcoded.
 
 ## Build and test
@@ -41,7 +43,7 @@ Racket 8.16 CS is installed at `C:\Program Files\Racket`. Run the test suite wit
 raco test tests/
 ```
 
-It runs the fixture checks (image hash, stdout, exit code) and the external oracles. Oracles are skipped when their tool is missing. `RANGI_UPDATE_SNAPSHOTS=1 raco test tests/` rewrites reviewed snapshots; only do that when the change to emitted bytes is intended and explained in the commit.
+It runs the fixture checks (image hash, stdout, exit code) and the external oracles. Oracles are skipped when their tool is missing. It also runs the structural lint (`tests/lib/pe-lint.rkt`, tested by `tests/image-lint-test.rkt`) on every fixture. The metadata dump decodes MethodSpec rows (they match SRM on mscorlib). It still throws on TypeSpec, CustomAttribute, and GenericParam, so mscorlib is compared by public type count only (see [verification.md](docs/plans/verification.md)). `RANGI_UPDATE_SNAPSHOTS=1 raco test tests/` rewrites reviewed snapshots; only do that when the change to emitted bytes is intended and explained in the commit.
 
 The smoke test is still:
 
@@ -61,5 +63,6 @@ External oracles available on this machine:
 ## Repo quirks
 
 * The repo directory is owned by a different Windows user. `C:/repos/rangi` is in the global `safe.directory` list, so plain `git` commands work.
+* `$env:TEMP` can be an 8.3 short path that Racket cannot open. When you pass a temp path to Racket from PowerShell, use the long path form.
 * `*.bak` and `compiled/` are gitignored scratch files from DrRacket. Ignore them.
 * Racket files use `#lang racket` or `#lang racket/base`. Prefer `racket/base` plus explicit requires for library modules (the reader must load fast at phase 1).

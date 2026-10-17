@@ -6,7 +6,7 @@
 (provide metadata-dump layouts coded-specs column-size le)
 
 ; tables dumped, in table-id order
-(define dumped-tables '(module typeref typedef methoddef memberref assembly assemblyref))
+(define dumped-tables '(module typeref typedef methoddef memberref assembly assemblyref methodspec))
 ; tables read only for their row counts, which bound the lists in typedef and methoddef rows
 (define count-only-tables '(field param))
 
@@ -16,7 +16,8 @@
 
 (define table-titles
   (hash 'module "Module" 'typeref "TypeRef" 'typedef "TypeDef" 'methoddef "MethodDef"
-        'memberref "MemberRef" 'assembly "Assembly" 'assemblyref "AssemblyRef"))
+        'memberref "MemberRef" 'assembly "Assembly" 'assemblyref "AssemblyRef"
+        'methodspec "MethodSpec"))
 
 ; column kinds: (u N) fixed little-endian integer, str and blob and guid heap indexes,
 ; (simple T) row index into table T, (coded K) coded index (II.24.2.6)
@@ -32,13 +33,16 @@
    'assembly '((hash-alg (u 4)) (major (u 2)) (minor (u 2)) (build (u 2)) (revision (u 2))
                (flags (u 4)) (public-key blob) (name str) (culture str))
    'assemblyref '((major (u 2)) (minor (u 2)) (build (u 2)) (revision (u 2)) (flags (u 4))
-                  (public-key-or-token blob) (name str) (culture str) (hash-value blob))))
+                  (public-key-or-token blob) (name str) (culture str) (hash-value blob))
+   ; II.22.29
+   'methodspec '((method (coded methoddeforref)) (instantiation blob))))
 
 ; coded index bit width and the tables its tag selects, in tag order
 (define coded-specs
   (hash 'typedeforref '(2 typedef typeref typespec)
         'resolutionscope '(2 module moduleref assemblyref typeref)
-        'memberrefparent '(3 typedef typeref moduleref methoddef typespec)))
+        'memberrefparent '(3 typedef typeref moduleref methoddef typespec)
+        'methoddeforref '(1 methoddef memberref)))
 
 (define (le raw pos size)
   (for/fold ([acc 0]) ([i (in-range size)])
@@ -208,6 +212,9 @@
            (string-append "PublicKey=" (bytes->hex-string (ref 'public-key)))
            (string-append "Name=" (quoted (ref 'name)))
            (string-append "Culture=" (quoted (ref 'culture))))]
+    [(methodspec)
+     (list (string-append "Method=" (token-text (ref 'method)))
+           (string-append "Instantiation=" (bytes->hex-string (ref 'instantiation))))]
     [(assemblyref)
      (list (string-append "Version=" (version-text row))
            (format "Flags=~a" (ref 'flags))

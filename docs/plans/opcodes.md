@@ -6,7 +6,7 @@ ms.date: 2026-10-17
 
 ## Current state
 
-`assemble-il-stream` in `src/cli-writer.rkt` handles four forms: `ret` (0x2A), `add` (0x58), `ldc.i` (always `ldc.i4` 0x20 with a 4-byte operand), and `call` to a `MemberRef`. It silently skips everything else, including `.locals` and labels.
+`encode-il` in `src/cli-writer.rkt`, fed by `parse-il`, handles four forms: `ret` (0x2A), `add` (0x58), `ldc.i4` (0x20, always a 4-byte operand), and `call` to a `MemberRef` or `MethodDef` (0x28). Any other instruction raises `unsupported IL instruction`, so nothing is skipped silently. `.locals`, labels, and exception handling are not supported yet.
 
 ## Target size
 

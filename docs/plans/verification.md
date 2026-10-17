@@ -10,10 +10,10 @@ Any change that alters an emitted image must fail a test until a person reviews 
 
 ## Prerequisite: determinism
 
-Snapshots only work if output is reproducible. Before V1 snapshots are trusted:
+Status: done in V0 (`ca7aa13`). The list below is what determinism requires:
 
 * Replace hash iteration with insertion-ordered collections (for example a `gvector` plus an index `hash`) for heaps, rows, and methods.
-* Take the COFF timestamp from an option. Default to `0`, or to a hash of the image content as Roslyn's `/deterministic` does.
+* Take the COFF timestamp from an option. Deviation: the timestamp is always `0`; there is no option yet.
 * Derive the module MVID from a content hash (for example the first 16 bytes of SHA-256 over the metadata with the MVID zeroed).
 
 ## Verification layers
@@ -49,7 +49,7 @@ The map is the main tool for reviewing layout changes. It is human-readable, dif
 
 ### L3 Metadata dump snapshot
 
-A canonical, text dump of every metadata table row, heap entry, and decoded signature, produced by Rangi's own reader (`cli/reader.rkt`), approved as `metadata.txt`. This dump also serves as the reader's round-trip test.
+A canonical, text dump of every metadata table row, heap entry, and decoded signature, produced by Rangi's own reader (`src/cli-reader.rkt`), approved as `metadata.txt`. This dump also serves as the reader's round-trip test.
 
 ### L4 Image hash snapshot
 
@@ -81,7 +81,7 @@ Each oracle is a script under `tests/oracles/` and is skipped when the tool is m
 | PEVerify (.NET Framework SDK)        | Metadata validation (`/md`) and IL type safety (`/il`)      | `PEVerify.exe /md /il /nologo <image>`                          |
 | ildasm                               | Readable disassembly; snapshot as `ildasm.il` after scrubbing timestamp, MVID, and image base comments | `ildasm.exe /all /text /nobar <image>` |
 | System.Reflection.Metadata dumper    | Independent table decoder; diff against L3                  | `dotnet run --project tests/oracles/srm-dump/srm-dump.csproj -- <image>` |
-| ILVerify (`Microsoft.ILVerification`) | IL verification that also works for .NET (Core) targets    | `dotnet run --project tests/oracles/ilverify -- <image>`        |
+| ILVerify (`Microsoft.ILVerification`) | IL verification that also works for .NET (Core) targets    | Not implemented: `tests/oracles/ilverify` does not exist yet    |
 
 The baseline PEVerify warning (`0x8013129d` on `MethodDef` 1) is fixed. `main` sat on the `<Module>` type, and ilasm assembles the same code with no warning when `main` is inside a class. The writer now moves `<Module>` methods into a generated `Program` class, and `pe-verify.txt` records a clean run.
 
@@ -112,7 +112,34 @@ Deviations recorded for P1:
 * The diff is a `check-equal?` failure rather than a unified diff printer.
 * The row decoder lives in `tests/lib/metadata-dump.rkt` until P2 moves it into `cli/schema`.
 * `src/cli-reader.rkt` gains read-only accessors and stores the encoding sizes it already computes. It does not change the lazy lookup path.
+* mscorlib is compared by public type count only (1521, equal to SRM), because the L3 decoder still throws on tables it does not decode yet (TypeSpec, CustomAttribute, GenericParam, and others). MethodSpec rows are decoded and match SRM (656 rows on mscorlib).
+* The PE32+ reader output was compared with SRM by hand on an `ilasm /X64` image. No fixture covers it yet.
 * [x] V4 L5 invariant checker (`tests/lib/pe-lint.rkt`, `tests/image-lint-test.rkt`); deviations listed under L5
 * [ ] V5 L2 layout map (lands with restructure R3, when the layout engine exists)
 * [ ] V6 L8 ilasm differential fixtures for every feature in [cli-coverage.md](cli-coverage.md)
 * [ ] V7 Reader corpus test: run the L3 dump against every assembly in the .NET Framework 4.7.1 reference set and `System.Private.CoreLib`, diffed against SRM
+
+## Spec sources and discovery
+
+Source order for facts about the metadata format:
+
+1. System.Reflection.Metadata (SRM) and CoreCLR in dotnet/runtime. The reader must agree with SRM on every reference assembly. The SRM oracle (`tests/oracles/srm-dump`) is the check.
+2. The ECMA-335 6th edition text, as transcribed in the stakx/ecma-335 markdown. II.24.2.1 and II.24.2.6 define the `#~` header and the HeapSizes bits 0x01, 0x02, and 0x04. They do not mention `#-`, 0x20, or 0x40.
+3. Web search summaries. They contradicted each other on `#-` and extra data, so no rule is taken from them.
+
+Findings from SRM (`src/libraries/System.Reflection.Metadata/src/System/Reflection/Metadata/`):
+
+* `Internal/COR20Constants.cs`: `#-` is the uncompressed table stream. `#JTD` is the minimal-delta stream and `#Pdb` is the standalone PDB stream.
+* `MetadataReader.cs`: `#-` sets `MetadataStreamKind.Uncompressed`. The compressed kind (`#~`) rejects pointer tables and EncMap, and the uncompressed kind allows them. Index widths depend on row counts and minimal delta, not on the kind.
+* `Internal/MetadataFlags.cs`: `HeapSizes.ExtraData = 0x40`. When it is set, SRM reads and skips 4 bytes right after the row counts. Its comment says the CLI spec does not mention this, but the native reader honours it. SRM does not test 0x20.
+* The stream switch has `default: continue` with the comment "Some obfuscators insert invalid streams". Unknown streams are skipped, not errors.
+
+Local corpus scan (roadmap item 1):
+
+* A byte search for `#-` followed by NUL found 525 candidate files in the .NET Framework directories, the reference assemblies, and the .NET runtimes. The reader parsed each one.
+* 485 parsed with only known streams. None contained a real `#-` stream.
+* 34 failed with `rva 0x0 is not in any section`. These are native binaries with no CLI header.
+* 6 failed with unknown stream `#!`. They are NGEN native images: `mscorlib.ni.dll`, `system.ni.dll`, and `system.core.ni.dll` under `NativeImages`, in both `Framework` and `Framework64`.
+* So the local machine has no sample of `#-` or of the 0x40 flag. Test those with a patched image or a sample from another source.
+
+Tooling: `search_code` on dotnet/runtime finds the SRM paths. Read a file from `raw.githubusercontent.com/dotnet/runtime/main/<path>` to get its full text.

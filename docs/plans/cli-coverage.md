@@ -12,29 +12,29 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 
 | Id   | Table                  | Read    | Write   | Notes                                                    | Fixture |
 |------|------------------------|---------|---------|----------------------------------------------------------|---------|
-| 0x00 | Module                 | partial | partial | MVID constant; generation and EnC ids fixed              |         |
-| 0x01 | TypeRef                | partial | partial | ResolutionScope hardcoded to AssemblyRef 1               |         |
-| 0x02 | TypeDef                | partial | partial | Flags, Extends, FieldList, and MethodList hardcoded      |         |
-| 0x03 | FieldPtr               | none    | n/a     | Uncompressed `#-` streams only                           |         |
+| 0x00 | Module                 | partial | partial | MVID is a content hash; generation and EnC ids fixed     |         |
+| 0x01 | TypeRef                | partial | partial | ResolutionScope is the referenced AssemblyRef            |         |
+| 0x02 | TypeDef                | partial | partial | Flags from keywords; FieldList hardcoded to 1 (no fields) |         |
+| 0x03 | FieldPtr               | partial | n/a     | Count only                                               |         |
 | 0x04 | Field                  | none    | none    |                                                          |         |
-| 0x05 | MethodPtr              | none    | n/a     |                                                          |         |
-| 0x06 | MethodDef              | partial | partial | Flags `0x16` fixed; ImplFlags 0; ParamList 1             |         |
-| 0x07 | ParamPtr               | none    | n/a     |                                                          |         |
+| 0x05 | MethodPtr              | partial | n/a     | Count only                                               |         |
+| 0x06 | MethodDef              | partial | partial | Flags from keywords; ImplFlags 0; ParamList hardcoded to 1 |         |
+| 0x07 | ParamPtr               | partial | n/a     | Count only                                               |         |
 | 0x08 | Param                  | none    | none    | Needed for parameter names and `[out]`                   |         |
 | 0x09 | InterfaceImpl          | none    | none    | Sorted                                                   |         |
-| 0x0A | MemberRef              | partial | partial | Parent hardcoded to TypeRef 1                            |         |
+| 0x0A | MemberRef              | partial | partial | Parent is the TypeRef of the call target                 |         |
 | 0x0B | Constant               | none    | none    | Sorted                                                   |         |
 | 0x0C | CustomAttribute        | none    | none    | Sorted; needs custom attribute blob encoding (II.23.3)   |         |
 | 0x0D | FieldMarshal           | none    | none    | Sorted                                                   |         |
 | 0x0E | DeclSecurity           | none    | none    | Sorted                                                   |         |
 | 0x0F | ClassLayout            | none    | none    | Sorted; needed for explicit and sequential structs       |         |
 | 0x10 | FieldLayout            | none    | none    | Sorted                                                   |         |
-| 0x11 | StandAloneSig          | none    | none    | Reader crashes on it; needed for locals and `calli`      |         |
+| 0x11 | StandAloneSig          | partial | none    | Reader parses it; needed for locals and `calli`          |         |
 | 0x12 | EventMap               | none    | none    |                                                          |         |
-| 0x13 | EventPtr               | none    | n/a     |                                                          |         |
+| 0x13 | EventPtr               | partial | n/a     | Count only                                               |         |
 | 0x14 | Event                  | none    | none    |                                                          |         |
 | 0x15 | PropertyMap            | none    | none    |                                                          |         |
-| 0x16 | PropertyPtr            | none    | n/a     |                                                          |         |
+| 0x16 | PropertyPtr            | partial | n/a     | Count only                                               |         |
 | 0x17 | Property               | none    | none    |                                                          |         |
 | 0x18 | MethodSemantics        | none    | none    | Sorted                                                   |         |
 | 0x19 | MethodImpl             | none    | none    | Sorted; explicit interface implementation                |         |
@@ -42,20 +42,20 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x1B | TypeSpec               | none    | none    | Needed for generics and arrays                           |         |
 | 0x1C | ImplMap                | none    | none    | Sorted; P/Invoke                                         |         |
 | 0x1D | FieldRVA               | none    | none    | Sorted; static data, needs a `.sdata` or `.text` chunk   |         |
-| 0x1E | ENCLog                 | none    | n/a     |                                                          |         |
-| 0x1F | ENCMap                 | none    | n/a     |                                                          |         |
+| 0x1E | ENCLog                 | partial | n/a     | Count only                                               |         |
+| 0x1F | ENCMap                 | partial | n/a     | Count only                                               |         |
 | 0x20 | Assembly               | partial | partial | Version, flags, public key, and culture are zero         |         |
-| 0x21 | AssemblyProcessor      | none    | n/a     | Should be ignored by readers                             |         |
-| 0x22 | AssemblyOS             | none    | n/a     |                                                          |         |
-| 0x23 | AssemblyRef            | partial | partial | Version and public key token are zero; name hardcoded to `mscorlib` |  |
-| 0x24 | AssemblyRefProcessor   | none    | n/a     |                                                          |         |
-| 0x25 | AssemblyRefOS          | none    | n/a     |                                                          |         |
+| 0x21 | AssemblyProcessor      | partial | n/a     | Count only; should be ignored by readers                 |         |
+| 0x22 | AssemblyOS             | partial | n/a     | Count only                                               |         |
+| 0x23 | AssemblyRef            | partial | partial | Name comes from `.assembly extern`; version and public key token are zero |  |
+| 0x24 | AssemblyRefProcessor   | partial | n/a     | Count only                                               |         |
+| 0x25 | AssemblyRefOS          | partial | n/a     | Count only                                               |         |
 | 0x26 | File                   | none    | none    | Multi-module assemblies                                  |         |
 | 0x27 | ExportedType           | none    | none    | Type forwarders                                          |         |
 | 0x28 | ManifestResource       | none    | none    | Embedded resources                                       |         |
 | 0x29 | NestedClass            | none    | none    | Sorted                                                   |         |
 | 0x2A | GenericParam           | none    | none    | Sorted                                                   |         |
-| 0x2B | MethodSpec             | none    | none    | Generic method instantiation                             |         |
+| 0x2B | MethodSpec             | none    | none    | Generic method instantiation. Test helper decodes rows; matches SRM on mscorlib (656) |         |
 | 0x2C | GenericParamConstraint | none    | none    | Sorted                                                   |         |
 
 ## Heaps and streams (II.24)
@@ -63,11 +63,12 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | Feature                                        | Read    | Write   | Notes                                                 | Fixture |
 |------------------------------------------------|---------|---------|-------------------------------------------------------|---------|
 | Metadata root, version string                  | partial | partial | Version hardcoded to `v4.0.30319`                     |         |
-| `#~` header, `Valid`, `Sorted`, `HeapSizes`    | partial | partial | Masks hardcoded on write; extra-data flag ignored     |         |
-| `#-` uncompressed stream                       | none    | n/a     |                                                       |         |
-| `#Strings` (UTF-8, dedup, suffix sharing)      | partial | partial | Writer uses Latin-1 and no dedup ordering             |         |
-| `#US` (UTF-16LE, length, trailing flag byte)   | partial | none    | Writer seeds an unexplained entry; no `ldstr`          |         |
-| `#GUID`                                        | partial | partial | Single constant GUID                                  |         |
+| `#~` header, `Valid`, `Sorted`, `HeapSizes`    | partial | partial | Writer sets Sorted to 0; extra-data flag (0x40, 4 bytes after row counts) not read |         |
+| `#-` uncompressed stream                       | none    | n/a     | SRM reads it as a table stream and allows pointer tables. Not in the 6th-edition text; see [verification.md](verification.md#spec-sources-and-discovery) |         |
+| Unknown streams (for example `#!` in NGEN images) | none | n/a  | SRM skips them; the reader rejects them             |         |
+| `#Strings` (UTF-8, dedup)                      | partial | partial | UTF-8, dedup in insertion order; no suffix sharing    |         |
+| `#US` (UTF-16LE, length, trailing flag byte)   | partial | partial | Writer emits an empty stream; no `ldstr`               |         |
+| `#GUID`                                        | partial | partial | MVID content hash (V0)                                |         |
 | `#Blob`                                        | partial | partial |                                                       |         |
 | 4-byte heap index widths                       | done    | partial | Writer ignores widths in several columns              |         |
 
@@ -96,8 +97,8 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 
 | Feature                                         | Write status | Fixture |
 |-------------------------------------------------|--------------|---------|
-| TypeAttributes (visibility, layout, semantics)  | none (0)     |         |
-| MethodAttributes and MethodImplAttributes       | none (fixed) |         |
+| TypeAttributes (visibility, layout, semantics)  | partial (from keywords) |         |
+| MethodAttributes and MethodImplAttributes       | partial (from keywords) |         |
 | FieldAttributes                                 | none         |         |
 | ParamAttributes                                 | none         |         |
 | AssemblyFlags and AssemblyHashAlgorithm         | none         |         |
@@ -108,7 +109,7 @@ Parse ilasm keyword lists (`(public static hidebysig)`) into these flag values i
 
 ## Method bodies and IL (II.25.4, Partition III)
 
-Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes, tiny headers only, no locals, and no exception handling.
+Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes; tiny and fat headers; no locals; no exception handling.
 
 ## Module and type model
 
@@ -126,7 +127,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes, tiny headers onl
 | Custom attributes                                          | none    |         |
 | P/Invoke                                                   | none    |         |
 | Multiple assembly references with versions and public key tokens | none |       |
-| Entry point token taken from `.entrypoint`                 | none    |         |
+| Entry point token taken from `.entrypoint`                 | done    | nano    |
 | Static data (`.data`, FieldRVA)                            | none    |         |
 | Embedded managed resources                                 | none    |         |
 
@@ -136,13 +137,13 @@ Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes, tiny headers onl
 |------------------------------------------------------|---------|---------|---------|
 | PE32, x86 `ILONLY` EXE                               | done    | partial |         |
 | DLL output (`IMAGE_FILE_DLL`, `_CorDllMain`)         | n/a     | none    |         |
-| PE32+ (AMD64, ARM64), no import stub needed          | out of scope | out of scope |     |
+| PE32+ (AMD64, ARM64), no import stub needed          | partial (AMD64, checked by hand) | out of scope |     |
 | AnyCPU and `32BITPREFERRED`                          | n/a     | none    |         |
 | Subsystem GUI versus console                         | n/a     | none    |         |
 | Multiple sections (`.text`, `.rsrc`, `.reloc`, `.sdata`) | partial | partial (`.text`, `.reloc`) |  |
-| Sections of any size (no 0x400 limit)                | done    | none    |         |
+| Sections of any size (no 0x400 limit)                | done    | partial |         |
 | Base relocations generated from fixups               | n/a     | partial |         |
-| Deterministic timestamp and MVID                     | n/a     | none    |         |
+| Deterministic timestamp and MVID                     | n/a     | done    | nano    |
 | Debug directory and portable PDB                     | out of scope | out of scope |     |
 | Win32 resources (version info, manifest)             | none    | none    |         |
 | Strong-name signature                                | out of scope | out of scope |     |
@@ -150,7 +151,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes, tiny headers onl
 
 ## Suggested order
 
-1. Entry point token, flags, multiple TypeRefs and AssemblyRefs, `#US` with `ldstr` (smallest change that makes "hello world" real).
+1. `#US` with `ldstr` is next (smallest change that makes "hello world" real). Entry point token, flags, and multiple TypeRefs and AssemblyRefs are done.
 2. Fields, `.ctor`, instance methods, `newobj`, locals and fat bodies, then branching and EH.
 3. Multiple types with namespaces, extends, interfaces, nested types.
 4. Value types, enums, arrays, static data.

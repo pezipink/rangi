@@ -29,6 +29,7 @@ internal static class Program
         DumpMemberRefs(md, sb);
         DumpAssembly(md, sb);
         DumpAssemblyRefs(md, sb);
+        DumpMethodSpecs(md, sb);
 
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
         using var stdout = Console.OpenStandardOutput();
@@ -150,6 +151,20 @@ internal static class Program
                 $"Name={Str(md, ar.Name)}",
                 $"Culture={Str(md, ar.Culture)}",
                 $"HashValue={BlobHex(md, ar.HashValue)}");
+        }
+    }
+
+    private static void DumpMethodSpecs(MetadataReader md, StringBuilder sb)
+    {
+        int n = md.GetTableRowCount(TableIndex.MethodSpec);
+        if (n == 0) return;
+        Header(sb, "MethodSpec", n);
+        for (int i = 1; i <= n; i++)
+        {
+            var ms = md.GetMethodSpecification(MetadataTokens.MethodSpecificationHandle(i));
+            Row(sb, "MethodSpec", i,
+                $"Method={Token(ms.Method)}",
+                $"Instantiation={BlobHex(md, ms.Signature)}");
         }
     }
 

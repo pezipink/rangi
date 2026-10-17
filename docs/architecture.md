@@ -25,8 +25,9 @@ Baseline behaviour: `racket experiments/nano.rkt` writes a 2048-byte image that 
 
 Known defects:
 
-* The `#-` (uncompressed) stream name is rejected with `unknown cli metadata stream`.
-* The `HeapSizes` 0x20/0x40 bits (extra data) are ignored.
+* The `#-` (uncompressed) stream name is rejected with `unknown cli metadata stream`. SRM reads it as a table stream with the same row layout, and it accepts pointer tables there. See [verification.md](plans/verification.md#spec-sources-and-discovery).
+* Unknown streams such as `#!` (in NGEN native images) are rejected. SRM skips them.
+* The `HeapSizes` extra-data bit (0x40) is ignored, so the 4 bytes after the row counts are not skipped (untested). SRM skips them. Bit 0x20 is not defined by the spec or by SRM.
 * Row layouts are written by hand and duplicated in the writer.
 
 Fixed and covered by tests: PE32+ parsing, the table-id switch for the pointer, ENC, and Assembly processor/OS tables (previously an error), `standalonesig`, `HasCustomAttribute` (`declsecurity`), public type visibility (`flags & 0x7`), the port leak, and the missing-Assembly case (`read-assembly-meta` returns `#f`). `read-file` reads the file once and does not cache, so each call costs one read.
