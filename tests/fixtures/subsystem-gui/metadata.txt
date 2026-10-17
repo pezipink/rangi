@@ -1,0 +1,13 @@
+Module rows=1
+  Module[1] Name="subsystem-gui.exe" Mvid=2d913cb192000866e45a47062e3c1810
+TypeRef rows=1
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+TypeDef rows=2
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+MethodDef rows=1
+  MethodDef[1] Rva=8628 ImplFlags=0 Flags=22 Name="main" Signature=000008 Params=[] Il=1d2a
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

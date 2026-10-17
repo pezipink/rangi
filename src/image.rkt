@@ -42,6 +42,12 @@
 (define (image-layout-report m [file-name "image.exe"])
   (layout-report (plan-image (lower-module m) file-name #:dll? (module-model-dll? m))))
 
+(define (pe-subsystem name)
+  (case name
+    [(console) subsystem-windows-cui]
+    [(windows) subsystem-windows-gui]
+    [else (error 'pe-subsystem "unknown subsystem ~a" name)]))
+
 ; places every chunk and returns the placed image, without writing a file
 (define (plan-image p file-name #:dll? [dll? #f])
   (define asm-name (regexp-replace #rx"[.][^.]*$" file-name ""))
@@ -57,7 +63,8 @@
     (mscoree-chunks fmt #:dll? dll?))
   (define cli-header
     (cli-header-chunk #:metadata-size (bytes-length (chunk-bytes md))
-                      #:entry-rid entry-rid))
+                      #:entry-rid entry-rid
+                      #:flags (cli-platform-flags (cli-program-platform p))))
   (define body-chunks
     (for/list ([b (in-list bodies)] [i (in-naturals)])
       (chunk (method-sym i) dword-align b '())))
@@ -68,11 +75,12 @@
 
   (define chars-base (if (eq? fmt 'pe32+) pe32plus-characteristics pe32-characteristics))
   (define chars (if dll? (bitwise-ior chars-base image-file-dll) chars-base))
+  (define subsystem (pe-subsystem (cli-program-subsystem p)))
   (define params
     (if (eq? fmt 'pe32+)
-        (image-params 'pe32+ machine-amd64 chars subsystem-windows-cui
+        (image-params 'pe32+ machine-amd64 chars subsystem
                       default-dll-characteristics (hash-ref image-bases fmt) section-align file-align)
-        (image-params 'pe32 machine-i386 chars subsystem-windows-cui
+        (image-params 'pe32 machine-i386 chars subsystem
                       default-dll-characteristics (hash-ref image-bases fmt) section-align file-align)))
   ; the relocation table holds the addresses of .text, so lay out .text before building it
   (define reloc

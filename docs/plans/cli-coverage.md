@@ -145,8 +145,8 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | PE32, x86 `ILONLY` EXE                               | done    | partial |         |
 | DLL output (`IMAGE_FILE_DLL`, `_CorDllMain`)         | n/a     | done    | dll-output |
 | PE32+ (AMD64, ARM64), import stub `movabs`+DIR64    | partial (AMD64 writer via `nano-x64`; ARM64 out of scope) | out of scope |     |
-| AnyCPU and `32BITPREFERRED`                          | n/a     | none    |         |
-| Subsystem GUI versus console                         | n/a     | none    |         |
+| AnyCPU, `32BITREQUIRED`, and `32BITPREFERRED` (`.platform anycpu\|x86\|32bitpreferred`) | n/a | done | platform-x86 |
+| Subsystem GUI versus console (`.subsystem console\|windows`) | n/a | done | subsystem-gui |
 | Multiple sections (`.text`, `.rsrc`, `.reloc`, `.sdata`) | partial | partial (`.text`, `.reloc`) |  |
 | Sections of any size (no 0x400 limit)                | done    | done    | text-over-400, text-over-2000 |
 | Base relocations generated from fixups               | n/a     | partial |         |
