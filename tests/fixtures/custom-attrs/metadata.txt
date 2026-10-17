@@ -1,0 +1,30 @@
+Module rows=1
+  Module[1] Name="custom-attrs.exe" Mvid=7f5ee124b0f31fa1bde32c52a6368a48
+TypeRef rows=4
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+  TypeRef[3] ResolutionScope=0x23000001 Name="AssemblyTitleAttribute" Namespace="System.Reflection"
+  TypeRef[4] ResolutionScope=0x23000001 Name="ObsoleteAttribute" Namespace="System"
+TypeDef rows=4
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Tag" Namespace="" Extends=0x01000001 Fields=[] Methods=[2..2]
+  TypeDef[4] Flags=1 Name="Widget" Namespace="" Extends=0x01000001 Fields=[] Methods=[3..4]
+MethodDef rows=4
+  MethodDef[1] Rva=8896 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=2804000006280100000a2a
+  MethodDef[2] Rva=8908 ImplFlags=0 Flags=6150 Name=".ctor" Signature=200001 Params=[] Il=02280200000a2a
+  MethodDef[3] Rva=8916 ImplFlags=0 Flags=6150 Name=".ctor" Signature=200001 Params=[] Il=02280200000a2a
+  MethodDef[4] Rva=8924 ImplFlags=0 Flags=22 Name="Get" Signature=000008 Params=[] Il=1f2a2a
+MemberRef rows=4
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+  MemberRef[2] Parent=0x01000001 Name=".ctor" Signature=200001
+  MemberRef[3] Parent=0x01000003 Name=".ctor" Signature=2001010e
+  MemberRef[4] Parent=0x01000004 Name=".ctor" Signature=2001010e
+CustomAttribute rows=3
+  CustomAttribute[1] Parent=0x20000001 Type=0x0a000003 Value=01000572616e67690000
+  CustomAttribute[2] Parent=0x06000004 Type=0x06000002 Value=01000000
+  CustomAttribute[3] Parent=0x02000004 Type=0x0a000004 Value=01000572616e67690000
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
