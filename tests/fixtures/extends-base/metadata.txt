@@ -1,0 +1,25 @@
+Module rows=1
+  Module[1] Name="extends-base.exe" Mvid=14964ccc27c3e79c37a576b7c86bfbc8
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=4
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Derived" Namespace="" Extends=0x02000004 Fields=[] Methods=[2..3]
+  TypeDef[4] Flags=1 Name="Base" Namespace="" Extends=0x01000001 Fields=[1..1] Methods=[4..5]
+Field rows=1
+  Field[1] Flags=6 Name="weight" Signature=0608
+MethodDef rows=5
+  MethodDef[1] Rva=8816 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1f157302000006256f05000006280100000a6f03000006280100000a1b73020000066f05000006280100000a2a
+  MethodDef[2] Rva=8864 ImplFlags=0 Flags=6150 Name=".ctor" Signature=20010108 Params=[] Il=020328040000062a
+  MethodDef[3] Rva=8876 ImplFlags=0 Flags=6 Name="Twice" Signature=200008 Params=[] Il=027b01000004027b01000004582a
+  MethodDef[4] Rva=8892 ImplFlags=0 Flags=6150 Name=".ctor" Signature=20010108 Params=[] Il=02280200000a02037d010000042a
+  MethodDef[5] Rva=8908 ImplFlags=0 Flags=6 Name="Get" Signature=200008 Params=[] Il=027b010000042a
+MemberRef rows=2
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+  MemberRef[2] Parent=0x01000001 Name=".ctor" Signature=200001
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

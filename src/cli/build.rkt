@@ -70,7 +70,7 @@
   (for ([td (in-list tds)] [fstart (in-list field-starts)] [start (in-list starts)])
     (define ext (tdef-extends td))
     (add-row! tb 'typedef (tdef-flags td) (s (tdef-name td)) (s (tdef-ns td))
-              (if ext (coded-encode 'typedeforref 'typeref ext) 0)
+              (if ext (coded-encode 'typedeforref (car ext) (cdr ext)) 0)
               fstart
               start))
   (for ([f (in-list (append-map tdef-fields tds))])

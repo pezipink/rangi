@@ -18,7 +18,9 @@
 ; The front end's output. It holds names and instructions as written, with no tokens,
 ; heap indexes, or flag bits. cli/lower.rkt resolves those.
 (struct module-model (asm-refs classes module-name format))
-(struct class-decl (flags name gparams methods fields))
+; extends is the base type as written: a bare symbol for a class in this module, (asm ty) for an
+; external class, or #f for the default System.Object (II.22.37).
+(struct class-decl (flags name gparams extends methods fields))
 ; A field (II.22.15). flags are FieldAttributes keywords; type is a type form (II.22.15).
 (struct field-decl (flags type name) #:transparent)
 ; handlers: list of eh-clause in source order. maxstack is #f when there is no .maxstack.
@@ -197,6 +199,19 @@
      (field-decl flags type name)]
     [_ (error 'rangi "malformed .field in ~a: ~s" class-name node)]))
 
+; Class clauses between the name and the body: .typarams declares generic parameters, and
+; .extends names the base class (II.22.37). Each may appear at most once.
+(define (class-clauses name clauses)
+  (for/fold ([tp #f] [ext #f] #:result (values tp ext)) ([c (in-list clauses)])
+    (match c
+      [(cons '.typarams _)
+       (when tp (error 'rangi "duplicate .typarams in class ~a" name))
+       (values c ext)]
+      [(list '.extends base)
+       (when ext (error 'rangi "duplicate .extends in class ~a" name))
+       (values tp base)]
+      [_ (error 'rangi "unsupported class clause ~s in ~a" c name)])))
+
 (define (parse-il program)
   (define asm-refs '())
   (define asm-def? #f)
@@ -224,10 +239,9 @@
          (unless (memq f '(pe32 pe32+)) (error 'rangi "unknown .format ~a, expected pe32 or pe32+" f))
          (set! fmt f)
          acc]
-        [(list '.class flags name body)
-         (cons (list flags name #f body) acc)]
-        [(list '.class flags name (and tp (cons '.typarams _)) body)
-         (cons (list flags name tp body) acc)]
+        [(list '.class flags name clause ... body)
+         (define-values (tp ext) (class-clauses name clause))
+         (cons (list flags name tp ext body) acc)]
         [_ (error 'rangi "unsupported top-level directive ~s" node)])))
 
   (when (check-duplicates (map cadr raw-classes))
@@ -236,19 +250,22 @@
   ; <Module> is always TypeDef row 1. Its methods move to a generated Program class,
   ; since the CLR rejects entry points declared on <Module>.
   (define module-cls
-    (or (findf (class-named? '<Module>) raw-classes) (list '() '<Module> #f '())))
+    (or (findf (class-named? '<Module>) raw-classes) (list '() '<Module> #f #f '())))
   (define others (remove module-cls raw-classes))
-  (define moved? (pair? (cadddr module-cls)))
+  (define module-body (list-ref module-cls 4))
+  (define moved? (pair? module-body))
   (when (and moved? (findf (class-named? 'Program) others))
     (error 'rangi "class Program clashes with the holder generated for <Module> methods"))
   (define ordered
-    (append (list (if moved? (list (car module-cls) '<Module> (caddr module-cls) '()) module-cls))
-            (if moved? (list (list '() 'Program #f (cadddr module-cls))) '())
+    (append (list (if moved?
+                      (list (car module-cls) '<Module> (caddr module-cls) (cadddr module-cls) '())
+                      module-cls))
+            (if moved? (list (list '() 'Program #f #f module-body)) '())
             others))
 
   (define classes
     (for/list ([cls (in-list ordered)])
-      (match-define (list flags name tp body) cls)
+      (match-define (list flags name tp ext body) cls)
       (define gparams (parse-typarams name tp (typarams-count tp) 0))
       (define ncls (length gparams))
       (define fields
@@ -259,7 +276,7 @@
           (parse-method name node ncls)))
       (when (check-duplicates (map field-decl-name fields))
         (error 'rangi "duplicate field ~a in ~a" (check-duplicates (map field-decl-name fields)) name))
-      (class-decl flags name gparams methods fields)))
+      (class-decl flags name gparams ext methods fields)))
 
   (define entries
     (for*/list ([c (in-list classes)] [m (in-list (class-decl-methods c))] #:when (method-decl-entry? m))

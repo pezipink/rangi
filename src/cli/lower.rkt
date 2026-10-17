@@ -27,7 +27,8 @@
 ; is (cons 'methoddef|'memberref rid); a genericparam owner is (cons 'methoddef rid).
 (struct cli-program (asm-refs typerefs memberrefs typespecs methodspecs genericparams
                      typedefs module-name entry-rid format standalone-sigs us-heap))
-; fields are the TypeDef's Field rows, in row order (II.22.15).
+; fields are the TypeDef's Field rows, in row order (II.22.15). extends is (typedef . rid),
+; (typeref . rid), or #f for an interface or <Module> (II.22.37).
 (struct tdef (flags name ns extends methods fields))
 (struct mdef (name flags sig body entry?))
 ; A Field row (II.22.15): flags are FieldAttributes bits, sig is a FieldSig blob.
@@ -163,6 +164,39 @@
 (define (mscorlib-rid asm-refs)
   (or (hash-ref (interner-table asm-refs) "mscorlib" #f)
       (error 'rangi "System.Object requires an (.assembly extern mscorlib ...) reference")))
+
+; Extends of a TypeDef, as a tagged pair: (typedef . rid) for a class in this module, or
+; (typeref . rid) for an external class. A class without .extends derives from System.Object.
+; Interfaces and <Module> have no base.
+(define (lower-extends cx cls decls)
+  (define name (class-decl-name cls))
+  (define base (class-decl-extends cls))
+  (cond
+    [(or (eq? name '<Module>) (memq 'interface (class-decl-flags cls)))
+     (when base (error 'rangi "~a cannot have a base class" name))
+     #f]
+    [(not base)
+     (cons 'typeref (intern! (ctx-typerefs cx) (list (mscorlib-rid (ctx-asm-refs cx)) "System" "Object")))]
+    [(symbol? base)
+     (define target (hash-ref decls base #f))
+     (unless target (error 'rangi "~a extends unknown class ~a" name base))
+     (when (memq 'interface (class-decl-flags target))
+       (error 'rangi "~a cannot extend interface ~a" name base))
+     (when (eq? base '<Module>) (error 'rangi "~a cannot extend <Module>" name))
+     (check-no-cycle! name base decls)
+     (cons 'typedef (module-class-rid cx base))]
+    [else
+     (define-values (asm ty) (asm-type-parts base))
+     (cons 'typeref (typeref-rid! cx asm ty 0))]))
+
+; Follows the same-module base chain from base. Reaching name again is an inheritance cycle.
+(define (check-no-cycle! name base decls)
+  (let loop ([b base] [seen (list name)])
+    (cond
+      [(memq b seen) (error 'rangi "cyclic inheritance involving ~a" name)]
+      [(and (symbol? b) (hash-ref decls b #f))
+       => (lambda (c) (loop (class-decl-extends c) (cons b seen)))]
+      [else (void)])))
 
 ; ---------------------------------------------------------------------------
 ; instructions and bodies
@@ -756,6 +790,7 @@
       (add1 next)))
   (define cx (ctx asm-refs typerefs memberrefs typespecs methodspecs standalone-sigs us-heap
                   class-rids method-rids field-rids))
+  (define class-decls (for/hasheq ([cls (in-list classes)]) (values (class-decl-name cls) cls)))
   (define-values (tdefs gps)
     (for/fold ([tdefs '()] [gps '()] [next-rid 1]
                #:result (values (reverse tdefs) (append* (reverse gps))))
@@ -763,10 +798,7 @@
       (define name (class-decl-name cls))
       (define flags (class-decl-flags cls))
       (define-values (ns short) (split-type-name name))
-      (define extends
-        (cond
-          [(or (eq? name '<Module>) (memq 'interface flags)) #f]
-          [else (intern! typerefs (list (mscorlib-rid asm-refs) "System" "Object"))]))
+      (define extends (lower-extends cx cls class-decls))
       (define fdefs
         (for/list ([fd (in-list (class-decl-fields cls))])
           (fdef (symbol->string (field-decl-name fd))
