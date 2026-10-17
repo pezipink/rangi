@@ -3,9 +3,10 @@
 (require racket/port)
 (require "pe/read.rkt")
 (require "private/binary.rkt")
+(require "cli/schema.rkt")
 ; read-only accessors for tests that decode table rows. row decoding stays out of the reader,
 ; so the lazy path used by the macro expander is unchanged.
-(provide read-file get-public-typedefs read-assembly-meta
+(provide read-file get-public-typedefs read-assembly-meta read-row
          asm-reader-raw asm-reader-string-index-size asm-reader-blob-index-size
          asm-reader-guid-index-size asm-reader-encoding-sizes asm-reader-table-attributes
          asm-reader-get-string asm-reader-resolve-rva asm-reader-string-heap asm-reader-blob-heap
@@ -238,54 +239,10 @@
                [count1 (+ count 1)])
           (if (equal? target masked)
               (let ([type
-                     (case i
-                       [(#x0) 'module]
-                       [(#x1) 'typeref]
-                       [(#x2) 'typedef]
-                       [(#x4) 'field]
-                       [(#x6) 'methoddef]
-                       [(#x8) 'param]
-                       [(#x9) 'interfaceimpl]
-                       [(#xA) 'memberref]
-                       [(#xB) 'constant]
-                       [(#xC) 'customattribute]
-                       [(#xD) 'fieldmarshal]
-                       [(#xE) 'declsecurity]
-                       [(#xF) 'classlayout]
-                       [(#x10) 'fieldlayout]
-                       [(#x11) 'standalonesig]
-                       [(#x12) 'eventmap]
-                       [(#x14) 'event]
-                       [(#x15) 'propertymap]
-                       [(#x17) 'property]
-                       [(#x18) 'methodsemantics]
-                       [(#x19) 'methodimpl]
-                       [(#x1A) 'moduleref]
-                       [(#x1B) 'typespec]
-                       [(#x1C) 'implmap]
-                       [(#x1D) 'fieldrva]                       
-                       [(#x20) 'assembly]
-                       [(#x23) 'assemblyref]
-                       [(#x26) 'file]
-                       [(#x27) 'exportedtype]
-                       [(#x28) 'manifestresource]
-                       [(#x29) 'nestedclass]
-                       [(#x2A) 'genericparam]
-                       [(#x2B) 'methodspec]
-                       [(#x2C) 'genericparamconstraint]
-                       [(#x03) 'fieldptr]
-                       [(#x05) 'methodptr]
-                       [(#x07) 'paramptr]
-                       [(#x13) 'eventptr]
-                       [(#x16) 'propertyptr]
-                       [(#x1E) 'enclog]
-                       [(#x1F) 'encmap]
-                       [(#x21) 'assemblyprocessor]
-                       [(#x22) 'assemblyos]
-                       [(#x24) 'assemblyrefprocessor]
-                       [(#x25) 'assemblyrefos]
-                       [else (error 'read-file "unknown cli metadata table 0x~x" i)]
-                       )])
+                     (let ([t (table-by-id i)])
+                       (if t
+                           (table-name t)
+                           (error 'read-file "unknown cli metadata table 0x~x" i)))])
                 (values count1 (cons (table-data type (read-u32-le port) count) tables)))
                     
               (values count tables))))])
@@ -301,138 +258,34 @@
   ; eg, a field might represent an index into typedef, typeref or typesec.
   ; it uses 3 bits to identify which table, and the rest of the index
   ; must have enough bits to locate a row in any of the 3 tables.
-  (define (max-rows-lookup to-search)
-    (for/fold ([max 0])
-              ([table table-order])
-    (let ([type (table-data-type table)]
-          [rows (table-data-row-count table)])
-      (if (member type to-search)
-          (if (> rows max) rows max)
-          max))))
-
-  ; the first set of encodings are just for simple table lookups.
-  ; in this case if the table has more rows than will fit into
-  ; 16 bits, then they are encoded with 32 bits, else 16 bits
-  (define encodings (make-hash))
-  (for ([td table-order])
-    (hash-set! encodings (table-data-type td) (if (<= (table-data-row-count td) #xFFFF) 2 4)))
-
-  ; now we have each of the special encodings that might look at more than one table.
-  ; the lower bits are used to determine which table it actually is, and therefore
-  ; those bits cannot be used to store the actual value. so the smaller 2 byte representation
-  ; will be where the max row count of the biggest table fits into the remaining bits.
-  ; 1 bit 
-  (hash-set! encodings 'hasfieldmarshal (if (<= (max-rows-lookup '(field param)) #x7FFF) 2 4))
-  (hash-set! encodings 'hassemantics (if (<= (max-rows-lookup '(event property)) #x7FFF) 2 4))
-  (hash-set! encodings 'methoddeforref (if (<= (max-rows-lookup '(methoddef memberref)) #x7FFF) 2 4))
-  (hash-set! encodings 'memberforwarded (if (<= (max-rows-lookup '(field methoddef)) #x7FFF) 2 4))
-  (hash-set! encodings 'typeormethoddef (if (<= (max-rows-lookup '(typedef methoddef)) #x7FFF) 2 4))
-  ; 2 bits
-  (hash-set! encodings 'typedeforref (if (<= (max-rows-lookup '(typedef typeref typespec)) #x3FFF) 2 4)) 
-  (hash-set! encodings 'hasconstant (if (<= (max-rows-lookup '(field param property)) #x3FFF) 2 4))
-  (hash-set! encodings 'hasdeclsecurity (if (<= (max-rows-lookup '(typedef methoddef assembly)) #x3FFF) 2 4))
-  (hash-set! encodings 'implementation (if (<= (max-rows-lookup '(file assemblyref exportedtype)) #x3FFF) 2 4)) 
-  (hash-set! encodings 'resolutionscope (if (<= (max-rows-lookup '(module moduleref assemblyref typeref)) #x3FFF) 2 4)) 
-  ; 3 bits
-  (hash-set! encodings 'memberrefparent (if (<= (max-rows-lookup '(typedef typeref moduleref methoddef typespec)) #x1FFF) 2 4))
-  ;  note this one has 3 'not used' tables in its tag encoding
-  (hash-set! encodings 'customattributetype (if (<= (max-rows-lookup '(methoddef memberref)) #x1FFF) 2 4))
-  
-  ; 5 bits
-  (hash-set!
-   encodings
-   'hascustomattribute
-   (if (<= (max-rows-lookup
-            '(methoddef field typeref typedef param interfaceimpl memberref module
-              declsecurity property event standalonesig moduleref typespec assembly
-               assemblyref file exportedtype manifestresource genericparam
-              genericparamconstraint methodspec))
-            #x7FF) 2 4)) ; 5 bits
-  
-  (define tables 
+  ; II.24.2.6: simple and coded index widths come from the schema (schema.rkt).
+  ; Absent tables have zero rows, so they never widen an index.
+  (define tables
     (for/hash ([td table-order])
       (values (table-data-type td) td)))
+  (define (rows-of name)
+    (let ([td (hash-ref tables name #f)])
+      (if td (table-data-row-count td) 0)))
+  (define encodings (make-hash))
+  (for ([td table-order])
+    (hash-set! encodings (table-data-type td) (simple-index-width (table-data-row-count td))))
+  (for ([k (in-list schema-coded-kinds)])
+    (hash-set! encodings (coded-kind-name k) (coded-index-width k rows-of)))
   (set-asm-reader-table-attributes! rdr tables)
   (set-asm-reader-encoding-sizes! rdr encodings)
   
   ;now we have everything we need to calculate the size of each table row,
   ;and therefore the actual size and offset of each table.
-  (define (calc-size items)
-    (apply
-     +
-     (map (λ (x)
-            (if (symbol? x)
-                ; an absent table has no rows, so a 2 byte simple index is correct for it
-                (hash-ref encodings x 2)
-                x)) items)))
-  
-  ;todo: not sure to use spec approach yet
-  ;(define specs (gen-table-specs string-size guid-size blob-size encodings))
-  ;(writeln specs)
-  
-  ;(writeln (format "metadata start ~a" (file-position port)))
   (define end-address
-    (let ([ss string-size]
-          [gs guid-size]
-          [bs blob-size])
-      (for/fold
-       ([address table-start])
-       ([table table-order])
-        (let* ([type (table-data-type table)]
-               [count (table-data-row-count table)]            
-               [row-size
-                (calc-size
-                 (case type
-                   ['module (list 2 ss gs gs gs)]
-                   ['typeref (list 'resolutionscope ss ss)]
-                   ['typedef (list 4 ss ss 'typedeforref 'field 'methoddef)]
-                   ['field (list 2 ss bs)]
-                   ['methoddef (list 4 2 2 ss bs 'param)]
-                   ['param (list 2 2 ss)]
-                   ['interfaceimpl (list 'typedef 'typedeforref)]
-                   ['memberref (list 'memberrefparent ss bs)]
-                   ['constant (list 1 1 'hasconstant bs)]
-                   ['customattribute (list 'hascustomattribute 'customattributetype bs)]
-                   ['fieldmarshal (list 'hasfieldmarshal bs)]
-                   ['declsecurity (list 2 'hasdeclsecurity bs)]
-                   ['classlayout (list 2 4 'typedef)]
-                   ['fieldlayout (list 4 'field)]
-                   ['eventmap (list 'typedef 'event)]
-                   ['event (list 2 ss 'typedeforref)]
-                   ['propertymap (list 'typedef 'property)]
-                   ['property (list 2 ss bs)]
-                   ['methodsemantics (list 2 'methoddef 'hassemantics)]
-                   ['methodimpl (list 'typedef 'methoddeforref 'methoddeforref)]
-                   ['moduleref (list ss)]
-                   ['typespec (list bs)]
-                   ['implmap (list 2 'memberforwarded ss 'moduleref)]
-                   ['fieldrva (list 4 'field)]
-                   ['assembly (list 4 2 2 2 2 4 bs ss ss)]
-                   ['assemblyref (list 2 2 2 2 4 bs ss ss bs)]
-                   ['file (list 4 ss bs)]
-                   ['exportedtype (list 4 4 ss ss 'implementation)]
-                   ['manifestresource (list 4 4 ss 'implementation)]
-                   ['nestedclass (list 'typedef 'typedef)]
-                   ['genericparam (list 2 2 'typeormethoddef ss)]
-                   ['methodspec (list 'methoddeforref bs)]
-                   ['genericparamconstraint (list 'genericparam 'typedeforref)]
-                   ['fieldptr (list 'field)]
-                   ['methodptr (list 'methoddef)]
-                   ['paramptr (list 'param)]
-                   ['eventptr (list 'event)]
-                   ['propertyptr (list 'property)]
-                   ['standalonesig (list bs)]
-                   ['enclog (list 4 4)]
-                   ['encmap (list 4)]
-                   ['assemblyprocessor (list 4)]
-                   ['assemblyos (list 4 4 4)]
-                   ['assemblyrefprocessor (list 4 'assemblyref)]
-                   ['assemblyrefos (list 4 4 4 'assemblyref)]
-                   [else (error 'read-file "unknown type ~a" type)]))]
-               )
-          (set-table-data-start-offset! table address)        
-          (set-table-data-row-size! table row-size)
-          (+ address (* row-size count))))))
+    (for/fold
+     ([address table-start])
+     ([table table-order])
+      (let* ([count (table-data-row-count table)]
+             [t (table-by-name (table-data-type table))]
+             [size (row-size t string-size blob-size guid-size rows-of)])
+        (set-table-data-start-offset! table address)
+        (set-table-data-row-size! table size)
+        (+ address (* size count)))))
 
   #;(writeln (format "total ~a"
                    ( apply + (map (λ (x) (* (table-data-row-size x) (table-data-row-count x))) table-order))
@@ -686,6 +539,61 @@
        (let ([port (open-input-bytes (asm-reader-raw rdr))])
          (file-position port (table-data-start-offset td))
          (parse-assembly-row rdr port))))
+
+; generic row decoder, 1-based rid. returns a vector with one entry per column:
+;   u8/u16/u32 -> integer, string -> string, guid -> 16 bytes (#f when null),
+;   blob -> bytes without its length prefix (#f when null),
+;   (index t) -> rid (0 when null), (coded k) -> (cons target-name rid) (#f when null).
+; the fast paths (get-public-typedefs) do not use this.
+(define (read-row rdr name rid)
+  (define t (or (table-by-name name) (error 'read-row "unknown table ~a" name)))
+  (define td (hash-ref (asm-reader-table-attributes rdr) name #f))
+  (unless td (error 'read-row "table ~a is not present" name))
+  (unless (<= 1 rid (table-data-row-count td))
+    (error 'read-row "row ~a out of range for ~a" rid name))
+  (define ss (asm-reader-string-index-size rdr))
+  (define bs (asm-reader-blob-index-size rdr))
+  (define gs (asm-reader-guid-index-size rdr))
+  (define (rows-of n)
+    (let ([other (hash-ref (asm-reader-table-attributes rdr) n #f)])
+      (if other (table-data-row-count other) 0)))
+  (define port (open-input-bytes (asm-reader-raw rdr)))
+  (file-position port (+ (table-data-start-offset td) (* (- rid 1) (table-data-row-size td))))
+  (define (read-heap-index width)
+    (read-uint-le width port))
+  (define (blob-at heap index)
+    (if (zero? index)
+        #f
+        (let* ([b0 (bytes-ref heap index)]
+               [len-size (cond [(zero? (bitwise-and b0 #x80)) 1]
+                               [(= (bitwise-and b0 #xC0) #x80) 2]
+                               [else 4])]
+               [len (for/fold ([acc (bitwise-and b0 (case len-size [(1) #x7F] [(2) #x3F] [else #x1F]))])
+                              ([i (in-range 1 len-size)])
+                      (+ (* acc 256) (bytes-ref heap (+ index i))))]
+               [start (+ index len-size)])
+          (subbytes heap start (+ start len)))))
+  (for/vector ([c (in-list (table-columns t))])
+    (define kind (column-kind c))
+    (define width (column-width kind ss bs gs rows-of))
+    (cond
+      [(symbol? kind)
+       (case kind
+         [(string) ((asm-reader-get-string rdr) (read-heap-index width))]
+         [(guid) (let ([index (read-heap-index width)])
+                   (if (zero? index)
+                       #f
+                       (subbytes (asm-reader-guid-heap rdr) (* (- index 1) 16) (* index 16))))]
+         [(blob) (blob-at (asm-reader-blob-heap rdr) (read-heap-index width))]
+         [else (read-uint-le width port)])]
+      [(eq? (car kind) 'index) (read-heap-index width)]
+      [else
+       (let ([value (read-heap-index width)])
+         (if (zero? value)
+             #f
+             (let-values ([(target rid) (coded-decode (coded-kind-by-name (cadr kind)) value)])
+               (unless target (error 'read-row "unused tag in ~a" (cadr kind)))
+               (cons target rid))))])))
 
 ;(define parsed (read-file "c:/temp/nano2.exe"))
 ;parsed
