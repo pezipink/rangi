@@ -31,8 +31,9 @@
                      typedefs module-name entry-rid format standalone-sigs us-heap
                      subsystem platform))
 ; fields are the TypeDef's Field rows, in row order (II.22.15). extends is (typedef . rid),
-; (typeref . rid), or #f for an interface or <Module> (II.22.37).
-(struct tdef (flags name ns extends methods fields))
+; (typeref . rid), or #f for an interface or <Module> (II.22.37). enclosing is the TypeDef rid of
+; the enclosing class for a nested type, or #f (II.22.32).
+(struct tdef (flags name ns extends methods fields enclosing))
 (struct mdef (name flags sig body entry?))
 ; A Field row (II.22.15): flags are FieldAttributes bits, sig is a FieldSig blob. const is #f, or
 ; (element-code . value-bytes) for a literal field's Constant row (II.22.9).
@@ -59,8 +60,34 @@
 ; ---------------------------------------------------------------------------
 ; flags and types
 
-(define (typedef-flags kws)
-  (for/fold ([acc 0]) ([k (in-list kws)])
+; Visibility of a nested type (II.22.37, NestedPublic..NestedFamORAssem). The values are the
+; TypeAttributes bits, which differ from the top-level access bits.
+(define nested-access-flags
+  '((public . #x2) (private . #x3) (family . #x4) (assembly . #x5)
+    (famandassem . #x6) (famorassem . #x7)))
+
+; A nested class is written "nested <access>" (II.10.3). With no nested keyword it is nested
+; private, as ilasm emits it. A top-level class takes no nested keyword and no bare
+; public or private, which are top-level access bits.
+(define (typedef-flags kws nested?)
+  (define nested-tail (memq 'nested kws))
+  (when (and nested-tail (not nested?))
+    (error 'rangi "nested visibility on a top-level class"))
+  (define visibility
+    (cond
+      [(not nested?) 0]
+      [(not nested-tail) (cdr (assq 'private nested-access-flags))]
+      [(and (pair? (cdr nested-tail)) (assq (cadr nested-tail) nested-access-flags)) => cdr]
+      [else (error 'rangi "nested class needs an access keyword after nested, got ~s"
+                   (cdr nested-tail))]))
+  (define others
+    (let loop ([ks kws])
+      (cond [(null? ks) '()]
+            [(eq? (car ks) 'nested) (if (pair? (cdr ks)) (cddr ks) '())]
+            [else (cons (car ks) (loop (cdr ks)))])))
+  (when (and nested? (for/or ([k (in-list others)]) (memq k '(public private notpublic))))
+    (error 'rangi "bare access keyword in nested class, use nested public, nested private, ..."))
+  (for/fold ([acc visibility]) ([k (in-list others)])
     (bitwise-ior
      acc
      (case k
@@ -77,6 +104,7 @@
        [(autochar) #x20000]
        [(beforefieldinit) #x100000]
        [else (error 'rangi "unsupported class flag ~a" k)]))))
+
 
 (define access-flags
   '((public . #x6) (private . #x1) (family . #x4) (assembly . #x3)
@@ -851,7 +879,16 @@
               ([cls (in-list classes)])
       (define name (class-decl-name cls))
       (define flags (class-decl-flags cls))
-      (define-values (ns short) (split-type-name name))
+      (define enclosing (class-decl-enclosing cls))
+      (define enclosing-rid
+        (and enclosing
+             (or (hash-ref class-rids enclosing #f)
+                 (error 'rangi "nested class ~a has no enclosing class ~a" name enclosing))))
+      ; a nested type's TypeDef has an empty namespace and a simple name (II.22.37)
+      (define-values (ns short)
+        (if enclosing
+            (values "" (cadr (regexp-match #rx"([^/]*)$" (symbol->string name))))
+            (split-type-name name)))
       (define extends (lower-extends cx cls class-decls))
       (define fdefs
         (for/list ([fd (in-list (class-decl-fields cls))])
@@ -863,7 +900,9 @@
                 (encode-field-sig (lower-type cx '(0 . 0) (field-decl-type fd)))
                 const)))
       (define-values (mdefs rows) (encode-methods cx name next-rid (class-decl-methods cls)))
-      (values (cons (tdef (typedef-flags flags) short ns extends mdefs fdefs) tdefs)
+      (values (cons (tdef (typedef-flags flags (and enclosing #t)) short ns extends mdefs fdefs
+                          enclosing-rid)
+                    tdefs)
               (cons rows gps)
               (+ next-rid (length mdefs)))))
   (define entry-rid

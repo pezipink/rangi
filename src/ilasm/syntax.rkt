@@ -26,7 +26,9 @@
 (struct asm-ref (name version token) #:transparent)
 ; extends is the base type as written: a bare symbol for a class in this module, (asm ty) for an
 ; external class, or #f for the default System.Object (II.22.37).
-(struct class-decl (flags name gparams extends methods fields))
+; name is the full name: Outer/Inner for a nested class (II.10.3). enclosing is the full name of
+; the enclosing class, or #f for a top-level class.
+(struct class-decl (flags name gparams extends methods fields enclosing))
 ; A field (II.22.15). flags are FieldAttributes keywords; type is a type form (II.22.15).
 ; init is #f, or (prim . value) for a literal field: an integral primitive and its integer value.
 (struct field-decl (flags type name init) #:transparent)
@@ -274,6 +276,41 @@
        (loop rest ver (parse-ref-token who hex))]
       [_ (error 'rangi "unsupported .assembly extern clause ~s in ~a" b who)])))
 
+; A nested class is a .class node inside a class body (II.10.3). Its simple name may not contain
+; . (a namespace separator) or / (the separator of a full name such as Outer/Inner).
+(define (nested-class-node? node)
+  (and (pair? node) (eq? (car node) '.class)))
+
+; The (flags name tp ext body) shape of a top-level class, for a nested .class node.
+(define (nested-class-raw node)
+  (match node
+    [(list '.class (? list? flags) (? symbol? name) clause ... (? list? body))
+     (unless (regexp-match? #rx"^[^./]+$" (symbol->string name))
+       (error 'rangi "nested class name ~a may not contain . or /" name))
+     (define-values (tp ext) (class-clauses name clause))
+     (list flags name tp ext body)]
+    [_ (error 'rangi "malformed nested class ~s" node)]))
+
+; A class followed by its nested classes in source order (II.10.3). enclosing is the full name
+; of the enclosing class, or #f. A nested class's full name is Outer/Inner.
+(define (flatten-class raw enclosing)
+  (match-define (list flags simple tp ext body) raw)
+  (define name (if enclosing (string->symbol (format "~a/~a" enclosing simple)) simple))
+  (define gparams (parse-typarams name tp (typarams-count tp) 0))
+  (define ncls (length gparams))
+  (define members (filter (λ (node) (not (nested-class-node? node))) body))
+  (define fields
+    (for/list ([node (in-list members)] #:when (and (pair? node) (eq? (car node) '.field)))
+      (parse-field name node ncls)))
+  (define methods
+    (for/list ([node (in-list members)] #:unless (and (pair? node) (eq? (car node) '.field)))
+      (parse-method name node ncls)))
+  (when (check-duplicates (map field-decl-name fields))
+    (error 'rangi "duplicate field ~a in ~a" (check-duplicates (map field-decl-name fields)) name))
+  (cons (class-decl flags name gparams ext methods fields enclosing)
+        (append* (for/list ([node (in-list body)] #:when (nested-class-node? node))
+                   (flatten-class (nested-class-raw node) name)))))
+
 (define (parse-il program)
   (define asm-refs '())
   (define asm-def? #f)
@@ -325,6 +362,8 @@
          (set! platform p)
          acc]
         [(list '.class flags name clause ... body)
+         (when (regexp-match? #rx"/" (symbol->string name))
+           (error 'rangi "class name ~a may not contain /" name))
          (define-values (tp ext) (class-clauses name clause))
          (cons (list flags name tp ext body) acc)]
         [_ (error 'rangi "unsupported top-level directive ~s" node)])))
@@ -338,6 +377,8 @@
     (or (findf (class-named? '<Module>) raw-classes) (list '() '<Module> #f #f '())))
   (define others (remove module-cls raw-classes))
   (define module-body (list-ref module-cls 4))
+  (when (ormap nested-class-node? module-body)
+    (error 'rangi "<Module> cannot have nested classes"))
   (define moved? (pair? module-body))
   (when (and moved? (findf (class-named? 'Program) others))
     (error 'rangi "class Program clashes with the holder generated for <Module> methods"))
@@ -348,20 +389,9 @@
             (if moved? (list (list '() 'Program #f #f module-body)) '())
             others))
 
-  (define classes
-    (for/list ([cls (in-list ordered)])
-      (match-define (list flags name tp ext body) cls)
-      (define gparams (parse-typarams name tp (typarams-count tp) 0))
-      (define ncls (length gparams))
-      (define fields
-        (for/list ([node (in-list body)] #:when (and (pair? node) (eq? (car node) '.field)))
-          (parse-field name node ncls)))
-      (define methods
-        (for/list ([node (in-list body)] #:unless (and (pair? node) (eq? (car node) '.field)))
-          (parse-method name node ncls)))
-      (when (check-duplicates (map field-decl-name fields))
-        (error 'rangi "duplicate field ~a in ~a" (check-duplicates (map field-decl-name fields)) name))
-      (class-decl flags name gparams ext methods fields)))
+  (define classes (append* (for/list ([cls (in-list ordered)]) (flatten-class cls #f))))
+  (when (check-duplicates (map class-decl-name classes))
+    (error 'rangi "duplicate class name ~a" (check-duplicates (map class-decl-name classes))))
 
   (define entries
     (for*/list ([c (in-list classes)] [m (in-list (class-decl-methods c))] #:when (method-decl-entry? m))
