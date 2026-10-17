@@ -34,7 +34,7 @@ Done:
 * V0 determinism: insertion-ordered rows and heaps, content-hash MVID, COFF timestamp 0.
 * V4 L5 structural lint (`tests/lib/pe-lint.rkt`, tested by `tests/image-lint-test.rkt`).
 * Writer rewrite: `<Module>` methods move to a generated `Program` class; `.entrypoint` sets the entry token; unknown IL raises; supported IL is `ret`, `add`, `ldc.i4`, and `call`.
-* Reader defects R1 to R10 fixed, except the two open items below. PE32 and PE32+ nano dumps match System.Reflection.Metadata. The mscorlib public type count matches (1521).
+* Reader defects R1 to R10 fixed, except the two open items below. PE32 and PE32+ nano dumps match System.Reflection.Metadata. The mscorlib public type count matches the SRM oracle (1520; the earlier 1521 figure was wrong, see `tests/read-bench-test.rkt`). Stream D baseline: lazy open median about 6.5 ms, enumerate public types median about 0.5 ms (20 runs, 4.7.1 mscorlib).
 * P3 bigger fixtures: `tests/fixtures/text-over-400` (`.text` VirtualSize 0x48E, 2 classes and 4 methods) and `tests/fixtures/text-over-2000` (`.text` 0x21A2, 8 classes and 64 methods). Both have fat IL bodies (code over 64 bytes, and `.maxstack 9` on some methods), and both pass PEVerify, ildasm, SRM, and the lint. `fixtures-test.rkt` asserts each `.text` stays above its threshold. The layout map (V5) is now in place.
 * Known writer gap: `call` only accepts MemberRef, so the non-entry methods in the bigger fixtures are never executed. They are checked by the oracles and lint only.
 
