@@ -39,7 +39,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x18 | MethodSemantics        | none    | none    | Sorted                                                   |         |
 | 0x19 | MethodImpl             | none    | none    | Sorted; explicit interface implementation                |         |
 | 0x1A | ModuleRef              | none    | none    | Needed for P/Invoke                                      |         |
-| 0x1B | TypeSpec               | partial | partial | Row helper and `read-row`; blob via `sigs.rkt` and reader; arrays pending |         |
+| 0x1B | TypeSpec               | partial | partial | Row helper and `read-row`; blob via `sigs.rkt` and reader; arrays pending | generic-calls |
 | 0x1C | ImplMap                | none    | none    | Sorted; P/Invoke                                         |         |
 | 0x1D | FieldRVA               | none    | none    | Sorted; static data, needs a `.sdata` or `.text` chunk   |         |
 | 0x1E | ENCLog                 | partial | n/a     | Count only                                               |         |
@@ -54,8 +54,8 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x27 | ExportedType           | none    | none    | Type forwarders                                          |         |
 | 0x28 | ManifestResource       | none    | none    | Embedded resources                                       |         |
 | 0x29 | NestedClass            | none    | none    | Sorted                                                   |         |
-| 0x2A | GenericParam           | partial | partial | Sorted; row helper and read; secondary sort key unverified |         |
-| 0x2B | MethodSpec             | partial | partial | Generic method instantiation. Rows read; `metadata-dump` prints the instantiation blob as hex; rows match SRM on mscorlib (656) |         |
+| 0x2A | GenericParam           | partial | partial | Sorted; written for module generic methods; secondary sort key unverified | generic-calls |
+| 0x2B | MethodSpec             | partial | partial | Generic method instantiation; written for `call` with `inst`. Rows match SRM on mscorlib (656) | generic-calls |
 | 0x2C | GenericParamConstraint | partial | partial | Sorted; row helper and read                              |         |
 
 ## Heaps and streams (II.24)
@@ -63,7 +63,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | Feature                                        | Read    | Write   | Notes                                                 | Fixture |
 |------------------------------------------------|---------|---------|-------------------------------------------------------|---------|
 | Metadata root, version string                  | partial | partial | Version hardcoded to `v4.0.30319`                     |         |
-| `#~` header, `Valid`, `Sorted`, `HeapSizes`    | partial | partial | Writer sets Sorted to 0; extra-data flag (0x40, 4 bytes after row counts) not read |         |
+| `#~` header, `Valid`, `Sorted`, `HeapSizes`    | partial | partial | Writer sets Sorted bits for present sorted tables (for example GenericParam); extra-data flag (0x40, 4 bytes after row counts) not read |         |
 | `#-` uncompressed stream                       | none    | n/a     | SRM reads it as a table stream and allows pointer tables. Not in the 6th-edition text; see [verification.md](verification.md#spec-sources-and-discovery) |         |
 | Unknown streams (for example `#!` in NGEN images) | none | n/a  | SRM skips them; the reader rejects them             |         |
 | `#Strings` (UTF-8, dedup)                      | partial | partial | UTF-8, dedup in insertion order; no suffix sharing    |         |
@@ -78,7 +78,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 |------------------------------------------------------------------|------|---------|---------|
 | MethodDefSig and MethodRefSig (default, `HASTHIS`, `EXPLICITTHIS`) (II.23.2.1) | partial | partial |         |
 | `VARARG` call convention and sentinel                            | none | none    |         |
-| Generic method sig (`GENERIC`, `GenParamCount`) (II.23.2.1)      | partial | partial |         |
+| Generic method sig (`GENERIC`, `GenParamCount`) (II.23.2.1)      | partial | partial | generic-calls |
 | FieldSig (0x06)                                                  | none | none    |         |
 | PropertySig (0x08)                                               | none | none    |         |
 | LocalVarSig (0x07), including `PINNED` and `BYREF` (II.23.2.6)   | partial | partial |         |
@@ -87,9 +87,9 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | `CLASS` and `VALUETYPE` with TypeDefOrRefOrSpec encoded tokens   | partial | partial |         |
 | `SZARRAY` (`ARRAY` rank, sizes, lower bounds not yet)            | partial | partial |         |
 | `PTR`, `BYREF` (`FNPTR`, `TYPEDBYREF` not yet)                   | partial | partial |         |
-| `GENERICINST`, `VAR`, `MVAR`                                     | partial | partial |         |
+| `GENERICINST`, `VAR`, `MVAR`                                     | partial | partial | generic-calls |
 | `CMOD_REQD`, `CMOD_OPT`                                          | none | none    |         |
-| TypeSpec and MethodSpec blobs (II.23.2.14, II.23.2.15)           | partial | partial |         |
+| TypeSpec and MethodSpec blobs (II.23.2.14, II.23.2.15)           | partial | partial | generic-calls |
 | Custom attribute value blobs (II.23.3)                           | none | none    |         |
 | Marshalling descriptors (II.23.4)                                | none | none    |         |
 
@@ -122,7 +122,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes; tiny and fat hea
 | Interfaces and implementation                              | none    |         |
 | Nested types                                               | none    |         |
 | Properties and events                                      | none    |         |
-| Generic types and methods                                  | none    |         |
+| Generic types and methods                                  | partial | generic-calls |
 | Value types and enums                                      | none    |         |
 | Custom attributes                                          | none    |         |
 | P/Invoke                                                   | none    |         |
