@@ -104,7 +104,7 @@ Deviations from the original plan, which said IL bytes should match:
 Pending differential fixtures (they have no `program.il` yet, or their features are not covered by the normaliser):
 
 * `arrays-sum`, `calls-multi`, `extends-base`, `instance-external-call`, `generic-calls`, `il-*`, `ops-*`, `text-over-*`, and `nano*` have no textual source. `generic-calls` also needs MethodSpec normalisation, which is not written yet.
-* Value types and enums, interfaces, attributes, and DLLs are not on `main` (P5 open items). They are added with those features.
+* Value types and enums are on `main` (`value-types`, `enum-literals`) but have no differential fixture yet. Interfaces, attributes, and DLLs are not on `main` (P5 open items). They are added with those features.
 
 Differentially tested so far: `ldstr-hello`, `switch-dispatch`, `multi-types`, `static-fields`.
 
