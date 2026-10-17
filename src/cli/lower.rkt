@@ -7,7 +7,8 @@
          (only-in "sigs.rkt" encode-localvar-sig encode-method-sig encode-method-instantiation
                   encode-typespec encode-type primitive-names)
          (only-in "../il/encode.rkt" find-opcode opcode-named)
-         (only-in "../il/opcodes.rkt" opcode-operand)
+         (only-in "../il/opcodes.rkt" opcode-operand opcode-type)
+         (only-in racket/string string-prefix?)
          (only-in "../il/stack.rkt" compute-max-stack effect label-at
                   opcode-pop-count opcode-push-count opcode-flow-kind)
          (only-in "../il/labels.rkt" assemble-items assembly-code assembly-label-offset
@@ -238,10 +239,10 @@
      (bitwise-ior #x01000000 (typeref-rid! cx asm ty 0))]
     [_ (error 'rangi "array element type ~s is not supported" elem)]))
 
-; II.25.4.6: a catch handler starts with the exception object on the stack. finally and fault
-; handlers start with an empty stack (III.1.7.5).
+; II.25.4.6: a catch handler, and a filter block and its handler, start with the exception
+; object on the stack. finally and fault handlers start with an empty stack.
 (define (handler-depth clause)
-  (if (eq? (eh-clause-kind clause) 'catch) 1 0))
+  (if (memq (eh-clause-kind clause) '(catch filter)) 1 0))
 
 ; endfault has the same encoding as endfinally, 0xDC (III.4.5, III.4.6), so the front end
 ; accepts both and lowering sees only endfinally.
@@ -397,20 +398,122 @@
          [else (list (cadr item))]))
      (effect name (opcode-pop-count op) (opcode-push-count op) flow targets)]))
 
+; The node's instruction name, or #f for a label or a non-instruction.
+(define (node-op-name node)
+  (cond
+    [(symbol? node) (and (not (label-symbol? node)) node)]
+    [(and (pair? node) (symbol? (car node)) (not (eq? (car node) 'label))) (car node)]
+    [else #f]))
+
+(define (node-label-name node)
+  (cond
+    [(and (symbol? node) (label-symbol? node)) (label-name-of node)]
+    [(and (pair? node) (eq? (car node) 'label) (pair? (cdr node))) (cadr node)]
+    [else #f]))
+
+(define (prefix-op? name)
+  (define op (and name (find-opcode name)))
+  (and op (eq? (opcode-type op) 'Prefix)))
+
+; Partition III.2: which instruction each prefix may immediately precede. The spec states these
+; in prose, so the lists are transcribed here. unaligned. (III.2.5) and volatile. (III.2.6)
+; apply to indirect and field access; volatile. also covers static fields. tail. (III.2.4)
+; applies to calls. constrained. (III.2.1) applies to callvirt. readonly. (III.2.3) applies to
+; ldelema. no. (III.2.2) applies to type checks, element access, field access, and callvirt.
+(define (prefix-accepts? prefix target)
+  (define t (symbol->string target))
+  (define (memory-access?)
+    (or (string-prefix? t "ldind.")
+        (string-prefix? t "stind.")
+        (and (memq target '(ldfld stfld ldobj stobj initblk cpblk)) #t)))
+  (case prefix
+    [(unaligned.) (memory-access?)]
+    [(volatile.) (or (memory-access?) (and (memq target '(ldsfld stsfld)) #t))]
+    [(tail.) (and (memq target '(call calli callvirt)) #t)]
+    [(constrained.) (eq? target 'callvirt)]
+    [(readonly.) (eq? target 'ldelema)]
+    [(no.) (or (and (memq target '(castclass ldelema unbox ldelem stelem ldfld stfld callvirt
+                                   ldvirtftn))
+                    #t)
+               (string-prefix? t "ldelem.")
+               (string-prefix? t "stelem."))]
+    [else #t]))
+
+; A prefix may be followed by other prefixes. The first instruction after the chain is the one
+; each prefix applies to, so the chain must end in an instruction (III.2).
+; Labels occupy no bytes, so they are skipped. The tail. call must be followed by ret (III.2.4).
+(define (check-prefixes code)
+  (define v (list->vector code))
+  (define n (vector-length v))
+  (define (insn-index i)
+    (cond [(>= i n) #f]
+          [(node-label-name (vector-ref v i)) (insn-index (add1 i))]
+          [else i]))
+  (for ([node (in-vector v)] [i (in-naturals)])
+    (define prefix (node-op-name node))
+    (when (and prefix (prefix-op? prefix))
+      (define target-index
+        (let loop ([j (insn-index (add1 i))])
+          (cond [(not j) #f]
+                [(prefix-op? (node-op-name (vector-ref v j))) (loop (insn-index (add1 j)))]
+                [else j])))
+      (define target (and target-index (node-op-name (vector-ref v target-index))))
+      (unless target
+        (error 'rangi "prefix ~a must immediately precede an instruction" prefix))
+      (unless (prefix-accepts? prefix target)
+        (error 'rangi "prefix ~a cannot precede ~a" prefix target))
+      (when (eq? prefix 'tail.)
+        (define next (insn-index (add1 target-index)))
+        (unless (and next (eq? (node-op-name (vector-ref v next)) 'ret))
+          (error 'rangi "prefix tail. must be followed by ret after ~a" target))))))
+
+; A filter block (II.25.4.6) must come before its handler and end with endfilter (III.3.34).
+; The last instruction before the handler, skipping labels, must be endfilter.
+(define (check-filter-blocks code handlers)
+  (define v (list->vector code))
+  (define (index-of-label name)
+    (for/first ([node (in-vector v)] [i (in-naturals)]
+                #:when (eq? (node-label-name node) name))
+      i))
+  (for ([c (in-list handlers)] #:when (eq? (eh-clause-kind c) 'filter))
+    (define filter-label (eh-clause-class c))
+    (define handler-label (eh-clause-handler-start c))
+    (define fi (index-of-label filter-label))
+    (define hi (index-of-label handler-label))
+    (unless fi (error 'rangi "filter label ~a is not defined" filter-label))
+    (unless hi (error 'rangi "handler label ~a is not defined" handler-label))
+    (unless (< fi hi)
+      (error 'rangi "filter block ~a must come before its handler ~a" filter-label handler-label))
+    (define last-insn
+      (for/last ([i (in-range fi hi)] #:unless (node-label-name (vector-ref v i)))
+        (vector-ref v i)))
+    (unless (or (eq? last-insn 'endfilter) (equal? last-insn '(endfilter)))
+      (error 'rangi "filter block ~a must end with endfilter before handler ~a"
+             filter-label handler-label))))
+
 ; Lowers the instruction list to labels.rkt items and assembles them. Returns the assembly
 ; (code bytes and label offsets) and the maximum stack depth computed from the control-flow
-; graph. Each catch handler starts with one item, the exception object (III.1.7.5, II.25.4.6).
+; graph. Each catch handler starts with one item, the exception object. A filter block starts
+; with the same item, and so does the handler that follows it (II.25.4.6).
 (define (encode-il cx scope code0 nparams nlocals ret-void? handlers)
   (define code (map canonical-node code0))
+  (check-prefixes code)
+  (check-filter-blocks code handlers)
   (define items
     (for/list ([node (in-list code)]) (lower-instruction cx scope node nparams nlocals)))
   (define effects
     (for/list ([node (in-list code)] [item (in-list items)])
       (node-effect node item ret-void?)))
+  (define handler-entries
+    (append*
+     (for/list ([h (in-list handlers)])
+       (define depth (handler-depth h))
+       (define handler (cons (eh-clause-handler-start h) depth))
+       (if (eq? (eh-clause-kind h) 'filter)
+           (list (cons (eh-clause-class h) depth) handler)
+           (list handler)))))
   (values (assemble-items items)
-          (compute-max-stack effects
-                             #:handlers (for/list ([h (in-list handlers)])
-                                          (cons (eh-clause-handler-start h) (handler-depth h))))))
+          (compute-max-stack effects #:handlers handler-entries)))
 
 ; .maxstack given: it is an explicit override and must be at least the computed depth.
 ; Otherwise the default of 8 is kept unless the code needs more.
@@ -442,11 +545,12 @@
                    (make-bytes pad 0)
                    (or eh #""))]))
 
-; II.25.4.6 Flags: catch 0x0000, finally 0x0002, fault 0x0004. ClassToken is the exception
-; type for a catch and 0 otherwise.
+; II.25.4.6 Flags: catch 0x0000, filter 0x0001, finally 0x0002, fault 0x0004. ClassToken is the
+; exception type for a catch, the filter block offset for a filter, and 0 otherwise.
 (define (clause-flags c)
   (case (eh-clause-kind c)
     [(catch) #x0000]
+    [(filter) #x0001]
     [(finally) #x0002]
     [(fault) #x0004]))
 
@@ -460,6 +564,10 @@
 ; with a 24-byte clause per handler. Offsets come from the assembled labels.
 (define (eh-section cx asm clauses)
   (define (at l) (assembly-label-offset asm l))
+  (define (class-field c)
+    (if (eq? (eh-clause-kind c) 'filter)
+        (at (eh-clause-class c))
+        (clause-class-token cx c)))
   (define clause-bytes
     (for/list ([c (in-list clauses)])
       (define ts (at (eh-clause-try-start c)))
@@ -469,7 +577,7 @@
                     (le (- (at (eh-clause-try-end c)) ts) 4)
                     (le hs 4)
                     (le (- (at (eh-clause-handler-end c)) hs) 4)
-                    (le (clause-class-token cx c) 4))))
+                    (le (class-field c) 4))))
   (define body (apply bytes-append clause-bytes))
   (bytes-append (bytes #x41) (le (+ 4 (bytes-length body)) 3) body))
 

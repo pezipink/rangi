@@ -121,12 +121,83 @@
              (λ () (apply main-body (handler-program 'fault 1))))
   (check-not-exn (λ () (apply main-body (handler-program 'fault 2)))))
 
-(test-case "filter clauses are rejected as unsupported"
-  (check-exn #rx"malformed .try"
+; A filter clause (II.25.4.6) has Flags 0x0001 and ClassToken equal to the offset of its filter
+; block. The filter block starts with the exception object on the stack (depth 1), pops it, pushes
+; its int32 result, and ends with endfilter (III.3.34). The handler also starts with depth 1.
+(define (filter-program handler-body maxstack)
+  (append
+   (list `(.maxstack ,maxstack)
+         '(.try (filter f) ts te hs he)
+         'ts: '(ldc.i4.1) '(pop) '(leave done)
+         'te: 'f: '(pop) '(ldc.i4.1) 'endfilter
+         'hs:)
+   handler-body
+   (list 'he: 'done:)))
+
+(test-case "a filter clause has flags 0x0001, and its ClassToken is the filter block offset"
+  (define body
+    (apply main-body (filter-program '((pop) (leave done)) 8)))
+  (define clauses (eh-clauses body))
+  (check-equal? (length clauses) 1)
+  (define-values (flags ts tlen hs hlen tok) (apply values (first clauses)))
+  (check-equal? flags #x0001 "filter flag")
+  (check-equal? tok (+ ts tlen) "the filter block starts where the protected region ends")
+  (check-equal? (bytes-ref (code-of body) (+ tok 2)) #xFE "the filter block ends with endfilter (0xFE 0x11)")
+  (check-equal? (bytes-ref (code-of body) (+ tok 3)) #x11 "the filter block ends with endfilter (0xFE 0x11)")
+  (check-equal? (bytes-ref (code-of body) (- hs 1)) #x11 "endfilter sits just before the handler"))
+
+(test-case "a filter handler starts with depth 1, so its body peaks at 3"
+  (check-exn #rx"computed maximum stack depth 3"
+             (λ () (apply main-body (filter-program '((ldc.i4.1) (ldc.i4.2) (pop) (pop) (pop) (leave done)) 2))))
+  (check-not-exn
+   (λ () (apply main-body (filter-program '((ldc.i4.1) (ldc.i4.2) (pop) (pop) (pop) (leave done)) 3)))))
+
+(test-case "a filter label that is not defined is an error"
+  (check-exn #rx"nope"
              (λ ()
-               (parse-il
-                `((.assembly extern ,mscorlib-ref {})
-                  (.module local.exe)
-                  (.class (private auto ansi) <Module>
-                    [(.method (public static) void main () (cil managed)
-                       { (.entrypoint) (.try (filter) a b c d) (ret) })]))))))
+               (main-body
+                '(.maxstack 8)
+                '(.try (filter nope) ts te hs he)
+                'ts: '(ldc.i4.1) '(pop) '(leave done)
+                'te: 'hs: '(pop) '(leave done)
+                'he: 'done:))))
+
+(test-case "a filter block that does not end with endfilter is an error"
+  (check-exn #rx"must end with endfilter"
+             (λ ()
+               (main-body
+                '(.maxstack 8)
+                '(.try (filter f) ts te hs he)
+                'ts: '(ldc.i4.1) '(pop) '(leave done)
+                'te: 'f: '(pop) '(ldc.i4.1) '(leave done)
+                'hs: '(pop) '(leave done)
+                'he: 'done:))))
+
+(test-case "a filter block placed after its handler is an error"
+  (check-exn #rx"must come before its handler"
+             (λ ()
+               (main-body
+                '(.maxstack 8)
+                '(.try (filter f) ts te hs he)
+                'ts: '(ldc.i4.1) '(pop) '(leave done)
+                'te: 'hs: '(pop) '(leave done)
+                'he: 'f: '(pop) '(ldc.i4.1) 'endfilter
+                'done:))))
+
+(test-case "a prefix must precede an instruction it applies to"
+  (check-exn #rx"volatile. cannot precede ldc.i4.1"
+             (λ () (main-body '(.maxstack 8) '(volatile.) '(ldc.i4.1) '(pop))))
+  (check-exn #rx"unaligned. cannot precede ldc.i4.1"
+             (λ () (main-body '(.maxstack 8) '(unaligned. 1) 'lbl: '(ldc.i4.1) '(pop)))))
+
+(test-case "tail. must be followed by ret"
+  (define (tail-call . tail)
+    (apply main-body
+           '(.maxstack 8)
+           '(ldc.i4.1)
+           '(tail.)
+           '(call void (mscorlib System.Console) WriteLine (int32))
+           tail))
+  (check-not-exn (λ () (tail-call)))
+  (check-exn #rx"tail. must be followed by ret"
+             (λ () (tail-call '(ldc.i4.2) '(pop)))))
