@@ -18,7 +18,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x03 | FieldPtr               | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
 | 0x04 | Field                  | partial | partial | Same-module fields from `.field` keywords and FieldSig; `ldsfld`/`stsfld` checked for static-ness and type. Instance fields have no positive fixture yet | static-fields |
 | 0x05 | MethodPtr              | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
-| 0x06 | MethodDef              | partial | partial | Flags from keywords; ImplFlags 0; ParamList hardcoded to 1; same-module `call` targets (`(call ret (Class) name (params))`, static only; forward calls and recursion) | calls-multi |
+| 0x06 | MethodDef              | partial | partial | Flags from keywords; ImplFlags 0; ParamList is the next free Param rid (per method); same-module `call` targets (`(call ret (Class) name (params))`, static only; forward calls and recursion) | calls-multi |
 | 0x07 | ParamPtr               | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
 | 0x08 | Param                  | done    | done    | One row per named param, in method order; Sequence 1-based; flags from `(param [in] [out] [opt] TY NAME [= value])`; unnamed params get no row | param-constants |
 | 0x09 | InterfaceImpl          | done | done | Sorted; `.implements` rows (same-module and external interfaces); interface inheritance (an interface's `.implements` lists the interfaces it extends) | interfaces, interface-inheritance |
