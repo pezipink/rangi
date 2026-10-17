@@ -59,8 +59,8 @@ The SHA-256 of the emitted image, approved as `image.sha256`. It catches byte ch
 
 The checker parses the raw bytes itself, so a reader bug cannot hide a writer bug. Table layouts come from the L3 decoder, and row offsets and sizes come from the reader and are checked against the bytes. `tests/image-lint-test.rkt` runs it on every fixture and on damaged copies of one image. It asserts:
 
-* PE: PE32 magic and i386 machine; `e_lfanew` and the PE signature; `FileAlignment` and `SectionAlignment` are powers of two; `ImageBase` is 64K aligned; `SizeOfHeaders` is the header size rounded up; `SizeOfCode`, `SizeOfInitializedData`, `BaseOfCode`, `BaseOfData`, and `SizeOfImage` match the section table; sections are aligned, non-overlapping, in order, and have raw data inside the file; every data directory lies inside a section
-* Entry: `AddressOfEntryPoint` is in a code section, is an `FF 25` jump through the import address table, and a base relocation covers its operand
+* PE: PE32 magic and i386 machine; DOS header starts with `MZ`; `e_lfanew` and the PE signature; COFF `EXECUTABLE_IMAGE` set and `RELOCS_STRIPPED` clear when a base relocation directory exists; subsystem is Windows GUI or console; `FileAlignment` and `SectionAlignment` are powers of two; `ImageBase` is 64K aligned; `SizeOfHeaders` is the header size rounded up; `SizeOfCode`, `SizeOfInitializedData`, `BaseOfCode`, `BaseOfData`, and `SizeOfImage` match the section table; sections are aligned, non-overlapping, in order, readable, and have raw data inside the file; every data directory lies inside a section
+* Entry: `AddressOfEntryPoint` is in a code section that is readable and executable, is an `FF 25` jump through the import address table, and a base relocation covers its operand; the import descriptor names `mscoree.dll` and the first import is `_CorExeMain`
 * CLI: header size 0x48, ILONLY flag set, metadata inside a section, entry token is a MethodDef row
 * Metadata: `BSJB` root and version 1.1; streams are 4-byte aligned, inside the blob, and unique; `#Strings`, `#Blob`, and `#GUID` sizes equal the reader's heap lengths; heap index widths agree with the `HeapSizes` bits; `Valid` has no bits above II.22; row counts agree with the reader; tables are contiguous; at most 3 bytes of trailing padding
 * Rows: every string, blob, and GUID index is in range; every simple index is at most the target row count plus one (list starts may point past the last row); every coded index has a valid tag and an in-range row
@@ -74,7 +74,7 @@ Deviations from the original plan:
 
 ### L6 External oracles
 
-Each oracle is a script under `tests/oracles/` and is skipped when the tool is missing.
+Each oracle is a script under `tests/oracles/` and is skipped when the tool is missing, with a message. Set `RANGI_REQUIRE_ORACLES=1` to make a missing tool an error instead. Use that on a machine that is supposed to have the full toolchain, so the oracles cannot pass by skipping.
 
 | Oracle                               | Catches                                                     | Command                                                         |
 |--------------------------------------|-------------------------------------------------------------|-----------------------------------------------------------------|
@@ -142,4 +142,5 @@ Local corpus scan (roadmap item 1):
 * 6 failed with unknown stream `#!`. They are NGEN native images: `mscorlib.ni.dll`, `system.ni.dll`, and `system.core.ni.dll` under `NativeImages`, in both `Framework` and `Framework64`.
 * So the local machine has no sample of `#-` or of the 0x40 flag. Test those with a patched image or a sample from another source.
 
+Patched-image check (roadmap item 1): `tests/lib/patch-image.rkt` turns the nano `#~` image into a `#-` image with HeapSizes 0x40 and the 4 extra bytes. It fixes up the stream offsets, the MethodDef and FieldRVA RVAs, the entry point, the import directory, and the base relocations, then removes the same number of zero padding bytes from `.text`, so the file size is unchanged. `tests/stream-variants-test.rkt` checks three things. The patched image runs and prints 42. Its dump matches the `#~` dump apart from `Rva=` values. A copy with the `#US` stream renamed to `#!` gives the same dump. SRM agrees with the reader on both patched images. The CLR loads and runs the patched `#-` image, but this is one small program, so it does not show that every `#-` image in the wild has the same layout.
 Tooling: `search_code` on dotnet/runtime finds the SRM paths. Read a file from `raw.githubusercontent.com/dotnet/runtime/main/<path>` to get its full text.

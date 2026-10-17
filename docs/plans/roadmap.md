@@ -39,7 +39,7 @@ Done:
 
 Open items, in order:
 
-1. Reader: accept the `#-` uncompressed stream and the HeapSizes extra-data bit (0x40), and skip unknown streams such as `#!` instead of rejecting them. The 6th-edition text does not define `#-` or 0x40, so follow SRM (see [verification.md](verification.md#spec-sources-and-discovery)). Unblocked; not started.
+1. Done: the reader accepts the `#-` uncompressed stream and the HeapSizes extra-data bit (0x40), and skips unknown streams such as `#!`. The 6th-edition text does not define `#-` or 0x40, so this follows SRM (see [verification.md](verification.md#spec-sources-and-discovery)). `tests/stream-variants-test.rkt` patches nano into a `#-`/0x40 image and a `#!` variant. Both run, and their dumps match the `#~` dump and SRM. The patcher handles PE32 images only; PE32+ is not covered.
 2. Done: `tests/lib/metadata-dump.rkt` decodes MethodSpec rows, and the SRM oracle dumps them. mscorlib's 656 MethodSpec rows match SRM exactly. mscorlib is still compared by public type count, because the decoder does not yet cover TypeSpec, CustomAttribute, and other tables. That gap belongs to item 3.
 3. V7 reader corpus test over the .NET 4.7.1 reference assemblies and `System.Private.CoreLib`, diffed against SRM.
 4. P2 (R1, R2): `rangi/private/binary.rkt` and `rangi/cli/schema.rkt`. The reader and writer still hand-copy their layouts. Boundary values `0x3FFF` and `0x4000` for compressed integers have no unit test yet.
@@ -49,8 +49,7 @@ Open items, in order:
 8. The ILVerify oracle (L6) is not implemented. `tests/oracles/ilverify` does not exist.
 ## Handoff
 
-* Start with item 1. Its spec question is answered by SRM, not the ECMA text. The corpus scan found no `#-` sample locally, so build a test image by patching a `#~` image: rename the stream to `#-` and set 0x40 with 4 extra bytes. Compare the dump with SRM.
-* Add a unit test that the reader skips `#!` (NGEN images), and cite SRM's `default: continue` in the code comment.
+* Item 1 is done. The `#-` and `#!` checks come from patched nano images (`tests/lib/patch-image.rkt`), not a unit test of the reader alone. The 0x40 field is read and discarded, as in SRM, and the stream-name rule cites SRM's `default: continue`.
 * Item 3 needs TypeSpec, CustomAttribute, and GenericParam decoding in `tests/lib/metadata-dump.rkt` before mscorlib can be compared fully.
 
 ## P0 checklist

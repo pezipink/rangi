@@ -21,4 +21,4 @@
            (define-values (code out) (run-tool ildasm (list "/all" "/text" "/nobar" (path->string exe)) exe))
            (check-equal? code 0 "ildasm exit status")
            (check-snapshot (build-path dir "ildasm.il") (scrub-volatile-lines out))))))
-    (printf "skipping ildasm oracle: ildasm.exe not found\n"))
+    (oracle-missing "ildasm.exe"))

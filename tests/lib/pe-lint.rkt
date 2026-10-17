@@ -44,6 +44,11 @@
   (define s (rva->section (pe-image-sections img) rva))
   (and s (+ (section-raw-ptr s) (- rva (section-va s)))))
 
+; the NUL-terminated ASCII string at a file offset, or #f when none is found before the end
+(define (cstring-at raw off)
+  (define end (for/first ([i (in-range off (bytes-length raw))] #:when (zero? (bytes-ref raw i))) i))
+  (and end (bytes->string/latin-1 (subbytes raw off end))))
+
 (define (check-pe raw fail!)
   (define len (bytes-length raw))
   (define lfanew (and (>= len #x40) (le raw #x3C 4)))
@@ -79,7 +84,12 @@
           (if s (section-va s) 0))
 
         (expect fail! (= (field 0 2) #x10B) "optional header magic is not PE32")
+        (expect fail! (= (le raw 0 2) #x5A4D) "DOS header does not start with MZ")
         (expect fail! (= (le raw coff 2) #x14C) "machine is not i386")
+        (expect fail! (bitwise-bit-set? (le raw (+ coff 18) 2) 1)
+                "COFF characteristics ~x do not set EXECUTABLE_IMAGE" (le raw (+ coff 18) 2))
+        (expect fail! (memv (field 68 2) '(2 3))
+                "Subsystem ~a is not Windows GUI or console" (field 68 2))
         (expect fail! (and (power-of-two? file-align) (<= #x200 file-align #x10000))
                 "FileAlignment ~x is not a power of two between 0x200 and 0x10000" file-align)
         (expect fail! (and (power-of-two? sec-align) (>= sec-align file-align))
@@ -98,6 +108,8 @@
 
         (for ([s (in-list secs)])
           (define name (section-name s))
+          (expect fail! (bitwise-bit-set? (section-chars s) 30)
+                  "section ~a is not readable" name)
           (expect fail! (zero? (modulo (section-va s) sec-align))
                   "section ~a RVA ~x is not SectionAlignment aligned" name (section-va s))
           (expect fail! (and (zero? (modulo (section-raw-ptr s) file-align))
@@ -119,11 +131,18 @@
         (define es (rva->section secs entry))
         (expect fail! (and es (bitwise-bit-set? (section-chars es) 5))
                 "AddressOfEntryPoint ~x is not in a code section" entry)
+        ; the loader maps the entry stub with the section's protection, so it must be readable
+        ; and executable (IMAGE_SCN_MEM_EXECUTE, IMAGE_SCN_MEM_READ)
+        (expect fail! (and es (bitwise-bit-set? (section-chars es) 29)
+                           (bitwise-bit-set? (section-chars es) 30))
+                "entry section ~a is not readable and executable" (and es (section-name es)))
 
         (define dirs
           (for/hash ([i (in-range 16)])
             (values i (cons (field (+ 96 (* 8 i)) 4) (field (+ 100 (* 8 i)) 4)))))
         (expect fail! (= (field 92 4) 16) "NumberOfRvaAndSizes is not 16")
+        (expect fail! (not (and (bitwise-bit-set? (le raw (+ coff 18) 2) 0) (> (car (hash-ref dirs 5)) 0)))
+                "COFF says relocations are stripped, but a base relocation directory is present")
         (for ([(i d) (in-hash dirs)] #:when (> (car d) 0))
           (define s (rva->section secs (car d)))
           (expect fail! (and s (<= (+ (car d) (cdr d)) (+ (section-va s) (section-vsize s))))
@@ -167,6 +186,12 @@
      (define first-thunk (and ioff (le raw (+ ioff 16) 4)))
      (expect fail! (and first-thunk (= target (+ (pe-image-base img) first-thunk)))
              "entry stub jumps to ~x, which is not the import address table" target)
+     (define dll-off (and ioff (rva->off img (le raw (+ ioff 12) 4))))
+     (expect fail! (and dll-off (equal? (cstring-at raw dll-off) "mscoree.dll"))
+             "import descriptor does not name mscoree.dll")
+     (define hint-off (and first-thunk (rva->off img (le raw (rva->off img first-thunk) 4))))
+     (expect fail! (and hint-off (equal? (cstring-at raw (+ hint-off 2)) "_CorExeMain"))
+             "first import is not _CorExeMain")
      (define relocs (reloc-targets img fail!))
      (expect fail! (member (+ entry 2) relocs)
              "no base relocation covers the entry stub operand at ~x" (+ entry 2))]))

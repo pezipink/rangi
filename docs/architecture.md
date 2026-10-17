@@ -25,12 +25,10 @@ Baseline behaviour: `racket experiments/nano.rkt` writes a 2048-byte image that 
 
 Known defects:
 
-* The `#-` (uncompressed) stream name is rejected with `unknown cli metadata stream`. SRM reads it as a table stream with the same row layout, and it accepts pointer tables there. See [verification.md](plans/verification.md#spec-sources-and-discovery).
-* Unknown streams such as `#!` (in NGEN native images) are rejected. SRM skips them.
-* The `HeapSizes` extra-data bit (0x40) is ignored, so the 4 bytes after the row counts are not skipped (untested). SRM skips them. Bit 0x20 is not defined by the spec or by SRM.
+* The `HeapSizes` bit 0x20 is not defined by the spec or by SRM, and the reader does not handle it.
 * Row layouts are written by hand and duplicated in the writer.
 
-Fixed and covered by tests: PE32+ parsing, the table-id switch for the pointer, ENC, and Assembly processor/OS tables (previously an error), `standalonesig`, `HasCustomAttribute` (`declsecurity`), public type visibility (`flags & 0x7`), the port leak, and the missing-Assembly case (`read-assembly-meta` returns `#f`). `read-file` reads the file once and does not cache, so each call costs one read.
+Fixed and covered by tests: the `#-` (uncompressed) stream name, which SRM reads as a table stream with the same row layout (it accepts pointer tables there); unknown streams such as `#!` (in NGEN native images), which are skipped as SRM does (`default: continue`); the HeapSizes extra-data bit 0x40, where the 4 bytes after the row counts are read and discarded as SRM does (`tests/stream-variants-test.rkt`). PE32+ parsing, the table-id switch for the pointer, ENC, and Assembly processor/OS tables (previously an error), `standalonesig`, `HasCustomAttribute` (`declsecurity`), public type visibility (`flags & 0x7`), the port leak, and the missing-Assembly case (`read-assembly-meta` returns `#f`). `read-file` reads the file once and does not cache, so each call costs one read.
 
 ### Writer
 

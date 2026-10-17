@@ -77,7 +77,64 @@
                            (define cli-rva (le-at bs (opt-pos bs (+ 96 (* 8 14))) 4))
                            (define md-rva (le-at bs (+ (file-offset bs cli-rva) 8) 4))
                            (bytes-set! bs (file-offset bs md-rva) (char->integer #\X)))))
-     (check-true (reports? problems #rx"BSJB")))))
+     (check-true (reports? problems #rx"BSJB")))
+
+   (test-case "DOS header without the MZ magic is reported"
+     (define problems
+       (lint-damaged exe (λ (bs) (bytes-set! bs 0 (char->integer #\X)))))
+     (check-true (reports? problems #rx"MZ")))
+
+   (test-case "COFF characteristics without EXECUTABLE_IMAGE are reported"
+     (define problems
+       (lint-damaged exe (λ (bs)
+                           (define pos (+ (le-at bs #x3C 4) 22))
+                           (poke! bs pos 2 (bitwise-and (le-at bs pos 2) (bitwise-not 2))))))
+     (check-true (reports? problems #rx"EXECUTABLE_IMAGE")))
+
+   (test-case "Subsystem 0 is reported"
+     (define problems
+       (lint-damaged exe (λ (bs) (poke! bs (opt-pos bs 68) 2 0))))
+     (check-true (reports? problems #rx"Subsystem")))
+
+   (test-case "RELOCS_STRIPPED with a base relocation directory present is reported"
+     (define problems
+       (lint-damaged exe (λ (bs)
+                           (define pos (+ (le-at bs #x3C 4) 22))
+                           (poke! bs pos 2 (bitwise-ior (le-at bs pos 2) 1)))))
+     (check-true (reports? problems #rx"stripped")))
+
+   (test-case "entry section without execute permission is reported"
+     (define problems
+       (lint-damaged exe (λ (bs)
+                           ; .text is the first section header, its Characteristics at +36
+                           (define pos (+ (le-at bs #x3C 4) 24 224 36))
+                           (poke! bs pos 4 (bitwise-and (le-at bs pos 4) (bitwise-not #x20000000))))))
+     (check-true (reports? problems #rx"readable and executable")))
+
+   (test-case "section without read permission is reported"
+     (define problems
+       (lint-damaged exe (λ (bs)
+                           ; .reloc is the second section header
+                           (define pos (+ (le-at bs #x3C 4) 24 224 40 36))
+                           (poke! bs pos 4 (bitwise-and (le-at bs pos 4) (bitwise-not #x40000000))))))
+     (check-true (reports? problems #rx"is not readable")))
+
+   (test-case "import descriptor naming another DLL is reported"
+     (define problems
+       (lint-damaged exe (λ (bs)
+                           (define imp-rva (le-at bs (opt-pos bs 104) 4))
+                           (define name-rva (le-at bs (+ (file-offset bs imp-rva) 12) 4))
+                           (bytes-set! bs (file-offset bs name-rva) (char->integer #\x)))))
+     (check-true (reports? problems #rx"mscoree.dll")))
+
+   (test-case "first import that is not _CorExeMain is reported"
+     (define problems
+       (lint-damaged exe (λ (bs)
+                           (define imp-rva (le-at bs (opt-pos bs 104) 4))
+                           (define ft-rva (le-at bs (+ (file-offset bs imp-rva) 16) 4))
+                           (define hint-rva (le-at bs (file-offset bs ft-rva) 4))
+                           (bytes-set! bs (+ (file-offset bs hint-rva) 2) (char->integer #\x)))))
+     (check-true (reports? problems #rx"_CorExeMain")))))
 
 (test-case "input that is not a PE image is reported, not raised"
   (define garbage (make-temporary-file "rangi-lint-garbage-~a.bin"))

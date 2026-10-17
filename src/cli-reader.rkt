@@ -427,6 +427,10 @@
                     
               (values count tables))))])
       (values count (reverse tables))))
+  (when (bits-set? #x40 heap-sizes)
+    ; II.24.2.6 does not define this field. SRM (ReadMetadataTableHeader) reads
+    ; and ignores 4 bytes here when HeapSizes.ExtraData is set.
+    (read-bytes 4 port))
   (define table-start (file-position port))
   ; some encodings in the tables determine the amount
   ; of bytes used for an index depending on the maximum rows found in
@@ -589,6 +593,26 @@
      )))
 
 
+; maps a stream name to the key we keep it under, or #f for streams we skip.
+; ECMA-335 II.24.2.2 lists the names. SRM also skips unknown streams
+; (MetadataReader.cs, the default: continue case), so we do the same.
+(define (cli-stream-key name)
+  (cond
+    ; blobs are encoded signatures for things like methods.
+    ; we need to parse these for the type system 
+    [(equal? "#Blob" name) 'blob]
+    ; all non user strings, we need this!
+    [(equal? "#Strings" name) 'strings]
+    ; user strings in utf16 wide. don't need at the moment
+    [(equal? "#US" name) 'us]
+    ; guids not really used, don't need it for reading metadata
+    [(equal? "#GUID" name) 'guid]
+    ; this stream is the most complex one that has the relational
+    ; tables that represent all the types, emitted il, and all other
+    ; metadata. #- is the uncompressed form of the same tables (II.24.2.6).
+    [(member name '("#~" "#-")) '~]
+    [else #f]))
+
 (define (parse-cli-metadata md-root rdr port)
   (file-position port md-root)
   (define sig (read-bytes 4 port))
@@ -602,25 +626,11 @@
   (define num-streams (read-bytes 2 port))
   ;now follows num-streams array of StreamHeader structs
   (define headers 
-    (for/hash ([i (in-range (to-int num-streams))])
-      (let* ([header (parse-cli-stream-header port)]
-             [name (bytes->string/latin-1 (hash-ref header 'name))])
-        (cond
-          ; blobs are encoded signatures for things like methods.
-          ; we need to parse these for the type system 
-          [(equal? "#Blob" name) (values 'blob header)]
-          ; all non user strings, we need this!
-          [(equal? "#Strings" name) (values 'strings header)]
-          ; user strings in utf16 wide. don't need at the moment
-          [(equal? "#US" name) (values 'us header)]
-          ; guids not really used, don't need it for reading metadata
-          [(equal? "#GUID" name) (values 'guid header)]
-          ; this stream is the most complex one that has the relational
-          ; tables that represent all the types, emitted il, and all other
-          ; metadata
-          [(equal? "#~" name) (values '~ header)]
-          [else (error 'read-file "unknown cli metadata stream ~s" name)])
-        )))
+    (for*/hash ([i (in-range (to-int num-streams))]
+                [header (in-value (parse-cli-stream-header port))]
+                [key (in-value (cli-stream-key (bytes->string/latin-1 (hash-ref header 'name))))]
+                #:when key)
+      (values key header)))
 
   ;we copy and store the entire heaps as bytestring.  
   (define string-heap
@@ -634,15 +644,18 @@
   
   (set-asm-reader-string-heap! rdr string-heap)
 
+  ; #US is optional, so an absent one reads as an empty heap.
   (set-asm-reader-us-heap!
    rdr
-   (let* ([head (hash-ref headers 'us)]
-          [offset (hash-ref head 'offset)]
-          [size (hash-ref head 'size)])         
-   (subbytes
-    (asm-reader-raw rdr)
-    (+ md-root offset)
-    (+ md-root offset size))))
+   (let ([head (hash-ref headers 'us #f)])
+     (if head
+         (let* ([offset (hash-ref head 'offset)]
+                [size (hash-ref head 'size)])
+           (subbytes
+            (asm-reader-raw rdr)
+            (+ md-root offset)
+            (+ md-root offset size)))
+         #"")))
 
   (set-asm-reader-blob-heap!
    rdr
