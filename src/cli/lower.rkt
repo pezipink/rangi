@@ -1160,7 +1160,8 @@
      (cons 'memberref (member-ref! cx (owner-parent! cx asm ty '() '(0 . 0)) mname sig))]))
 
 ; MethodImpl rows (II.22.27) for the .override directives of cls. The body is a virtual instance
-; method of cls with the same name, return type, and parameters. A callvirt through a base type
+; method of cls with the same name, return type, and parameters. The owner is a base class of cls or
+; an interface in cls's interface closure (II.22.27). A callvirt through a base type or interface
 ; then runs the body (II.10.3, virtual dispatch).
 (define (lower-overrides cx cls decls)
   (define name (class-decl-name cls))
@@ -1168,7 +1169,7 @@
   (when (and (pair? overrides) (memq 'interface (class-decl-flags cls)))
     (error 'rangi "interface ~a cannot have .override" name))
   (define class-rid (module-class-rid cx name))
-  (define bases (ancestor-owners cls decls))
+  (define bases (append (ancestor-owners cls decls) (interface-closure cls decls)))
   (define seen (make-hash))
   (for/list ([o (in-list overrides)])
     (define owner (override-decl-owner o))
@@ -1192,15 +1193,14 @@
                 (cons 'methoddef body-rid)
                 (override-declaration cx owner decls mname ret params))))
 
-; An interface (II.10.1) is an abstract class with the interface flag (II.22.37). It has no base
-; and no .implements, and its methods are abstract, virtual, and instance methods (II.22.26).
+; An interface (II.10.1) is an abstract class with the interface flag (II.22.37). It has no base.
+; Its .implements lists the interfaces it extends (II.22.23). Its methods are abstract, virtual,
+; and instance methods (II.22.26).
 (define (check-interface! cls)
   (define name (class-decl-name cls))
   (when (memq 'interface (class-decl-flags cls))
     (unless (memq 'abstract (class-decl-flags cls))
       (error 'rangi "interface ~a must be abstract" name))
-    (when (pair? (class-decl-implements cls))
-      (error 'rangi "interface ~a cannot have .implements" name))
     (for ([md (in-list (class-decl-methods cls))])
       (define fl (method-decl-flags md))
       (unless (and (memq 'abstract fl) (memq 'virtual fl) (not (memq 'static fl)))
@@ -1232,23 +1232,43 @@
             #t)]
       [else #t])))
 
+; The interfaces cls implements, directly or through the interfaces they extend (II.22.23). Each
+; entry is a same-module interface name or an external (asm ty), in first-seen order.
+(define (interface-closure cls decls)
+  (let loop ([todo (class-decl-implements cls)] [acc '()])
+    (cond
+      [(null? todo) (reverse acc)]
+      [(member (car todo) acc) (loop (cdr todo) acc)]
+      [else
+       (define i (car todo))
+       (define target (and (symbol? i) (hash-ref decls i #f)))
+       (loop (append (cdr todo) (if target (class-decl-implements target) '()))
+             (cons i acc))])))
+
 ; InterfaceImpl rows (II.22.23) for the .implements of cls. A same-module interface is a TypeDef,
-; and cls must implement each of its methods. An external interface is a TypeRef, and its methods
-; are not checked.
+; and an external interface is a TypeRef. A class must implement each method of every interface in
+; its closure, including interfaces it inherits through an extended interface. An interface has no
+; implementation of its own, so its methods are not checked. External interface methods are not
+; checked.
 (define (lower-implements cx cls decls)
   (define name (class-decl-name cls))
   (define class-rid (module-class-rid cx name))
+  (define closure (interface-closure cls decls))
+  (when (memq name closure)
+    (error 'rangi "interface ~a cannot implement itself" name))
+  (for ([i (in-list closure)] #:when (symbol? i))
+    (define target (hash-ref decls i #f))
+    (unless target (error 'rangi "~a implements unknown interface ~a" name i))
+    (unless (memq 'interface (class-decl-flags target))
+      (error 'rangi "~a implements ~a, which is not an interface" name i))
+    (unless (memq 'interface (class-decl-flags cls))
+      (for ([md (in-list (class-decl-methods target))])
+        (unless (implemented? cls decls (method-decl-name md)
+                              (method-decl-ret md) (method-decl-params md))
+          (error 'rangi "~a does not implement ~a.~a" name i (method-decl-name md))))))
   (for/list ([i (in-list (class-decl-implements cls))])
     (cond
       [(symbol? i)
-       (define target (hash-ref decls i #f))
-       (unless target (error 'rangi "~a implements unknown interface ~a" name i))
-       (unless (memq 'interface (class-decl-flags target))
-         (error 'rangi "~a implements ~a, which is not an interface" name i))
-       (for ([md (in-list (class-decl-methods target))])
-         (unless (implemented? cls decls (method-decl-name md)
-                               (method-decl-ret md) (method-decl-params md))
-           (error 'rangi "~a does not implement ~a.~a" name i (method-decl-name md))))
        (interfaceimpl class-rid (cons 'typedef (module-class-rid cx i)))]
       [else
        (define-values (asm ty) (asm-type-parts i))

@@ -118,12 +118,84 @@
              (λ () (lower '(.class (public interface auto ansi) I
                              [(.method (public virtual abstract newslot) int32 Area ())])))))
 
-(test-case "an interface cannot implement another interface"
-  (check-exn #rx"interface J cannot have .implements"
-             (λ () (lower iarea
-                          '(.class (public abstract interface auto ansi) J
-                             [(.method (public virtual abstract newslot) int32 Area ())
-                              (.implements IArea)])))))
+(define ia-with-area
+  '(.class (public abstract interface auto ansi) IA
+     [(.method (public virtual abstract newslot) int32 Area ())]))
+
+(define ib-extends-ia
+  '(.class (public abstract interface auto ansi) IB
+     [(.method (public virtual abstract newslot) int32 Perimeter ())
+      (.implements IA)]))
+
+(test-case "an interface may extend another interface, lowering to an InterfaceImpl row (II.22.23)"
+  (define p (lower ia-with-area ib-extends-ia))
+  (define rows (cli-program-interfaceimpls p))
+  (check-equal? (length rows) 1)
+  (check-equal? (interfaceimpl-class (car rows)) (rid-of p "IB"))
+  (check-equal? (interfaceimpl-iface (car rows)) (cons 'typedef (rid-of p "IA"))))
+
+(test-case "a class implementing an interface must implement the methods of interfaces it inherits"
+  (check-exn #rx"Square does not implement IA.Area"
+             (λ () (lower ia-with-area ib-extends-ia
+                          `(.class (public auto ansi) Square
+                             (.extends (mscorlib System.Object))
+                             [,base-ctor
+                              (.method (public virtual newslot) int32 Perimeter () (cil managed)
+                                { (.maxstack 8) (ldc.i4.4) (ret) })
+                              (.implements IB)])))))
+
+(test-case "a class implementing an interface inherits the methods of its extended interfaces"
+  (define p (lower ia-with-area ib-extends-ia
+                   `(.class (public auto ansi) Square
+                      (.extends (mscorlib System.Object))
+                      [,base-ctor
+                       (.method (public virtual newslot) int32 Area () (cil managed)
+                         { (.maxstack 8) (ldc.i4.4) (ret) })
+                       (.method (public virtual newslot) int32 Perimeter () (cil managed)
+                         { (.maxstack 8) (ldc.i4.4) (ret) })
+                       (.implements IB)])))
+  (check-equal? (length (cli-program-interfaceimpls p)) 2))
+
+(test-case "an interface can only extend an interface"
+  (check-exn #rx"IB implements Base, which is not an interface"
+             (λ () (lower `(.class (public auto ansi) Base
+                             (.extends (mscorlib System.Object))
+                             [,base-ctor])
+                          `(.class (public abstract interface auto ansi) IB
+                             [(.implements Base)])))))
+
+(test-case "an interface cannot inherit from itself through the interfaces it extends"
+  (check-exn #rx"interface IA cannot implement itself"
+             (λ () (lower `(.class (public abstract interface auto ansi) IA
+                             [(.implements IB)])
+                          `(.class (public abstract interface auto ansi) IB
+                             [(.implements IA)])))))
+
+(test-case "a MethodImpl may name an inherited interface method as its declaration (II.22.27)"
+  (define p (lower ia-with-area ib-extends-ia
+                   `(.class (public auto ansi) Square
+                      (.extends (mscorlib System.Object))
+                      [,base-ctor
+                       (.method (public virtual newslot) int32 Area () (cil managed)
+                         { (.maxstack 8) (ldc.i4.4) (ret) })
+                       (.method (public virtual newslot) int32 Perimeter () (cil managed)
+                         { (.maxstack 8) (ldc.i4.4) (ret) })
+                       (.override IA::Area int32 ())
+                       (.implements IB)])))
+  (define rows (cli-program-methodimpls p))
+  (check-equal? (length rows) 1)
+  (check-equal? (methodimpl-class (car rows)) (rid-of p "Square"))
+  (check-equal? (car (methodimpl-decl (car rows))) 'methoddef))
+
+(test-case ".override of an interface that is not implemented is rejected"
+  (check-exn #rx"IA is not a base class of Square"
+             (λ () (lower ia-with-area
+                          `(.class (public auto ansi) Square
+                             (.extends (mscorlib System.Object))
+                             [,base-ctor
+                              (.method (public virtual newslot) int32 Area () (cil managed)
+                                { (.maxstack 8) (ldc.i4.4) (ret) })
+                              (.override IA::Area int32 ())])))))
 
 (test-case "an interface method must be abstract and virtual"
   (check-exn #rx"interface method I.Area must be abstract, virtual"
