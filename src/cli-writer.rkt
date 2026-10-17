@@ -3,11 +3,11 @@
 (require racket/hash)
 (require "cli-reader.rkt") 
 
-(define nano
+(define nano2
   '(
     (.assembly extern "C:/Program Files (x86)/Reference Assemblies/Microsoft/Framework/.NETFramework/v4.7.1/mscorlib.dll" {})
     (.assembly donothing {})
-    (.module nano.exe)
+    (.module nano2.exe)
     (.class (private auto ansi) <Module>           
       [
        (.method
@@ -15,7 +15,7 @@
         {
          (.entrypoint)
          (.maxstack 8)
-         (ldc.i 45)
+         (ldc.i 42)
          (call void (mscorlib System.Console) WriteLine (int32))
          (ret)     
         })
@@ -329,7 +329,7 @@
        (write-byte #x28 port)
        
        ;type has the full assembly qualifier, this is a methodref. (memberref 0A)
-       (write-byte num port)
+       (write-byte (bitwise-and #xFF num) port)
        (write-byte (bitwise-and #xFF (arithmetic-shift num -8)) port)
        (write-byte (bitwise-and #xFF (arithmetic-shift num -16)) port)
        ;memberref
@@ -378,16 +378,39 @@
     (write-byte b port))
   )
 
+
+(define (write-le-2 num port)
+  (write-byte (bitwise-and #xFF num) port)
+  (write-byte (bitwise-and #xFF (arithmetic-shift num -8)) port))
+
+(define (write-le-3 num port)
+  (write-byte (bitwise-and #xFF num) port)
+  (write-byte (bitwise-and #xFF (arithmetic-shift num -8)) port)
+  (write-byte (bitwise-and #xFF (arithmetic-shift num -16)) port))
+
 (define (write-le-4 num port)
   (write-byte (bitwise-and #xFF num) port)
   (write-byte (bitwise-and #xFF (arithmetic-shift num -8)) port)
   (write-byte (bitwise-and #xFF (arithmetic-shift num -16)) port)
   (write-byte (bitwise-and #xFF (arithmetic-shift num -24)) port))
 
-(define (write-le-2 num port)
+(define (write-le-8 num port)
   (write-byte (bitwise-and #xFF num) port)
-  (write-byte (bitwise-and #xFF (arithmetic-shift num -8)) port))
-  
+  (write-byte (bitwise-and #xFF (arithmetic-shift num -8)) port)
+  (write-byte (bitwise-and #xFF (arithmetic-shift num -16)) port)
+  (write-byte (bitwise-and #xFF (arithmetic-shift num -24)) port)
+  (write-byte (bitwise-and #xFF (arithmetic-shift num -32)) port)
+  (write-byte (bitwise-and #xFF (arithmetic-shift num -40)) port)
+  (write-byte (bitwise-and #xFF (arithmetic-shift num -48)) port)
+  (write-byte (bitwise-and #xFF (arithmetic-shift num -56)) port)
+  )
+
+(define (align-stream align-to port)
+  (let ([m (modulo (file-position port) align-to)])
+    (if (equal? m 0)
+        (void)
+        (for [(i (in-range (- 4 m )))] (write-byte 0 port)))))
+
 (define (assemble asm)
   ; todo
   ; extract sets of things for heaps * strings, user strings, blobs.
@@ -399,7 +422,8 @@
   
   (let ([tr (hash-ref (asm-builder-refs asm) 'typeref)])
     (for([key (hash-keys tr)]
-         [i (in-naturals)])        
+         [i (in-naturals)])
+      ; set row number starting at 1
       (hash-set! tr key (add1 i))))
 
   (define td-index
@@ -438,6 +462,8 @@
             (hash-set! index-blob index encoded)
             (hash-set! (hash-ref (asm-builder-refs asm) 'memref) mr (cons index (add1 i)))
             (hash-set! meth-row-lookup mr (add1 i))
+            ; first byte is blob len
+            (write-byte (bytes-length encoded) blob-heap)
             (for ([b encoded]) (write-byte b blob-heap))
             ))))
 
@@ -463,17 +489,47 @@
             (hash-set! meth-row-lookup (mb->key mb) (add1 table-index))
             (for ([b encoded]) (write-byte b blob-heap))))))
 
+
+
+  ; finish blob heap
+  (align-stream 4 blob-heap)
+  (define blob-heap-size (file-position blob-heap))
+
+  
   (define string-heap (open-output-bytes))
   (write-byte 0 string-heap); first byte is always 0
+  ; string->offset lookup used when writing metadata tables
   (define string-index
     (for/hash ([s (hash-keys (hash-ref (asm-builder-refs asm) 'string))])
+      
       (let([index (file-position string-heap)])
+        (writeln s)
         (for ([b (string->bytes/latin-1 s)])
           (write-byte b string-heap))
         (write-byte 0 string-heap)
-        (values index s)
+        (values s index)
         )))
-  
+  ; we know the heap will be placed at a 4-byte aligned address, so we can calculate
+  ; any padding here to ensure it ends correctly aligned
+  (align-stream 4 string-heap)
+  (define string-heap-size (file-position string-heap))
+
+
+  ; the US heap will be empty to start with. for some reason it always has a 1 char blank string (a space)
+  ; in additon to the null byte. all strings have a terminal byte to indicate unicode stuff, and
+  ; each char is 2 bytes (16bit wide unicode) so even the 1 char string is 3 bytes
+  (define us-heap (open-output-bytes))
+  (write-bytes (bytes 0 3 #x32 0 0) us-heap)
+  (align-stream 4 us-heap)
+  (define us-heap-size (file-position us-heap))
+
+  ; the guid heap is basically unused, there's always 1 in there for the module which we'll hardcode directly
+  ; todo: generate a guid
+  (define guid-heap (open-output-bytes))
+  (write-bytes (bytes #xD8 #x7D #xD4 #x05 #xDD #xB2 #x70 #x4E #x98 #x35 #x01 #xC9 #x1E #x98 #x66 #x18) guid-heap)
+  (align-stream 4 guid-heap)
+  (define guid-heap-size (file-position guid-heap))
+  (wlf "guid ~x" guid-heap-size)
   
    ;(writeln (collect (map hash-values (map class-builder-meth-builders (asm-builder-class-defs asm)))))
 ;;   (writeln blob-index)    
@@ -486,8 +542,12 @@
   (define bs (if (<= (file-position blob-heap) #xFFFF) 2 4))
   (define gs 2)
 
-
-  
+  (define (write-sr num port)
+    (if (equal? ss 2) (write-le-2 num port) (write-le-4 num port)))
+  (define (write-br num port)
+    (if (equal? ss 2) (write-le-2 num port) (write-le-4 num port)))
+  (define (write-gr num port)
+     (write-le-2 num port))
   
   ; calculate each table's row count and size
   ; first pass we can't do the size since we need all the rows available
@@ -572,7 +632,7 @@
   (hash-set! encodings 'ss ss)
   (hash-set! encodings 'bs bs)
   
-  ; second pass of the tales to determine row size
+  ; second pass of the tables to determine row size
   (define (calc-size items)
     (apply
      +
@@ -627,8 +687,16 @@
            
   (define total-tables-size
     (apply + (map (λ (td) (* (table-data-row-count td) (table-data-row-size td))) (hash-values tables))))
+
+  (define total-~-stream-size
+    ; the header for the ~ stream is 24 + (4 * num-tables) bytes
+    ; then is is for some reason algined to xC. I don't thin this is needed
+    ; but we'll put it in for now anyway.
+    ;hardcoded for now
+    (+ total-tables-size 24 28 4))
   
   (wlf "total table size : 0x~x" total-tables-size)
+  (wlf "total ~~ size : 0x~x" total-~-stream-size)
   ; assemble IL and determine IL stream size and build offest
   ; for now we'll output all with 'fat' headers.  we can't calculate the rva yet,
   ; but we can asssemble and store our local relative offset into the il heap.
@@ -744,107 +812,113 @@
   ; number of streams (always 5? sice we write the US blob even if its empty)
   (write-le-2 #x5 pe)
   (define stream-header-start (file-position pe))
+  (define stream-header-offset (- stream-header-start cli-root))
   
+  ; x27C
   ; now follows each stream header.  we need to calculate:
   ;  offset 4  - start of stream from meta root
   ;  size 4 - size of stream, multiple of 4 (althogh it says 4, it seems the assembler aligns the result end position to 8)
   ;  name - limit 32 chars padded to 4byte boundary. in practice there are only 5 names. #~, #String, #US, #Blob, #Guid
 
-  ; we need to know the size of each header (different due to name string) before we can work out
-  ; offest placements.
+  ; the size of these headers is varaible due to the name, but in practice we know they will start algined so we already know
+  ; any padding they will need, and so the total size of all headers is known
+  (define total-stream-header-size #x4C)
+  (define stream-~-offset (+ stream-header-offset total-stream-header-size))
+  (define stream-strings-offset (+ stream-~-offset total-~-stream-size))
+  (define stream-us-offset (+ stream-strings-offset string-heap-size))
+  (define stream-guid-offset (+ stream-us-offset us-heap-size))
+  (define stream-blob-offset (+ stream-guid-offset guid-heap-size))
 
-  ; this is actually a little bit tricky.  each name neeeds to be aligned to 4 bytes, but that depends where we start from.
-  ; it's not possible to determine the sizes of the headers or the offests without simulating the address space here,
-  ; unless we mark the locations as we go then come back and re-write them, but that would flush the port which we don't want.
-  ; (actually, maybe that's ok if we use a separate string port then append it once it's ready...)
+  ; write headers
+  ; ~
+  (write-le-4 stream-~-offset pe)
+  (write-le-4 total-~-stream-size pe)
+  (write-bytes (bytes #x23 #x7E #x00 #x00) pe) ; #~
+  
+  (write-le-4 stream-strings-offset pe)
+  (write-le-4 string-heap-size pe)
+  (write-bytes (bytes #x23 #x53 #x74 #x72 #x69 #x6E #x67 #x73 #x00 #x00 #x00 #x00 ) pe) ; #Strings
+  
+  (write-le-4 stream-us-offset pe)
+  (write-le-4 us-heap-size pe)
+  (write-bytes (bytes #x23 #x55 #x53 #x00 ) pe) ; #US
+  
+  (write-le-4 stream-guid-offset pe)
+  (write-le-4 guid-heap-size pe)
+  (write-bytes (bytes #x23 #x47 #x55 #x49 #x44 #x00 #x00 #x00 ) pe) ; #GUID
+  
+  (write-le-4 stream-blob-offset pe)
+  (write-le-4 blob-heap-size pe)
+  (write-bytes (bytes #x23 #x42 #x6C #x6F #x62 #x00 #x00 #x00  ) pe) ; #Blob
+
+  (wlf "stream #~~ location ~x" (file-position pe))
+  ; ///////////////////////////////////////////////////////////////////////////
+  ; BEGIN #~ STREAM
+  ;
+  (write-le-4 0 pe)     ; Reserved, always 0
+  (write-byte 2 pe)     ; Major, always 2
+  (write-byte 0 pe)     ; Minor, always 0
+  ; todo: heap sizes, 0 for now since they are 2 bytes in our example
+  (write-byte 0 pe)     ; Heap sizes: todo, bottom 3 bits determine it strings, guid, blob are 4 bytes
+  (write-byte 1 pe)     ; Reserved, always 1
+  ; todo: valed, hardcoded for the 7 tables present in the example
+  (write-le-8 #x0900000447 pe)     ; Valid.  bit vector showing which tables are present
+  ; todo: sorted. the spec is unlear on this. hardcoding it for now
+  ; and need to experiment with ths later  
+  (write-le-8 #x16003325FA00 pe)     ; Sorted.  not sure what this is
+  ; next is the 4-byte length of each table
+  ; we have the info to do this but hardcode them to 1 for now
+  (for ([i (in-range 7)]) (write-le-4 1 pe))
+  ; and now we have the table rows laid out in order.
+
+  
+  ; we are semi-hardcoding this for now
+
+  ; first is module 0x0
+  (wlf "module start ~x" (file-position pe))
+  (write-bytes (bytes 0 0) pe)  ;generation, always 0
+  (write-sr (hash-ref string-index (symbol->string(asm-builder-mod-def asm))) pe) ; name
+  (write-gr 1 pe)  ;mvid guid ref
+  (write-gr 0 pe)  ;encid, always 0 guid ref
+  (write-gr 0 pe)  ;encbaseid, always 0 guid ref
+  
+  (wlf "typeref start ~x" (file-position pe))
+  ;(wlf "~a" (hash-ref (asm-builder-refs asm) 'typeref))
+  ;(wlf "~a" (sort (hash->list (hash-ref (asm-builder-refs asm) 'typeref)) < #:key cdr))
+  ; a typedef has a resolutionscope tag, there are exotic uses, but for now
+  ; all our typerefs will be of type assemblyref (type in external asm)
+  ; TODO: like the tr index, we need a ar index which gives the row layout of
+  ; assemblyref table.  for now we only have 1 so we'll just hardcode it
+  (for ([pair (sort (hash->list (hash-ref (asm-builder-refs asm) 'typeref)) < #:key cdr)])
+    (match pair
+      [(cons (list asm type) index)
+       (wlf "~a" type)
+       (let ([split (string-split (symbol->string type) ".")])
+         ;(wlf "~a" (hash-ref string-index (car split)))
+         ;(wlf "~a" (hash-ref string-index (cadr split)))
+         ; first is resolution scope, top byte is x23 (assemblyref)
+         (write-byte #x23 pe)
+         ; todo: lookup assembly ref row index
+         (write-le-3 1 pe)
+         (write-sr (hash-ref string-index (car split)) pe)  ;type name
+         (write-sr (hash-ref string-index (cadr split)) pe)  ;namespace 
+         )
+       ]
+      [else (raise "unexpected typeref")]))
+
+  (wlf "typedef start ~x" (file-position pe))
+  
   
 
-  ; todo: we need a better system to do this more generally.  that is, generate a bunch of bytes that need some locations patched
-  ; up later.  this is a repeating pattern - for example the size and placement of the sections themselves requires them to be written,
-  ; but their resulting locations will affect RVAs and offsets within the section itself.  The same for these cli stream headers.
-
-  ; maybe a struct with the byte stream and a map of patchup functions that can close on the locations as it encounters them?
-
-  ; let's try it here
-  (define (header-builder name)
-    (define name-size (+ (string-length name) 1)) ; +1 for null-terminate
-    (define builder (open-output-bytes (bytes)))
-    ; first 8 bytes are the offest from the metadata root and the stream size
-    (write-le-4 0 builder)
-    (write-le-4 0 builder)
-    ; now is the string name itself.  we can't do this yet though, because
-    ; we have to align it to 4 bytes which will depend on where this stream
-    ; starts, and where the metadata root starts (for the first header. the others we
-    ; know they will start aligned, but we can treat them the same.)
-    (λ (start-offset physical-address)
-      ; the start offset is the bytes from the metadata root.
-      ; physical address is the actual location which we need to determine the
-      ; name string padding.
-
-
-      ; we are at the end of the stream, so we can calculate the size for the name
-      (define name-start (+ physical-address 8))
-      (define name-end (+ name-start name-size))
-      (define name-padding
-        (if (equal? (modulo name-end 4) 0)
-            0
-            (- 4 (modulo name-end 4))))
-            
-      ; now write the name and padding
-      (for ([c (string->bytes/latin-1 name)]) (write-byte c builder))
-      (write-byte 0 builder) ; null term
-      (for ([i (in-range name-padding)]) (write-byte 0 builder))
-
-      ; the size of the header is the length of the stream
-      (define header-size (file-position builder))
-
-      ; set the offset from the passed data
-      ; (note - this doesn't rely on the above calculation, we just want
-      ; to avoid jumping around in the stream.)
-      (file-position builder 0)
-      (write-le-4 start-offset builder)
-
-      ; we still don't know the size of the stream since it might get padded
-      ; depending on it's physical location.  we leave the pointer at the
-      ; place the size goes, and return the size of the header, and a function
-      ; that will accept ... either the size of the body directly (this test...)
-      ; or the physical start location of the data which this function can then pad
-      (values header-size (λ (data-size) (begin (write-le-4 data-size builder)
-                                                ; finally return the bytes
-                                                (get-output-bytes builder))))
-      ))
-(wlf "header start ~x" stream-header-start )
-  (define-values (header-lookup header-physical-end _)
-    (for/fold ([lookup (make-immutable-hash)]
-               [physical stream-header-start]
-               [offset (- stream-header-start cli-root)])
-              ([type '(~ strings us guid blob)])
-      (define b
-        (case type
-          ['~  (header-builder "#~")]
-          ['strings  (header-builder "#Strings")]
-          ['us  (header-builder "#US")]
-          ['guid  (header-builder "#GUID")]
-          ['blob  (header-builder "#Blob")]
-          [else (raise "fail!")]))      
-      (define-values (size ctor) (b offset physical))
-      (values (hash-set lookup type (cons size ctor)) (+ physical size) (+ offset size))))
-
-  (wlf "header finsh ~x" header-physical-end )
+  ; END #~ STREAM
+  ; ////////////////////////////////////////////////////////////////////////////|>
+  
+  
 ;;   (define (bytes-to-next n align)
 ;;    (if (equal? (modulo n align) 0)
 ;;        0
 ;;        (- align (modulo n align))))
-;;   (define stream-header-sizes    
-;;      (list (cons '~ (+ (string-length "#~ ")(bytes-to-next (string-length "#~ ") 4) 8))
-;;            (cons 'String (+ (string-length "#String ")(bytes-to-next (string-length "#String ") 4) 8))
-;;            (cons 'US (+ (string-length "#US ")(bytes-to-next (string-length "#US ") 4)8))
-;;            (cons 'Blob (+  (string-length "#Blob ") (bytes-to-next (string-length "#Blob ") 4) 8))
-;;            (cons 'GUID (+ (string-length "#GUID ")(bytes-to-next (string-length "#GUID ") 4) 8))
-;;            ))
-;;   (define total-header-size (apply + (map cdr stream-header-sizes)))
-  ;(writeln stream-header-sizes)
-  ;(writeln (+ (- stream-header-start cli-root) total-header-size))
+
   
   ;"import table : 3c8"
   
@@ -865,7 +939,7 @@
   (close-output-port pe)
   #f
   )
-(time (assemble (parse-il nano)))
+(time (assemble (parse-il nano2)))
 
  
 
