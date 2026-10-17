@@ -23,6 +23,7 @@ Work is driven by the plans in [docs/plans/](docs/plans/). Start with [roadmap.m
 | [restructure.md](docs/plans/restructure.md)               | Splitting PE image writing from CLI metadata, module layout   |
 | [opcodes.md](docs/plans/opcodes.md)                       | Full ECMA-335 Partition III opcode table and IL assembler     |
 | [cli-coverage.md](docs/plans/cli-coverage.md)             | Spec coverage tracker: tables, signatures, bodies, PE features |
+| [types.md](docs/plans/types.md)                           | Shared type library: canonical type references, lazy descriptors, reference and declaration providers |
 | [workflow.md](docs/plans/workflow.md)                     | Lanes, worktrees, test tiers, hot spots, timings (read before parallel work) |
 
 ## Ground rules
