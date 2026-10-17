@@ -59,6 +59,7 @@
 
 ; data directory indices, in PE/COFF order
 (define dir-import-table 1)
+(define dir-resource-table 2)
 (define dir-base-relocation-table 5)
 (define dir-iat 12)
 (define dir-clr-runtime-header 14)
@@ -80,6 +81,9 @@
 ; read-write initialized data, for static data (II.16)
 (define section-chars-sdata
   (bitwise-ior scn-cnt-initialized-data scn-mem-read scn-mem-write))
+; read-only initialized data for the Win32 resource tree (PE/COFF, The .rsrc Section)
+(define section-chars-rsrc
+  (bitwise-ior scn-cnt-initialized-data scn-mem-read))
 
 ; ---------------------------------------------------------------------------
 ; defaults for the images the writer emits

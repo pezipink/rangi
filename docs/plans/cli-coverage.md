@@ -156,7 +156,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Base relocations generated from fixups               | n/a     | done    | base-relocs |
 | Deterministic timestamp and MVID                     | n/a     | done    | nano    |
 | Debug directory and portable PDB                     | out of scope | out of scope |     |
-| Win32 resources (version info, manifest)             | none    | none    |         |
+| Win32 resources (version info, manifest)             | none    | done    | win32-resources |
 | Strong-name signature                                | out of scope | out of scope |     |
 | .NET (Core) target with `runtimeconfig.json`         | out of scope | out of scope |     |
 

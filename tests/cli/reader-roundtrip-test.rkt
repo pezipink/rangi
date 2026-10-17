@@ -73,6 +73,7 @@
                '()
                '()
                '()
+               '()
                '()))
 
 (test-case "InterfaceImpl rows read back with the class and the typedeforref interface"

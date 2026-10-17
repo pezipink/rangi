@@ -37,10 +37,12 @@
 ; methodimpls are the MethodImpl rows for .override, in source order. interfaceimpls are the
 ; InterfaceImpl rows for .implements, in source order. resources are the ManifestResource rows
 ; for .mresource, in source order. customattrs are the CustomAttribute rows (II.22.10) in source
-; order; the builder sorts them by parent.
+; order; the builder sorts them by parent. win32resources are the Win32 resource decls (win32-resource-decl)
+; in source order, which image.rkt lays out in the .rsrc section.
 (struct cli-program (asm-refs typerefs memberrefs typespecs methodspecs genericparams
                      typedefs module-name entry-rid format standalone-sigs us-heap
-                     subsystem platform methodimpls interfaceimpls resources customattrs))
+                     subsystem platform methodimpls interfaceimpls resources customattrs
+                     win32-resources))
 ; ManifestResource row (II.22.24): name is the string, flags are the ManifestResource
 ; attribute bits (public or private), offset is the byte offset of its length prefix within the
 ; CLI resources blob (II.25.3.3), and data is its content.
@@ -1245,5 +1247,6 @@
                methodimpls
                interfaceimpls
                resources
-               customattrs))
+               customattrs
+               (module-model-win32-resources m)))
 

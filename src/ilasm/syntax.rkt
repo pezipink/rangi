@@ -14,6 +14,7 @@
          (struct-out field-decl)
          (struct-out data-decl)
          (struct-out resource-decl)
+         (struct-out win32-resource-decl)
          (struct-out method-decl)
          (struct-out pinvoke-decl)
          (struct-out generic-param)
@@ -27,8 +28,9 @@
 ; 'x86, or '32bitpreferred (.platform). Both are names here; lower and image map them to flags.
 ; data is the list of data-decl blocks (.data, II.16) in source order. resources is the list of
 ; resource-decl in source order (.mresource). customs is the list of custom-decl on the assembly
-; (top-level .custom).
-(struct module-model (asm-refs classes module-name format dll? subsystem platform data resources customs))
+; (top-level .custom). win32-resources is the list of win32-resource-decl in source order (.win32resource).
+(struct module-model (asm-refs classes module-name format dll? subsystem platform data resources customs
+                               win32-resources))
 ; An .assembly extern (II.22.5 AssemblyRef). name comes from the referenced file. version is four
 ; 16-bit parts, and token is the 8-byte public key token or #"" when none is given.
 (struct asm-ref (name version token) #:transparent)
@@ -56,6 +58,9 @@
 ; An embedded managed resource (II.22.24 ManifestResource, II.25.3.3): name is the symbol the
 ; resource is looked up by, flags is 'public or 'private, bytes is its content.
 (struct resource-decl (name flags bytes) #:transparent)
+; A Win32 resource (PE/COFF, The .rsrc Section): type, name, and language are 16-bit integer IDs,
+; and bytes is the resource data. Written as .win32resource TYPE NAME LANG (bytearray (HEX ...)).
+(struct win32-resource-decl (type name lang bytes) #:transparent)
 ; handlers: list of eh-clause in source order. maxstack is #f when there is no .maxstack.
 ; pinvoke is #f, or the pinvoke-decl of a pinvokeimpl method (II.15.5). customs is the list of
 ; custom-decl written in the method body (II.22.10 with a MethodDef parent).
@@ -431,6 +436,29 @@
   (when dup (error 'rangi "duplicate .mresource ~a" dup))
   rs)
 
+; .win32resource TYPE NAME LANG bytearray (HEX ...): one Win32 resource (PE/COFF, The .rsrc Section).
+; TYPE, NAME, and LANG are integer IDs from 0 to 65535, and each (type, name, lang) is used once.
+(define (parse-win32-resource-decl node)
+  (match node
+    [(list '.win32resource (? exact-integer? type) (? exact-integer? name) (? exact-integer? lang)
+           (list 'bytearray (? list? items)))
+     (for ([id (in-list (list type name lang))])
+       (unless (<= 0 id #xFFFF)
+         (error 'rangi ".win32resource ID ~a is outside 0..65535" id)))
+     (win32-resource-decl type name lang
+                          (apply bytes (for/list ([x (in-list items)])
+                                         (parse-data-byte (format "~a/~a/~a" type name lang) x))))]
+    [_ (error 'rangi "malformed .win32resource (expected .win32resource TYPE NAME LANG (bytearray (HEX ...))): ~s"
+              node)]))
+
+(define (check-win32-resources rs)
+  (define dup (check-duplicates (map (λ (r) (list (win32-resource-decl-type r)
+                                                  (win32-resource-decl-name r)
+                                                  (win32-resource-decl-lang r)))
+                                     rs)))
+  (when dup (error 'rangi "duplicate .win32resource ~s" dup))
+  rs)
+
 ; Byte size of a fixed-size primitive, for checking FieldRVA data (II.23.1.16).
 (define primitive-sizes
   '((boolean . 1) (int8 . 1) (uint8 . 1) (char . 2) (int16 . 2) (uint16 . 2)
@@ -555,6 +583,7 @@
   (define platform #f)
   (define data-decls '())
   (define resource-decls '())
+  (define win32-decls '())
   (define (add-asm-extern! filename body)
     (define name (read-assembly-meta (read-file filename)))
     (when (findf (λ (r) (equal? (asm-ref-name r) name)) asm-refs)
@@ -611,6 +640,9 @@
          acc]
         [(list '.mresource _ ...)
          (set! resource-decls (cons (parse-resource-decl node) resource-decls))
+         acc]
+        [(list '.win32resource _ ...)
+         (set! win32-decls (cons (parse-win32-resource-decl node) win32-decls))
          acc]
         [_ (error 'rangi "unsupported top-level directive ~s" node)])))
 
@@ -670,4 +702,5 @@
 
   (module-model (reverse asm-refs) classes mod-name (or fmt 'pe32) dll?
                 (or subsystem 'console) (or platform 'anycpu) (reverse data-decls)
-                (check-resources (reverse resource-decls)) (reverse asm-customs)))
+                (check-resources (reverse resource-decls)) (reverse asm-customs)
+                (check-win32-resources (reverse win32-decls))))

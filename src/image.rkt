@@ -3,7 +3,10 @@
          racket/file
          racket/list
          racket/path
-         (only-in "ilasm/syntax.rkt" module-model-dll?)
+         (only-in "ilasm/syntax.rkt"
+                  module-model-dll?
+                  win32-resource-decl-type win32-resource-decl-name
+                  win32-resource-decl-lang win32-resource-decl-bytes)
          "cli/lower.rkt"
          "cli/build.rkt"
          "cli/header.rkt"
@@ -11,6 +14,7 @@
          "pe/imports.rkt"
          "pe/layout.rkt"
          "pe/relocs.rkt"
+         "pe/rsrc.rkt"
          "pe/write.rkt")
 (provide write-image assemble image-layout-report)
 
@@ -29,12 +33,19 @@
 
 ; writes the module model to out-path and returns out-path
 (define (write-image m out-path)
-  (write-pe-image (plan-image (lower-module m) (path->string (file-name-from-path out-path))
+  (define p (lower-module m))
+  (write-pe-image (plan-image p (path->string (file-name-from-path out-path))
                               #:dll? (module-model-dll? m))
                   out-path
                   #:entry 'entry-stub
-                  #:dirs pe-data-dirs)
+                  #:dirs (image-data-dirs p))
   out-path)
+
+; the Win32 resource directory (data directory index 2) is listed only when there are resources
+(define (image-data-dirs p)
+  (if (null? (cli-program-win32-resources p))
+      pe-data-dirs
+      (cons (cons dir-resource-table rsrc-tree-chunk-name) pe-data-dirs)))
 
 (define (assemble m [out-path (make-temporary-file "rangi-~a.exe")])
   (write-image m out-path))
@@ -91,6 +102,15 @@
     (if (null? data-chunks)
         '()
         (list (section ".sdata" section-chars-sdata data-chunks))))
+  ; the Win32 resource tree (PE/COFF, The .rsrc Section) is added only when there are resources
+  (define win32-entries
+    (for/list ([d (in-list (cli-program-win32-resources p))])
+      (win32-entry (win32-resource-decl-type d) (win32-resource-decl-name d)
+                   (win32-resource-decl-lang d) (win32-resource-decl-bytes d))))
+  (define rsrc
+    (if (null? win32-entries)
+        '()
+        (list (section ".rsrc" section-chars-rsrc (win32-resource-chunks win32-entries)))))
 
   (define chars-base (if (eq? fmt 'pe32+) pe32plus-characteristics pe32-characteristics))
   (define chars (if dll? (bitwise-ior chars-base image-file-dll) chars-base))
@@ -105,4 +125,4 @@
   (define reloc
     (section ".reloc" section-chars-reloc
              (list (base-relocation-chunk (layout-image params (list text))))))
-  (layout-image params (append (list text) sdata (list reloc))))
+  (layout-image params (append (list text) sdata rsrc (list reloc))))
