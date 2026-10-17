@@ -73,6 +73,9 @@
               (if ext (coded-encode 'typedeforref (car ext) (cdr ext)) 0)
               fstart
               start))
+  ; one NestedClass row per nested TypeDef (II.22.32); sort-tables! orders them by NestedClass
+  (for ([td (in-list tds)] [rid (in-naturals 1)] #:when (tdef-enclosing td))
+    (add-row! tb 'nestedclass rid (tdef-enclosing td)))
   (for ([f (in-list (append-map tdef-fields tds))])
     (add-row! tb 'field (fdef-flags f) (s (fdef-name f)) (b (fdef-sig f))))
   ; Constant rows (II.22.9) point back at their Field row by its 1-based rid

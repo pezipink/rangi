@@ -53,7 +53,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x26 | File                   | none    | none    | Multi-module assemblies                                  |         |
 | 0x27 | ExportedType           | none    | none    | Type forwarders                                          |         |
 | 0x28 | ManifestResource       | none    | none    | Embedded resources                                       |         |
-| 0x29 | NestedClass            | none    | none    | Sorted                                                   |         |
+| 0x29 | NestedClass            | partial | done    | Sorted by NestedClass; one row per nested type, from textual nested `.class`; read back via `read-row` only | nested-types |
 | 0x2A | GenericParam           | partial | partial | Sorted; written for module generic methods; secondary sort key unverified | generic-calls |
 | 0x2B | MethodSpec             | partial | partial | Generic method instantiation; written for `call` with `inst`. Rows match SRM on mscorlib (656) | generic-calls |
 | 0x2C | GenericParamConstraint | partial | partial | Sorted; row helper and read                              |         |
@@ -125,7 +125,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | `.cctor` type initializer (static, specialname, rtspecialname; no beforefieldinit unless requested) | done | cctor-init |
 | Instance methods, `newobj`, virtual dispatch, `.override`  | partial (instance methods, `newobj`, `callvirt` done; `.override` and virtual dispatch not) | instance-methods |
 | Interfaces and implementation                              | none    |         |
-| Nested types                                               | none    |         |
+| Nested types (`nested public\|private\|assembly\|family\|famandassem\|famorassem` inside a class body; NestedClass rows; no namespace on the TypeDef) | done | nested-types |
 | Properties and events                                      | none    |         |
 | Generic types and methods (generic instances, same-module generic calls) | partial | generic-calls |
 | Single-dimension arrays (`newarr`, `ldelem`, `stelem`, `ldlen`; `ldelema` unit-tested only) | done | arrays-sum |
