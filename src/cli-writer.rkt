@@ -4,6 +4,7 @@
          racket/file
          racket/path
          "cli-reader.rkt"
+         "cli/schema.rkt"
          "private/binary.rkt"
          "pe/imports.rkt"
          "pe/layout.rkt"
@@ -284,7 +285,9 @@
 ; ---------------------------------------------------------------------------
 ; pass B: metadata tables
 
-(struct tbl (id kinds rows))
+; rows are positional, in the column order of the table's schema entry (schema.rkt)
+(struct tbl (name rows))
+(define (tbl-id t) (table-id (table-by-name (tbl-name t))))
 
 (define (starts-of counts)
   (let loop ([cs counts] [next 1] [acc '()])
@@ -299,35 +302,35 @@
   (define mdefs (append-map tdef-methods tds))
   (define starts (starts-of (map (λ (td) (length (tdef-methods td))) tds)))
   (define module-t
-    (tbl #x00 '(u2 str guid guid guid)
+    (tbl 'module
          (list (list 0 (s mod-name) 1 0 0))))
   (define typeref-t
-    (tbl #x01 '((coded 2 (0 #x23 1)) str str)
+    (tbl 'typeref
          (for/list ([r (in-list (il-program-typerefs p))])
            (match-let ([(list asm ns name) r])
-             (list (bitwise-ior (arithmetic-shift asm 2) 2) (s name) (s ns))))))
+             (list (coded-encode 'resolutionscope 'assemblyref asm) (s name) (s ns))))))
   (define typedef-t
-    (tbl #x02 '(u4 str str (coded 2 (2 1)) (simple 4) (simple 6))
+    (tbl 'typedef
          (for/list ([td (in-list tds)] [start (in-list starts)])
            (define ext (tdef-extends td))
            (list (tdef-flags td) (s (tdef-name td)) (s (tdef-ns td))
-                 (if ext (bitwise-ior (arithmetic-shift ext 2) 1) 0)
+                 (if ext (coded-encode 'typedeforref 'typeref ext) 0)
                  1
                  start))))
   (define methoddef-t
-    (tbl #x06 '(u4 u2 u2 str blob (simple 8))
+    (tbl 'methoddef
          (for/list ([m (in-list mdefs)] [i (in-naturals)])
            (list (rva-ref (method-sym i)) 0 (mdef-flags m) (s (mdef-name m)) (b (mdef-sig m)) 1))))
   (define memberref-t
-    (tbl #x0A '((coded 3 (2 1 #x1A 6 #x1B)) str blob)
+    (tbl 'memberref
          (for/list ([r (in-list (il-program-memberrefs p))])
            (match-let ([(list tr name sig) r])
-             (list (bitwise-ior (arithmetic-shift tr 3) 1) (s name) (b sig))))))
+             (list (coded-encode 'memberrefparent 'typeref tr) (s name) (b sig))))))
   (define assembly-t
-    (tbl #x20 '(u4 u2 u2 u2 u2 u4 blob str str)
+    (tbl 'assembly
          (list (list 0 0 0 0 0 0 0 (s asm-name) 0))))
   (define assemblyref-t
-    (tbl #x23 '(u2 u2 u2 u2 u4 blob str str blob)
+    (tbl 'assemblyref
          (for/list ([n (in-list (il-program-asm-refs p))])
            (list 0 0 0 0 0 0 (s n) 0 0))))
   (list module-t typeref-t typedef-t methoddef-t memberref-t assembly-t assemblyref-t))
@@ -344,24 +347,18 @@
   (define blobs (pad-to (heap-bytes bh) 4))
   (define us (bytes 0 0 0 0))
   (define counts
-    (for/hash ([t (in-list tables)]) (values (tbl-id t) (length (tbl-rows t)))))
+    (for/hash ([t (in-list tables)]) (values (tbl-name t) (length (tbl-rows t)))))
   (define strbig (> (bytes-length strs) #xFFFF))
   (define blobbig (> (bytes-length blobs) #xFFFF))
+  ; the #GUID stream is always 16 bytes with no guid index flag, so guid indexes are 2 bytes
+  (define (rows-of name) (hash-ref counts name 0))
   (define (kind-width k)
-    (match k
-      ['u2 2]
-      ['u4 4]
-      ['str (if strbig 4 2)]
-      ['blob (if blobbig 4 2)]
-      ['guid 2]
-      [(list 'simple t) (if (> (hash-ref counts t 0) #xFFFF) 4 2)]
-      [(list 'coded bits targets)
-       (define mx (for/fold ([m 0]) ([t (in-list targets)]) (max m (hash-ref counts t 0))))
-       (if (< mx (expt 2 (- 16 bits))) 2 4)]))
+    (column-width k (if strbig 4 2) (if blobbig 4 2) 2 rows-of))
   (define cells
     (for*/list ([t (in-list tables)]
                 [row (in-list (tbl-rows t))]
-                [(v w) (in-parallel row (map kind-width (tbl-kinds t)))])
+                [(v w) (in-parallel row (map (λ (c) (kind-width (column-kind c)))
+                                             (table-columns (table-by-name (tbl-name t)))))])
       (cons v w)))
   (define table-bytes
     (apply bytes-append
