@@ -153,7 +153,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Subsystem GUI versus console (`.subsystem console\|windows`) | n/a | done | subsystem-gui |
 | Multiple sections (`.text`, `.rsrc`, `.reloc`, `.sdata`) | partial | partial (`.text`, `.reloc`, `.sdata` when there is static data) | static-data |
 | Sections of any size (no 0x400 limit)                | done    | done    | text-over-400, text-over-2000 |
-| Base relocations generated from fixups               | n/a     | partial |         |
+| Base relocations generated from fixups               | n/a     | done    | base-relocs |
 | Deterministic timestamp and MVID                     | n/a     | done    | nano    |
 | Debug directory and portable PDB                     | out of scope | out of scope |     |
 | Win32 resources (version info, manifest)             | none    | none    |         |
