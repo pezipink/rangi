@@ -1,0 +1,40 @@
+Module rows=1
+  Module[1] Name="method-constraints.exe" Mvid=e7b2ee07cc17e3d16e84805ffd16bcda
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=5
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..3]
+  TypeDef[3] Flags=161 Name="IArea" Namespace="" Extends=0x00000000 Fields=[] Methods=[4..4]
+  TypeDef[4] Flags=1 Name="Square" Namespace="" Extends=0x01000001 Fields=[] Methods=[5..6]
+  TypeDef[5] Flags=1 Name="Wide" Namespace="" Extends=0x01000001 Fields=[] Methods=[7..8]
+MethodDef rows=8
+  MethodDef[1] Rva=8948 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=7305000006280100002b280100000a7307000006280200002b280100000a2a
+  MethodDef[2] Rva=8980 ImplFlags=0 Flags=22 Name="Measure" Signature=100101081e00 Params=[] Il=0f00fe160100001b6f040000062a
+  MethodDef[3] Rva=8996 ImplFlags=0 Flags=22 Name="Scale" Signature=100101081e00 Params=[] Il=0f00fe160100001b6f080000062a
+  MethodDef[4] Rva=0 ImplFlags=0 Flags=1350 Name="Area" Signature=200008 Params=[]
+  MethodDef[5] Rva=9012 ImplFlags=0 Flags=6150 Name=".ctor" Signature=200001 Params=[] Il=02280200000a2a
+  MethodDef[6] Rva=9020 ImplFlags=0 Flags=326 Name="Area" Signature=200008 Params=[] Il=1a2a
+  MethodDef[7] Rva=9024 ImplFlags=0 Flags=6150 Name=".ctor" Signature=200001 Params=[] Il=02280200000a2a
+  MethodDef[8] Rva=9032 ImplFlags=0 Flags=326 Name="Area" Signature=200008 Params=[] Il=1f092a
+InterfaceImpl rows=1
+  InterfaceImpl[1] Class=4 Interface=0x02000003
+MemberRef rows=2
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+  MemberRef[2] Parent=0x01000001 Name=".ctor" Signature=200001
+TypeSpec rows=1
+  TypeSpec[1] Signature=1e00
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
+GenericParam rows=2
+  GenericParam[1] Number=0 Flags=0 Owner=0x06000002 Name="T"
+  GenericParam[2] Number=0 Flags=0 Owner=0x06000003 Name="T"
+MethodSpec rows=2
+  MethodSpec[1] Method=0x06000002 Instantiation=0a011210
+  MethodSpec[2] Method=0x06000003 Instantiation=0a011214
+GenericParamConstraint rows=2
+  GenericParamConstraint[1] Owner=1 Constraint=0x02000003
+  GenericParamConstraint[2] Owner=2 Constraint=0x02000005

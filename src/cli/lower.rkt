@@ -468,6 +468,8 @@
      (bitwise-ior #x01000000 (typeref-rid! cx asm ty 0))]
     [_ (error 'rangi "~a ~s is not supported" what elem)]))
 
+(define (type-variable? x) (and (symbol? x) (tyvar-ref x) #t))
+
 ; II.25.4.6: a catch handler, and a filter block and its handler, start with the exception
 ; object on the stack. finally and fault handlers start with an empty stack.
 (define (handler-depth clause)
@@ -532,6 +534,9 @@
     [(list 'ldstr s) (list 'ldstr (string-token cx s))]
     [(list (and op (or 'newarr 'ldelem 'ldelema 'stelem)) elem)
      (list op (element-type-token! cx elem))]
+    ; a type variable operand is a TypeSpec whose blob is VAR or MVAR (II.22.39, II.23.2.12)
+    [(list (and op (or 'box 'unbox.any 'castclass 'isinst 'constrained.)) (? type-variable? t))
+     (list op (bitwise-ior #x1B000000 (typespec-rid! cx (encode-typespec (lower-type cx scope t)))))]
     [(list (and op (or 'box 'unbox 'unbox.any 'castclass 'isinst 'ldobj 'stobj 'cpobj 'initobj
                        'sizeof 'refanyval 'mkrefany 'ldtoken 'constrained.))
            type)

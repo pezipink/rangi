@@ -60,6 +60,25 @@
   (check-exn #rx"prefix constrained. cannot precede pop"
              (λ () (lower-with-body '((ldc.i4.1) (box int32) (constrained. int32) (pop))))))
 
+(test-case "a method type variable operand is range-checked against the method's arity"
+  (check-exn #rx"type variable !!0 out of range \\(0 declared\\)"
+             (λ () (lower-with-body '((box !!0) (pop))))))
+
+(test-case "constrained. on a method type variable is accepted in a generic method"
+  (check-not-exn
+   (λ ()
+     (lower-module
+      (parse-il
+       `((.assembly extern ,mscorlib-path {})
+         (.assembly local {})
+         (.module local.exe)
+         (.class (private auto ansi) <Module>
+           [(.method (public static) void main () (cil managed)
+              { (.entrypoint) (.maxstack 8) (ret) })
+            (.method (public static) int32 Show (.typarams (T)) (!!0) (cil managed)
+              { (.maxstack 8) (ldarga.s 0) (constrained. !!0)
+                (callvirt string (mscorlib System.Object) ToString ()) (pop) (ldc.i4.0) (ret) })])))))))
+
 (test-case "constrained. before callvirt on a managed pointer is accepted"
   (check-not-exn
    (λ () (lower-with-body

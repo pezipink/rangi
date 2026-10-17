@@ -48,3 +48,47 @@
 (test-case "a repeated special is rejected"
   (check-exn #rx"duplicate special constraint"
              (λ () (box-gparams '(.typarams (T class class))))))
+
+; A module with the given classes, for constraints that name classes of this module.
+(define (module-with . classes)
+  `((.assembly extern "C:/Program Files (x86)/Reference Assemblies/Microsoft/Framework/.NETFramework/v4.7.1/mscorlib.dll" {})
+    (.assembly generic-syntax {})
+    (.module local.exe)
+    (.class (private auto ansi) <Module>
+      [(.method (public static) void main () (cil managed) { (.entrypoint) (.maxstack 8) (ret) })])
+    ,@classes))
+
+(define plain-class
+  `(.class (public auto ansi) Plain (.extends (mscorlib System.Object)) []))
+
+(define (gen-class tp)
+  `(.class (public auto ansi) Gen ,tp (.extends (mscorlib System.Object)) []))
+
+(define (holder-with-method-typarams tp)
+  `(.class (public auto ansi) Holder (.extends (mscorlib System.Object))
+     [(.method (public static) void M ,tp () (cil managed) { (.maxstack 8) (ret) })]))
+
+(test-case "a constraint with type arguments on a non-generic local class is a parse error"
+  (check-exn #rx"names non-generic class Plain"
+             (λ () (parse-il (module-with plain-class
+                                          (box-class '(.typarams (T (class Plain (int32)))))))))
+  (check-exn #rx"names non-generic class Plain"
+             (λ () (parse-il (module-with plain-class
+                                          (holder-with-method-typarams '(.typarams (T (class Plain (int32))))))))))
+
+(test-case "a constraint without type arguments on a generic local class is a parse error"
+  (check-exn #rx"takes 1 type argument"
+             (λ () (parse-il (module-with (gen-class '(.typarams A))
+                                          (box-class '(.typarams (T (class Gen)))))))))
+
+(test-case "a constraint with the wrong number of type arguments is a parse error"
+  (check-exn #rx"gives 2 type argument\\(s\\) to Gen, which takes 1"
+             (λ () (parse-il (module-with (gen-class '(.typarams A))
+                                          (box-class '(.typarams (T (class Gen (int32 int32))))))))))
+
+(test-case "valid constraints on local classes parse"
+  (check-not-exn
+   (λ () (parse-il (module-with plain-class
+                                (gen-class '(.typarams A))
+                                (box-class '(.typarams (T (class Plain)) (U (class Gen (int32)))))
+                                (holder-with-method-typarams '(.typarams (V (class Plain)))))))))

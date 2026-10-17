@@ -92,7 +92,7 @@
      [,base-ctor]))
 
 (test-case "a generic class used without type arguments as a constraint is rejected"
-  (check-exn #rx"without type arguments"
+  (check-exn #rx"names generic class Gen, which takes 1 type argument"
              (λ ()
                (lower gen-a
                       `(.class (public auto ansi) Bad (.typarams (T (class Gen)))

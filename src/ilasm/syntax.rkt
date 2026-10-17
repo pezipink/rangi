@@ -189,6 +189,37 @@
 
 (define (typarams-count tp) (if tp (length (cdr tp)) 0))
 
+; A constraint that names a class of this module must give exactly that class's type arguments.
+; External classes are checked at lowering, where their arity is known.
+(define (check-constraint-arities classes)
+  (define arities
+    (for/hash ([c (in-list classes)]) (values (class-decl-name c) (length (class-decl-gparams c)))))
+  (define (check-form c)
+    (match c
+      [(list (or 'class 'valuetype) (? symbol? name))
+       (check-arity name '() c)]
+      [(list (or 'class 'valuetype) (? symbol? name) (? list? args))
+       (check-arity name args c)]
+      [_ (void)]))
+  (define (check-arity name args c)
+    (define arity (hash-ref arities name #f))
+    (when arity
+      (cond
+        [(and (zero? arity) (pair? args))
+         (error 'rangi "constraint ~s names non-generic class ~a" c name)]
+        [(and (positive? arity) (null? args))
+         (error 'rangi "constraint ~s names generic class ~a, which takes ~a type argument(s)" c name arity)]
+        [(not (= arity (length args)))
+         (error 'rangi "constraint ~s gives ~a type argument(s) to ~a, which takes ~a" c (length args) name arity)]))
+    (for-each check-form args))
+  (define (check-gparams gps)
+    (for* ([gp (in-list gps)] [c (in-list (generic-param-constraints gp))])
+      (check-form c)))
+  (for ([c (in-list classes)])
+    (check-gparams (class-decl-gparams c))
+    (for ([m (in-list (class-decl-methods c))])
+      (check-gparams (method-decl-gparams m)))))
+
 ; tp is the whole (.typarams GP ...) list, or #f when there are no generic parameters.
 (define (parse-typarams who tp ncls nmth)
   (cond
@@ -935,6 +966,7 @@
   (define classes (append* (for/list ([cls (in-list ordered)]) (flatten-class cls #f))))
   (when (check-duplicates (map class-decl-name classes))
     (error 'rangi "duplicate class name ~a" (check-duplicates (map class-decl-name classes))))
+  (check-constraint-arities classes)
 
   (define data-fields
     (for*/list ([c (in-list classes)] [f (in-list (class-decl-fields c))] #:when (field-decl-at f))
