@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/match
          racket/file
+         racket/list
          racket/path
          (only-in "ilasm/syntax.rkt" module-model-dll?)
          "cli/lower.rkt"
@@ -72,6 +73,17 @@
     (section ".text" section-chars-text
              (append (list iat cli-header md) body-chunks
                      (list import-dir lookup hint-name dll-name entry-stub))))
+  ; initial data of FieldRVA fields (II.22.18), in Field-row order; the section is added only when
+  ; some field has data, so images without static data keep their layout
+  (define data-chunks
+    (for/list ([f (in-list (append-map tdef-fields (cli-program-typedefs p)))]
+               [rid (in-naturals 1)]
+               #:when (fdef-data f))
+      (chunk (field-data-sym rid) dword-align (fdef-data f) '())))
+  (define sdata
+    (if (null? data-chunks)
+        '()
+        (list (section ".sdata" section-chars-sdata data-chunks))))
 
   (define chars-base (if (eq? fmt 'pe32+) pe32plus-characteristics pe32-characteristics))
   (define chars (if dll? (bitwise-ior chars-base image-file-dll) chars-base))
@@ -86,4 +98,4 @@
   (define reloc
     (section ".reloc" section-chars-reloc
              (list (base-relocation-chunk (layout-image params (list text))))))
-  (layout-image params (list text reloc)))
+  (layout-image params (append (list text) sdata (list reloc))))

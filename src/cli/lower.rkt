@@ -6,7 +6,7 @@
          "heaps.rkt"
          (only-in "sigs.rkt" encode-localvar-sig encode-method-sig encode-method-instantiation
                   encode-typespec encode-type encode-field-sig primitive-names element-codes)
-         (only-in "flags.rkt" field-attributes-flags fa-hasdefault)
+         (only-in "flags.rkt" field-attributes-flags fa-hasdefault fa-hasfieldrva)
          (only-in "../il/encode.rkt" find-opcode opcode-named)
          (only-in "../il/opcodes.rkt" opcode-operand opcode-type)
          (only-in racket/string string-prefix?)
@@ -35,8 +35,9 @@
 (struct tdef (flags name ns extends methods fields))
 (struct mdef (name flags sig body entry?))
 ; A Field row (II.22.15): flags are FieldAttributes bits, sig is a FieldSig blob. const is #f, or
-; (element-code . value-bytes) for a literal field's Constant row (II.22.9).
-(struct fdef (name flags sig const))
+; (element-code . value-bytes) for a literal field's Constant row (II.22.9). data is #f, or the
+; initial value bytes of a FieldRVA field (II.22.18), which lives in the image's data area.
+(struct fdef (name flags sig const data))
 
 ; class-rids maps a module class name to its TypeDef rid. method-rids maps
 ; (list class name ret params), as written in the source, to (vector MethodDef-rid arity instance?).
@@ -811,6 +812,21 @@
            (apply bytes (for/list ([i (in-range size)])
                           (bitwise-and (arithmetic-shift v (* -8 i)) #xFF))))]))
 
+; The initial value of a FieldRVA field (II.22.18): the bytes of the .data block it names. Only a
+; static field can have one (II.16), and a literal takes its value from a Constant row instead.
+(define (field-data fd data-decls)
+  (define dname (field-decl-at fd))
+  (cond
+    [(not dname) #f]
+    [else
+     (unless (memq 'static (field-decl-flags fd))
+       (error 'rangi "FieldRVA field ~a must be static" (field-decl-name fd)))
+     (when (field-decl-init fd)
+       (error 'rangi "field ~a has both a literal value and data" (field-decl-name fd)))
+     (define d (hash-ref data-decls dname #f))
+     (unless d (error 'rangi "field ~a uses undefined data ~a" (field-decl-name fd) dname))
+     (data-decl-bytes d)]))
+
 (define (lower-module m)
   (define classes (module-model-classes m))
   (for ([cls (in-list classes)] #:unless (null? (class-decl-gparams cls)))
@@ -845,6 +861,7 @@
   (define cx (ctx asm-refs typerefs memberrefs typespecs methodspecs standalone-sigs us-heap
                   class-rids method-rids field-rids))
   (define class-decls (for/hasheq ([cls (in-list classes)]) (values (class-decl-name cls) cls)))
+  (define data-decls (for/hasheq ([d (in-list (module-model-data m))]) (values (data-decl-name d) d)))
   (define-values (tdefs gps)
     (for/fold ([tdefs '()] [gps '()] [next-rid 1]
                #:result (values (reverse tdefs) (append* (reverse gps))))
@@ -856,12 +873,16 @@
       (define fdefs
         (for/list ([fd (in-list (class-decl-fields cls))])
           (define const (field-constant fd class-decls))
+          (define data (field-data fd data-decls))
           (fdef (symbol->string (field-decl-name fd))
-                ; a Constant row requires fdHasDefault (II.23.1.5)
+                ; a Constant row requires fdHasDefault (II.23.1.5); a FieldRVA row requires
+                ; fdHasFieldRVA (II.23.1.5)
                 (bitwise-ior (field-attributes-flags (field-decl-flags fd))
-                             (if const fa-hasdefault 0))
+                             (if const fa-hasdefault 0)
+                             (if data fa-hasfieldrva 0))
                 (encode-field-sig (lower-type cx '(0 . 0) (field-decl-type fd)))
-                const)))
+                const
+                data)))
       (define-values (mdefs rows) (encode-methods cx name next-rid (class-decl-methods cls)))
       (values (cons (tdef (typedef-flags flags) short ns extends mdefs fdefs) tdefs)
               (cons rows gps)

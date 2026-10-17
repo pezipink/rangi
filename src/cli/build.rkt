@@ -7,11 +7,13 @@
          "tables.rkt"
          "metadata.rkt"
          "../private/binary.rkt")
-(provide build-metadata method-sym
+(provide build-metadata method-sym field-data-sym
          add-typespec-row! add-standalonesig-row! add-methodspec-row!
          add-genericparam-row! add-genericparamconstraint-row!)
 
 (define (method-sym i) (string->symbol (format "method:~a" i)))
+; the initial data of the Field row with 1-based rid i (II.22.18), placed by the image layout
+(define (field-data-sym i) (string->symbol (format "field-data:~a" i)))
 
 ; Row helpers for the generics and signature tables. Each takes the table builder and the
 ; heaps it writes into, and returns the 1-based rid. A target is (cons table rid).
@@ -81,6 +83,10 @@
     (add-row! tb 'constant (car (fdef-const f)) 0
               (coded-encode 'hasconstant 'field rid)
               (b (cdr (fdef-const f)))))
+  ; FieldRVA rows (II.22.18) give the RVA of each static field's initial data
+  (for ([f (in-list (append-map tdef-fields tds))] [rid (in-naturals 1)]
+        #:when (fdef-data f))
+    (add-row! tb 'fieldrva (rva-ref (field-data-sym rid)) rid))
   (for ([m (in-list mdefs)] [i (in-naturals)])
     (add-row! tb 'methoddef (rva-ref (method-sym i)) 0 (mdef-flags m) (s (mdef-name m))
               (b (mdef-sig m)) 1))
