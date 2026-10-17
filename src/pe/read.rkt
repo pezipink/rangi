@@ -1,10 +1,8 @@
 #lang racket/base
 ; Reads the PE headers of a .exe or .dll (ECMA-335 II.25.2) and maps RVAs to file offsets.
 ; This module knows nothing about CLI metadata. It is part of the lazy reader, so keep it cheap.
+(require "../private/binary.rkt")
 (provide read-spec read-pe-headers rva->file-offset)
-
-; unsigned little-endian conversion
-(define (le-uint bs) (integer-bytes->integer bs #f #f))
 
 ; only the first 0x40 bytes are needed; e_lfanew at 0x3C points at the PE header
 (define ms-dos-header-spec
@@ -113,20 +111,20 @@
 (define (read-pe-headers port)
   (define dos-header (read-spec ms-dos-header-spec port))
   ; e_lfanew is the file offset of the PE signature
-  (define pe-offset (le-uint (subbytes (hash-ref dos-header 'header) #x3C #x40)))
+  (define pe-offset (bytes->uint-le (subbytes (hash-ref dos-header 'header) #x3C #x40)))
   (file-position port pe-offset)
   (define pe-headers (make-hash))
   (hash-set! pe-headers 'ms-dos dos-header)
   (hash-set! pe-headers 'pe (read-spec pe-file-header-spec port))
   (define opt-start (file-position port))
-  (define opt-header-size (le-uint (hash-ref (hash-ref pe-headers 'pe) 'opt-header-size)))
+  (define opt-header-size (bytes->uint-le (hash-ref (hash-ref pe-headers 'pe) 'opt-header-size)))
   ; the magic tells PE32 and PE32+ apart
-  (define magic (le-uint (peek-bytes 2 0 port)))
+  (define magic (bytes->uint-le (peek-bytes 2 0 port)))
   (hash-set! pe-headers 'pe-opt
              (read-spec (if (= magic #x20B) pe32plus-opt-header-spec pe-opt-header-spec) port))
   ; section headers follow the optional header, whose real size is recorded in the file header
   (file-position port (+ opt-start opt-header-size))
-  (define num-secs (le-uint (hash-ref (hash-ref pe-headers 'pe) 'num-secs)))
+  (define num-secs (bytes->uint-le (hash-ref (hash-ref pe-headers 'pe) 'num-secs)))
   (hash-set! pe-headers 'sec-headers
              (for/list ([i (in-range 0 num-secs)]) (read-spec pe-section-header-spec port)))
   pe-headers)
@@ -136,7 +134,7 @@
 ; is at file offset 0x208.
 (define (rva->file-offset pe-headers rva)
   (or (for/first ([header (in-list (hash-ref pe-headers 'sec-headers))]
-                  #:when (let ([va (le-uint (hash-ref header 'virt-address))])
-                           (and (<= va rva) (< rva (+ va (le-uint (hash-ref header 'virt-size)))))))
-        (+ (le-uint (hash-ref header 'ptr-raw)) (- rva (le-uint (hash-ref header 'virt-address)))))
+                  #:when (let ([va (bytes->uint-le (hash-ref header 'virt-address))])
+                           (and (<= va rva) (< rva (+ va (bytes->uint-le (hash-ref header 'virt-size)))))))
+        (+ (bytes->uint-le (hash-ref header 'ptr-raw)) (- rva (bytes->uint-le (hash-ref header 'virt-address)))))
       (error 'rva->file-offset "rva 0x~x is not in any section" rva)))

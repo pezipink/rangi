@@ -12,20 +12,6 @@
 (provide assemble image-layout-report parse-il)
 
 ; ---------------------------------------------------------------------------
-; byte helpers
-
-(define (compressed n)
-  (cond
-    [(< n #x80) (bytes n)]
-    [(< n #x4000) (bytes (bitwise-ior #x80 (arithmetic-shift n -8)) (bitwise-and n #xFF))]
-    [(< n #x20000000)
-     (bytes (bitwise-ior #xC0 (arithmetic-shift n -24))
-            (bitwise-and (arithmetic-shift n -16) #xFF)
-            (bitwise-and (arithmetic-shift n -8) #xFF)
-            (bitwise-and n #xFF))]
-    [else (error 'rangi "blob of ~a bytes is too large" n)]))
-
-; ---------------------------------------------------------------------------
 ; layout constants (the PE layout itself lives in pe/)
 
 (define image-bases (hasheq 'pe32 #x400000 'pe32+ #x140000000))
@@ -108,7 +94,7 @@
 (define (method-sig ret params)
   (unless (list? params) (error 'rangi "malformed parameter list ~s" params))
   (bytes-append (bytes #x00)
-                (compressed (length params))
+                (compress-unsigned (length params))
                 (bytes (type-code ret))
                 (apply bytes-append (for/list ([t (in-list params)]) (bytes (param-code t))))))
 
@@ -290,7 +276,7 @@
     [(hash-ref (heap-table h) b #f) => values]
     [else
      (define off (heap-size h))
-     (write-bytes (compressed (bytes-length b)) (heap-port h))
+     (write-bytes (compress-unsigned (bytes-length b)) (heap-port h))
      (write-bytes b (heap-port h))
      (hash-set! (heap-table h) b off)
      off]))
