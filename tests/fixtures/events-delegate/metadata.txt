@@ -1,0 +1,45 @@
+Module rows=1
+  Module[1] Name="events-delegate.exe" Mvid=fc4dccfe638f29f159da14899b16baf1
+TypeRef rows=3
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+  TypeRef[3] ResolutionScope=0x23000001 Name="MulticastDelegate" Namespace="System"
+TypeDef rows=4
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=257 Name="Handler" Namespace="" Extends=0x01000003 Fields=[] Methods=[2..3]
+  TypeDef[4] Flags=1 Name="Source" Namespace="" Extends=0x01000001 Fields=[1..1] Methods=[4..9]
+Field rows=1
+  Field[1] Flags=1 Name="_cell" Signature=0608
+MethodDef rows=9
+  MethodDef[1] Rva=9064 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=73040000060a06191f286f0600000606196f050000061858280100000a06fe060700000673020000060b071d6f030000062a
+  MethodDef[2] Rva=0 ImplFlags=3 Flags=6150 Name=".ctor" Signature=2002011c18 Params=[]
+  MethodDef[3] Rva=0 ImplFlags=3 Flags=326 Name="Invoke" Signature=20010108 Params=[]
+  MethodDef[4] Rva=9128 ImplFlags=0 Flags=6150 Name=".ctor" Signature=200001 Params=[] Il=02280200000a2a
+  MethodDef[5] Rva=9136 ImplFlags=0 Flags=2054 Name="get_Item" Signature=20010808 Params=[] Il=027b010000042a
+  MethodDef[6] Rva=9144 ImplFlags=0 Flags=2054 Name="set_Item" Signature=2002010808 Params=[] Il=02047d010000042a
+  MethodDef[7] Rva=9156 ImplFlags=0 Flags=6 Name="Relay" Signature=20010108 Params=[] Il=03280100000a2a
+  MethodDef[8] Rva=9164 ImplFlags=0 Flags=2054 Name="add_Changed" Signature=200101120c Params=[] Il=2a
+  MethodDef[9] Rva=9168 ImplFlags=0 Flags=2054 Name="remove_Changed" Signature=200101120c Params=[] Il=2a
+MemberRef rows=2
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+  MemberRef[2] Parent=0x01000001 Name=".ctor" Signature=200001
+StandAloneSig rows=1
+  StandAloneSig[1] Signature=07021210120c
+EventMap rows=1
+  EventMap[1] Parent=4 Events=[1..1]
+Event rows=1
+  Event[1] Flags=0 Name="Changed" Type=0x02000003
+PropertyMap rows=1
+  PropertyMap[1] Parent=4 Properties=[1..1]
+Property rows=1
+  Property[1] Flags=0 Name="Item" Type=28010808
+MethodSemantics rows=4
+  MethodSemantics[1] Semantics=8 Method=8 Association=0x14000001
+  MethodSemantics[2] Semantics=16 Method=9 Association=0x14000001
+  MethodSemantics[3] Semantics=2 Method=5 Association=0x17000001
+  MethodSemantics[4] Semantics=1 Method=6 Association=0x17000001
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
