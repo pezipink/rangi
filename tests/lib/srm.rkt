@@ -1,7 +1,7 @@
 #lang racket/base
 ; Builds and runs the System.Reflection.Metadata dumper (tests/oracles/srm-dump).
 (require racket/system racket/runtime-path)
-(provide srm-dotnet build-srm! run-srm)
+(provide srm-dotnet build-srm! run-srm run-srm-batch)
 
 (define-runtime-path srm-project "../oracles/srm-dump/srm-dump.csproj")
 
@@ -27,3 +27,9 @@
 (define (run-srm dotnet exe)
   (run-capture dotnet "run" "--no-build" "--project" (path->string srm-project)
                "--" (path->string exe)))
+
+; dumps many images in one process; the output has a "=== FILE <path>" header per image,
+; followed by its dump or a "=== ERROR <message>" line
+(define (run-srm-batch dotnet exes)
+  (apply run-capture dotnet "run" "--no-build" "--project" (path->string srm-project)
+         "--" "--batch" (map path->string exes)))

@@ -355,7 +355,6 @@
     (cond
       [(hash-ref layouts name #f)
        => (λ (cols) (check-indexes rdr raw name td cols heap-lens count-of fail!))]
-      [(memq name '(field param)) (void)]
       [else (fail! "table ~a has no layout in the lint" name)])))
 
 ; every heap index, simple index, and coded index must be in range
@@ -387,6 +386,7 @@
      (define tag (bitwise-and v (sub1 (arithmetic-shift 1 (car spec)))))
      (define row (arithmetic-shift v (- (car spec))))
      (and (< tag (length (cdr spec)))
+          (list-ref (cdr spec) tag)
           (<= row (count-of (list-ref (cdr spec) tag))))]
     [else #t]))
 
