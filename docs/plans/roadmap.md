@@ -56,7 +56,7 @@ Open items, in order:
 | P0 | Done | None |
 | P1 | Done | None |
 | P2 | Done | R1 and R2 merged. Signed compressed integers are deferred until a caller needs them |
-| P3 | Partly done | R3 and V5 are done. R4 heaps (C) are merged; R4 tables, metadata, header, and body chunks are not started. R5 (front-end split) is not started. Close P3 after them. |
+| P3 | Partly done | R3, V5, and R4 are done, except the partial literal removal in R4. R5 (front-end split) is not started. Close P3 after R5. |
 | P4 | Started | O1, O2, and O3 done (B merged). O5 unit and relaxation tests merged. O4 and the rest of O5 are open. O4 method bodies depend on R4. |
 | P5 | Not started | Depends on R4 and R5 |
 | P6 | Mostly done | V7 corpus diff matches SRM on 133 of 133 assemblies. The benchmark and memory-mapping items in R6 are open. |
@@ -67,8 +67,7 @@ The critical path is P2, then R4, then R5, then closing P3, then P4 integration.
 
 1. Done: P2, part A1 (R1). Helpers live in `src/private/binary.rkt`, and the reader and writer use them. Signed compressed integers are still open. Merged from `stream/a1`.
 2. Done: P2, part A2 (R2), merged from `stream/a2`. The reader stays at `src/cli-reader.rkt` and the writer at `src/cli-writer.rkt`; the move happens in R5.
-3. R4 (CLI emits chunks), remaining parts. Heaps are merged. Next are tables (typed constructors, sorting, remap), the metadata root, the CLI header, and method-body chunks, all in the writer. Remove the writer literals in [architecture.md](../architecture.md#writer).
-3. R4 (CLI emits chunks), remaining parts. Heaps are merged. Next are tables (typed constructors, sorting, remap), the metadata root, the CLI header, and method-body chunks, all in the writer. Remove the writer literals in [architecture.md](../architecture.md#writer).
+3. R4 (CLI emits chunks). Done: heaps, tables, metadata root, CLI header, and body chunks. The literal removal is partly done, and the opcode and PE constants stay until O4 and R5. R5 is next on the critical path.
 4. R5 (front-end split). Move `parse-il` to `ilasm/syntax.rkt` and add `image.rkt`. This is when the writer's compatibility shims go.
 5. Close P3 once R4 and R5 are in and the layout snapshots have been reviewed by a person.
 6. P4 (O2 to O5). Operand encoders, labels, and relaxation go in as pure modules and are wired to the writer at O4.

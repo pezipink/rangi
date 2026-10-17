@@ -42,11 +42,12 @@ Deviations so far: a chunk holds plain bytes with zeroed holes and a list of typ
 ### R4 CLI layer emits chunks
 
 * [x] `cli/heaps.rkt`: insertion-ordered heaps with dedup. The `#Strings` heap writes UTF-8; the `#US` heap writes a compressed length, UTF-16LE text, and the trailing flag byte (II.24.2.4); `#Blob`; `#GUID` (1-based index). Merged from `stream/c-heaps`; the writer does not use it yet.
-* [ ] `cli/tables.rkt`: rows are added through typed constructors and stored in insertion order. Sorted tables are sorted at serialisation time, with a remap of any tokens that point into them. Compute `Valid`, `Sorted`, `HeapSizes`, and row counts.
-* [ ] `cli/metadata.rkt`: metadata root (signature, version string padded to 4, stream headers with computed offsets), as a single chunk.
-* [ ] `cli/header.rkt`: CLI header with the entry point token from the model, flags (`ILONLY`, `32BITREQUIRED`, `32BITPREFERRED`, `STRONGNAMESIGNED`), and symbol fixups to the metadata and resources.
-* [ ] Method bodies become one chunk each (4-byte aligned for fat headers), with `MethodDef.RVA` filled through a fixup.
-* [ ] Delete every literal listed in [architecture.md](../architecture.md#writer).
+* [x] `cli/tables.rkt`: rows are added with `add-row!`, which takes the table name and the columns in schema order, and checks arity and ranges against `schema.rkt`. Deviation: one generic constructor instead of per-table constructors, because the schema is already the single source of row layouts. Rows are stored in insertion order. `sort-tables!` sorts the sorted tables in dependency order, remaps every index and coded index into them, and errors on a cycle. `tables-stream` computes `Valid`, `Sorted`, `HeapSizes`, and row counts, and returns the MethodDef RVA fixups. Covered by `tests/cli/tables-test.rkt`.
+* [x] `cli/metadata.rkt`: metadata root (BSJB, version `v4.0.30319` padded to 4, stream headers with computed offsets), as a single chunk. The MVID is a digest over the other streams, written into `#GUID` at layout.
+* [x] `cli/header.rkt`: CLI header chunk (II.25.3.3) with the entry token from the model and a fixup to the metadata chunk. Flags default to `ILONLY`. Deviation: `32BITREQUIRED`, `32BITPREFERRED`, and `STRONGNAMESIGNED` are not set yet, because nothing needs them. Resources are not emitted.
+* [x] Method bodies are one chunk each, 4-byte aligned. The MethodDef RVA is written as an `rva-ref` cell, and `tables-stream` returns it as a fixup, so the writer no longer patches offsets by hand. Bodies were already chunks before R4.
+* [ ] Delete every literal listed in [architecture.md](../architecture.md#writer). Partly done: the hand-written row layouts and the CLI header and metadata literals are gone. Still open: opcode bytes in `encode-il` (O4 replaces them), and the PE machine, flag, and section constants in `plan-image` (R5 and the PE layer).
+
 
 ### R5 Front end separation
 

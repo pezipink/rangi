@@ -5,6 +5,10 @@
          racket/path
          "cli-reader.rkt"
          "cli/schema.rkt"
+         "cli/heaps.rkt"
+         "cli/tables.rkt"
+         "cli/metadata.rkt"
+         "cli/header.rkt"
          "private/binary.rkt"
          "pe/imports.rkt"
          "pe/layout.rkt"
@@ -251,182 +255,69 @@
               (or fmt 'pe32)))
 
 ; ---------------------------------------------------------------------------
-; heaps
-
-(struct heap (port table))
-(define (make-heap seed)
-  (define port (open-output-bytes))
-  (write-bytes seed port)
-  (heap port (make-hash)))
-(define (heap-size h) (file-position (heap-port h)))
-(define (heap-bytes h) (get-output-bytes (heap-port h)))
-
-(define (string-index! h s)
-  (cond
-    [(equal? s "") 0]
-    [(hash-ref (heap-table h) s #f) => values]
-    [else
-     (define off (heap-size h))
-     (write-bytes (string->bytes/utf-8 s) (heap-port h))
-     (write-byte 0 (heap-port h))
-     (hash-set! (heap-table h) s off)
-     off]))
-
-(define (blob-index! h b)
-  (cond
-    [(hash-ref (heap-table h) b #f) => values]
-    [else
-     (define off (heap-size h))
-     (write-bytes (compress-unsigned (bytes-length b)) (heap-port h))
-     (write-bytes b (heap-port h))
-     (hash-set! (heap-table h) b off)
-     off]))
-
-; ---------------------------------------------------------------------------
 ; pass B: metadata tables
 
-; rows are positional, in the column order of the table's schema entry (schema.rkt)
-(struct tbl (name rows))
-(define (tbl-id t) (table-id (table-by-name (tbl-name t))))
-
+; starts-of: 1-based first rid of each owner's run of rows (MethodList, FieldList)
 (define (starts-of counts)
   (let loop ([cs counts] [next 1] [acc '()])
     (if (null? cs)
         (reverse acc)
         (loop (cdr cs) (+ next (car cs)) (cons next acc)))))
 
-(define (build-tables p sh bh mod-name asm-name)
-  (define (s x) (string-index! sh x))
-  (define (b x) (blob-index! bh x))
+; Adds the rows, sorts, and serialises the heaps and the #~ stream. The MVID is a
+; zero placeholder in #GUID, filled at layout by the digest in metadata-chunk.
+(define (build-metadata p asm-name mod-name)
+  (define tb (make-tables))
+  (define sh (make-strings-heap))
+  (define bh (make-blob-heap))
+  (define gh (make-guid-heap))
+  (define uh (make-us-heap))
+  (define (s x) (heap-add! sh x))
+  (define (b x) (heap-add! bh x))
   (define tds (il-program-typedefs p))
   (define mdefs (append-map tdef-methods tds))
   (define starts (starts-of (map (λ (td) (length (tdef-methods td))) tds)))
-  (define module-t
-    (tbl 'module
-         (list (list 0 (s mod-name) 1 0 0))))
-  (define typeref-t
-    (tbl 'typeref
-         (for/list ([r (in-list (il-program-typerefs p))])
-           (match-let ([(list asm ns name) r])
-             (list (coded-encode 'resolutionscope 'assemblyref asm) (s name) (s ns))))))
-  (define typedef-t
-    (tbl 'typedef
-         (for/list ([td (in-list tds)] [start (in-list starts)])
-           (define ext (tdef-extends td))
-           (list (tdef-flags td) (s (tdef-name td)) (s (tdef-ns td))
-                 (if ext (coded-encode 'typedeforref 'typeref ext) 0)
-                 1
-                 start))))
-  (define methoddef-t
-    (tbl 'methoddef
-         (for/list ([m (in-list mdefs)] [i (in-naturals)])
-           (list (rva-ref (method-sym i)) 0 (mdef-flags m) (s (mdef-name m)) (b (mdef-sig m)) 1))))
-  (define memberref-t
-    (tbl 'memberref
-         (for/list ([r (in-list (il-program-memberrefs p))])
-           (match-let ([(list tr name sig) r])
-             (list (coded-encode 'memberrefparent 'typeref tr) (s name) (b sig))))))
-  (define assembly-t
-    (tbl 'assembly
-         (list (list 0 0 0 0 0 0 0 (s asm-name) 0))))
-  (define assemblyref-t
-    (tbl 'assemblyref
-         (for/list ([n (in-list (il-program-asm-refs p))])
-           (list 0 0 0 0 0 0 (s n) 0 0))))
-  (list module-t typeref-t typedef-t methoddef-t memberref-t assembly-t assemblyref-t))
+  (define mvid (heap-add! gh (make-bytes 16 0)))
+  (add-row! tb 'module 0 (s mod-name) mvid 0 0)
+  (for ([r (in-list (il-program-typerefs p))])
+    (match-let ([(list asm ns name) r])
+      (add-row! tb 'typeref (coded-encode 'resolutionscope 'assemblyref asm) (s name) (s ns))))
+  (for ([td (in-list tds)] [start (in-list starts)])
+    (define ext (tdef-extends td))
+    (add-row! tb 'typedef (tdef-flags td) (s (tdef-name td)) (s (tdef-ns td))
+              (if ext (coded-encode 'typedeforref 'typeref ext) 0)
+              1
+              start))
+  (for ([m (in-list mdefs)] [i (in-naturals)])
+    (add-row! tb 'methoddef (rva-ref (method-sym i)) 0 (mdef-flags m) (s (mdef-name m))
+              (b (mdef-sig m)) 1))
+  (for ([r (in-list (il-program-memberrefs p))])
+    (match-let ([(list tr name sig) r])
+      (add-row! tb 'memberref (coded-encode 'memberrefparent 'typeref tr) (s name) (b sig))))
+  (add-row! tb 'assembly 0 0 0 0 0 0 0 (s asm-name) 0)
+  (for ([n (in-list (il-program-asm-refs p))])
+    (add-row! tb 'assemblyref 0 0 0 0 0 0 (s n) 0 0))
 
-; returns the metadata root and its fixups. Each MethodDef RVA is a 4-byte field whose
-; value is the body chunk's RVA, so it is left zero here and patched at layout. The MVID
-; is a digest over the other streams, so it is also left zero and filled at layout.
-(define (metadata-bytes p asm-name mod-name)
-  (define sh (make-heap #"\0"))
-  (define bh (make-heap #"\0"))
-  (define tables
-    (filter (λ (t) (pair? (tbl-rows t))) (build-tables p sh bh mod-name asm-name)))
-  (define strs (pad-to (heap-bytes sh) 4))
-  (define blobs (pad-to (heap-bytes bh) 4))
-  (define us (bytes 0 0 0 0))
-  (define counts
-    (for/hash ([t (in-list tables)]) (values (tbl-name t) (length (tbl-rows t)))))
-  (define strbig (> (bytes-length strs) #xFFFF))
-  (define blobbig (> (bytes-length blobs) #xFFFF))
-  ; the #GUID stream is always 16 bytes with no guid index flag, so guid indexes are 2 bytes
-  (define (rows-of name) (hash-ref counts name 0))
-  (define (kind-width k)
-    (column-width k (if strbig 4 2) (if blobbig 4 2) 2 rows-of))
-  (define cells
-    (for*/list ([t (in-list tables)]
-                [row (in-list (tbl-rows t))]
-                [(v w) (in-parallel row (map (λ (c) (kind-width (column-kind c)))
-                                             (table-columns (table-by-name (tbl-name t)))))])
-      (cons v w)))
-  (define table-bytes
-    (apply bytes-append
-           (for/list ([c (in-list cells)])
-             (le (if (rva-ref? (car c)) 0 (car c)) (cdr c)))))
-  ; byte offset of each RVA field within the table stream, after its 24-byte header and row counts
-  (define rva-cells
-    (let loop ([cs cells] [pos 0] [acc '()])
-      (cond
-        [(null? cs) (reverse acc)]
-        [else
-         (define c (car cs))
-         (loop (cdr cs) (+ pos (cdr c))
-               (if (rva-ref? (car c)) (cons (cons pos (rva-ref-target (car c))) acc) acc))])))
-  (define heap-flags (+ (if strbig 1 0) (if blobbig 4 0)))
-  (define valid (for/sum ([t (in-list tables)]) (arithmetic-shift 1 (tbl-id t))))
-  (define tilde
-    (pad-to (bytes-append (le 0 4) (bytes 2 0 heap-flags 1) (le valid 8) (le 0 8)
-                          (apply bytes-append
-                                 (for/list ([t (in-list tables)])
-                                   (le (length (tbl-rows t)) 4)))
-                          table-bytes)
-            4))
-  (define streams
-    (list (cons "#~" tilde)
-          (cons "#Strings" strs)
-          (cons "#US" us)
-          (cons "#GUID" (make-bytes 16 0))
-          (cons "#Blob" blobs)))
-  (define (stream-header name off size)
-    (bytes-append (le off 4) (le size 4)
-                  (pad-to (bytes-append (string->bytes/utf-8 name) #"\0") 4)))
-  (define header-len
-    (for/sum ([st (in-list streams)]) (bytes-length (stream-header (car st) 0 0))))
-  (define offsets
-    (let loop ([ss streams] [off (+ #x20 header-len)] [acc '()])
-      (if (null? ss)
-          (reverse acc)
-          (loop (cdr ss) (+ off (bytes-length (cdr (car ss)))) (cons off acc)))))
-  (define headers
-    (apply bytes-append
-           (for/list ([st (in-list streams)] [off (in-list offsets)])
-             (stream-header (car st) off (bytes-length (cdr st))))))
-  (define root
-    (bytes-append #"BSJB" (le 1 2) (le 1 2) (le 0 4)
-                  (le 12 4) (pad-to #"v4.0.30319\0" 4)
-                  (le 0 2) (le (length streams) 2)))
-  (define table-start (+ 24 (* 4 (length tables))))
-  ; the MVID is a digest of every stream except #GUID, with the RVA fields filled in
-  (define guid-offset
-    (for/first ([st (in-list streams)] [off (in-list offsets)] #:when (equal? (car st) "#GUID"))
-      off))
-  (define digest-spans
-    (for/list ([st (in-list streams)] [off (in-list offsets)] #:unless (equal? (car st) "#GUID"))
-      (cons off (+ off (bytes-length (cdr st))))))
-  (values (bytes-append root headers (apply bytes-append (map cdr streams)))
-          (append
-           (for/list ([rc (in-list rva-cells)])
-             (fixup (+ (car offsets) table-start (car rc)) 'rva32 (cdr rc)))
-           (list (digest guid-offset digest-spans)))))
+  (sort-tables! tb)
+  (define strs (pad-to (heap-serialise sh) 4))
+  (define blobs (pad-to (heap-serialise bh) 4))
+  (define-values (tilde table-fixups)
+    (tables-stream tb
+                   #:string-wide? (> (bytes-length strs) #xFFFF)
+                   #:blob-wide? (> (bytes-length blobs) #xFFFF)
+                   #:guid-wide? #f))
+  (metadata-chunk (list (cons "#~" tilde)
+                        (cons "#Strings" strs)
+                        (cons "#US" (pad-to (heap-serialise uh) 4))
+                        (cons "#GUID" (heap-serialise gh))
+                        (cons "#Blob" blobs))
+                  #:table-fixups table-fixups
+                  #:mvid-index mvid))
 
 ; ---------------------------------------------------------------------------
 ; PE image
 
 (define (method-sym i) (string->symbol (format "method:~a" i)))
-
-; a 4-byte metadata cell holding the RVA of target; metadata-bytes emits it as a fixup
-(struct rva-ref (target))
 
 (define (assemble p [out-path (make-temporary-file "rangi-~a.exe")])
   (write-pe-image (plan-image p (path->string (file-name-from-path out-path))) out-path
@@ -450,24 +341,18 @@
     (for*/list ([td (in-list (il-program-typedefs p))] [m (in-list (tdef-methods td))])
       (mdef-body m)))
 
-  (define-values (md-bytes md-fixups) (metadata-bytes p asm-name mod-name))
+  (define md (build-metadata p asm-name mod-name))
   (match-define (list iat import-dir lookup hint-name dll-name entry-stub)
     (mscoree-chunks fmt))
   (define cli-header
-    (chunk 'cli-header 4
-           (bytes-append (le #x48 4) (le 2 2) (le 0 2)
-                         (make-bytes 4 0) (le (bytes-length md-bytes) 4)
-                         (le 1 4)
-                         (le (bitwise-ior #x06000000 entry-rid) 4)
-                         (make-bytes 48 0))
-           (list (fixup 8 'rva32 'metadata))))
-  (define metadata (chunk 'metadata 4 md-bytes md-fixups))
+    (cli-header-chunk #:metadata-size (bytes-length (chunk-bytes md))
+                      #:entry-rid entry-rid))
   (define body-chunks
     (for/list ([b (in-list bodies)] [i (in-naturals)])
       (chunk (method-sym i) 4 b '())))
   (define text
     (section ".text" #x60000020
-             (append (list iat cli-header metadata) body-chunks
+             (append (list iat cli-header md) body-chunks
                      (list import-dir lookup hint-name dll-name entry-stub))))
 
   (define params
