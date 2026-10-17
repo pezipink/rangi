@@ -8,7 +8,7 @@
 (provide lint-image)
 
 (struct section (name va vsize raw-size raw-ptr chars))
-(struct pe-image (raw sections base entry dirs size-of-image))
+(struct pe-image (raw sections base entry dirs size-of-image plus?))
 
 (define (expect fail! ok? fmt . args)
   (unless ok? (apply fail! fmt args)))
@@ -62,9 +62,12 @@
      (define nsec (le raw (+ coff 2) 2))
      (define opt-size (le raw (+ coff 16) 2))
      (define opt (+ coff 20))
+     ; the magic picks PE32 (0x10B) or PE32+ (0x20B); PE32+ has the longer optional header
+     (define plus? (and (<= (+ opt 2) len) (= (le raw opt 2) #x20B)))
+     (define hdr-size (if plus? 240 224))
      (define sec-start (+ opt opt-size))
      (cond
-       [(or (< opt-size 224) (> (+ sec-start (* 40 nsec)) len))
+       [(or (< opt-size hdr-size) (> (+ sec-start (* 40 nsec)) len))
         (fail! "optional header or section table is outside the file") #f]
        [else
         (define (field off size) (le raw (+ opt off) size))
@@ -74,7 +77,8 @@
         (define sec-align (field 32 4))
         (define size-of-headers (field 60 4))
         (define size-of-image (field 56 4))
-        (define image-base (field 28 4))
+        (define image-base (if plus? (field 24 8) (field 28 4)))
+        (define dirs-off (if plus? 112 96))
         (define entry (field 16 4))
         (define (sum-raw bit)
           (for/sum ([s (in-list secs)] #:when (bitwise-bit-set? (section-chars s) bit))
@@ -83,9 +87,11 @@
           (define s (findf (λ (s) (bitwise-bit-set? (section-chars s) bit)) secs))
           (if s (section-va s) 0))
 
-        (expect fail! (= (field 0 2) #x10B) "optional header magic is not PE32")
+        (expect fail! (memv (field 0 2) '(#x10B #x20B))
+                "optional header magic ~x is neither PE32 nor PE32+" (field 0 2))
         (expect fail! (= (le raw 0 2) #x5A4D) "DOS header does not start with MZ")
-        (expect fail! (= (le raw coff 2) #x14C) "machine is not i386")
+        (expect fail! (= (le raw coff 2) (if plus? #x8664 #x14C))
+                "machine ~x does not match the optional header format" (le raw coff 2))
         (expect fail! (bitwise-bit-set? (le raw (+ coff 18) 2) 1)
                 "COFF characteristics ~x do not set EXECUTABLE_IMAGE" (le raw (+ coff 18) 2))
         (expect fail! (memv (field 68 2) '(2 3))
@@ -103,8 +109,9 @@
                 "SizeOfInitializedData ~x does not match the initialized data sections" (field 8 4))
         (expect fail! (= (field 20 4) (first-va 5))
                 "BaseOfCode ~x is not the first code section" (field 20 4))
-        (expect fail! (= (field 24 4) (first-va 6))
-                "BaseOfData ~x is not the first initialized data section" (field 24 4))
+        (unless plus?
+          (expect fail! (= (field 24 4) (first-va 6))
+                  "BaseOfData ~x is not the first initialized data section" (field 24 4)))
 
         (for ([s (in-list secs)])
           (define name (section-name s))
@@ -139,15 +146,15 @@
 
         (define dirs
           (for/hash ([i (in-range 16)])
-            (values i (cons (field (+ 96 (* 8 i)) 4) (field (+ 100 (* 8 i)) 4)))))
-        (expect fail! (= (field 92 4) 16) "NumberOfRvaAndSizes is not 16")
+            (values i (cons (field (+ dirs-off (* 8 i)) 4) (field (+ dirs-off (* 8 i) 4) 4)))))
+        (expect fail! (= (field (- dirs-off 4) 4) 16) "NumberOfRvaAndSizes is not 16")
         (expect fail! (not (and (bitwise-bit-set? (le raw (+ coff 18) 2) 0) (> (car (hash-ref dirs 5)) 0)))
                 "COFF says relocations are stripped, but a base relocation directory is present")
         (for ([(i d) (in-hash dirs)] #:when (> (car d) 0))
           (define s (rva->section secs (car d)))
           (expect fail! (and s (<= (+ (car d) (cdr d)) (+ (section-va s) (section-vsize s))))
                   "data directory ~a (RVA ~x, size ~a) is not inside a section" i (car d) (cdr d)))
-        (pe-image raw secs image-base entry dirs size-of-image)])]))
+        (pe-image raw secs image-base entry dirs size-of-image plus?)])]))
 
 (define (check-cli img fail!)
   (define raw (pe-image-raw img))
@@ -168,38 +175,51 @@
              "metadata RVA ~x (~a bytes) is not inside a section" md-rva md-size)
      (list md-rva md-size (le raw (+ off 20) 4))]))
 
-; the entry stub is an indirect jump through the IAT, and its operand is an absolute address
-; that the loader must fix up, so a HIGHLOW relocation has to cover it
+; the entry stub jumps through the IAT by an absolute operand. PE32 uses jmp [abs32] (6 bytes).
+; PE32+ uses movabs rax, [abs64]; jmp rax (12 bytes), since FF 25 cannot reach a 64-bit address.
+; Either operand needs a base relocation, which is what the loader uses to move it.
 (define (check-entry img fail!)
   (define raw (pe-image-raw img))
   (define entry (pe-image-entry img))
   (define eoff (rva->off img entry))
+  (define plus? (pe-image-plus? img))
+  (define len (if plus? 12 6))
   (cond
-    [(not (and eoff (<= (+ eoff 6) (bytes-length raw))))
+    [(not (and eoff (<= (+ eoff len) (bytes-length raw))))
      (fail! "entry point ~x is outside the file" entry)]
+    [plus?
+     (expect fail! (and (equal? (subbytes raw eoff (+ eoff 2)) (bytes #x48 #xA1))
+                        (equal? (subbytes raw (+ eoff 10) (+ eoff 12)) (bytes #xFF #xE0)))
+             "entry point ~x is not a movabs rax, [abs64]; jmp rax stub" entry)
+     (check-entry-target img entry (le raw (+ eoff 2) 8) fail!)]
     [else
      (expect fail! (equal? (subbytes raw eoff (+ eoff 2)) (bytes #xFF #x25))
              "entry point ~x is not an indirect jump stub" entry)
-     (define target (le raw (+ eoff 2) 4))
-     (define imp (hash-ref (pe-image-dirs img) 1))
-     (define ioff (and (> (car imp) 0) (rva->off img (car imp))))
-     (define first-thunk (and ioff (le raw (+ ioff 16) 4)))
-     (expect fail! (and first-thunk (= target (+ (pe-image-base img) first-thunk)))
-             "entry stub jumps to ~x, which is not the import address table" target)
-     (define dll-off (and ioff (rva->off img (le raw (+ ioff 12) 4))))
-     (expect fail! (and dll-off (equal? (cstring-at raw dll-off) "mscoree.dll"))
-             "import descriptor does not name mscoree.dll")
-     (define hint-off (and first-thunk (rva->off img (le raw (rva->off img first-thunk) 4))))
-     (expect fail! (and hint-off (equal? (cstring-at raw (+ hint-off 2)) "_CorExeMain"))
-             "first import is not _CorExeMain")
-     (define relocs (reloc-targets img fail!))
-     (expect fail! (member (+ entry 2) relocs)
-             "no base relocation covers the entry stub operand at ~x" (+ entry 2))]))
+     (check-entry-target img entry (le raw (+ eoff 2) 4) fail!)]))
+
+(define (check-entry-target img entry target fail!)
+  (define raw (pe-image-raw img))
+  (define imp (hash-ref (pe-image-dirs img) 1))
+  (define ioff (and (> (car imp) 0) (rva->off img (car imp))))
+  (define first-thunk (and ioff (le raw (+ ioff 16) 4)))
+  (expect fail! (and first-thunk (= target (+ (pe-image-base img) first-thunk)))
+          "entry stub jumps to ~x, which is not the import address table" target)
+  (define dll-off (and ioff (rva->off img (le raw (+ ioff 12) 4))))
+  (expect fail! (and dll-off (equal? (cstring-at raw dll-off) "mscoree.dll"))
+          "import descriptor does not name mscoree.dll")
+  (define hint-off (and first-thunk (rva->off img (le raw (rva->off img first-thunk) 4))))
+  (expect fail! (and hint-off (equal? (cstring-at raw (+ hint-off 2)) "_CorExeMain"))
+          "first import is not _CorExeMain")
+  (define relocs (reloc-targets img fail!))
+  (expect fail! (member (+ entry 2) relocs)
+          "no base relocation covers the entry stub operand at ~x" (+ entry 2)))
 
 (define (reloc-targets img fail!)
   (define raw (pe-image-raw img))
   (define rd (hash-ref (pe-image-dirs img) 5))
   (define roff (and (> (car rd) 0) (rva->off img (car rd))))
+  ; the one relocation type this format's fixups use, besides padding
+  (define rtype (if (pe-image-plus? img) 10 3))
   (cond
     [(not roff) (fail! "base relocation directory is missing") '()]
     [else
@@ -218,10 +238,10 @@
                (for/list ([k (in-range (quotient (- bsize 8) 2))])
                  (le raw (+ p 8 (* 2 k)) 2)))
              (for ([e (in-list entries)])
-               (expect fail! (memv (arithmetic-shift e -12) '(0 3))
-                       "relocation type ~a is not HIGHLOW or padding" (arithmetic-shift e -12)))
+               (expect fail! (memv (arithmetic-shift e -12) (list 0 rtype))
+                       "relocation type ~a is not the base relocation type or padding" (arithmetic-shift e -12)))
              (define targets
-               (for/list ([e (in-list entries)] #:when (= (arithmetic-shift e -12) 3))
+               (for/list ([e (in-list entries)] #:when (= (arithmetic-shift e -12) rtype))
                  (+ page (bitwise-and e #xFFF))))
              (for ([t (in-list targets)])
                (expect fail! (rva->section (pe-image-sections img) t)

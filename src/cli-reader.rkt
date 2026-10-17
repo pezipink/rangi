@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/string)
 (require racket/port)
+(require "pe/read.rkt")
 ; read-only accessors for tests that decode table rows. row decoding stays out of the reader,
 ; so the lazy path used by the macro expander is unchanged.
 (provide read-file get-public-typedefs read-assembly-meta
@@ -130,102 +131,6 @@
   
   
 
-; only the first 0x40 bytes are needed; e_lfanew at 0x3C points at the PE header
-(define ms-dos-header-spec
-  '((header 64)))
-
-(define pe-file-header-spec
-  '(
-    (sig 4)
-    (machine 2)
-    (num-secs 2)
-    (stamp 4)
-    (sym 4)
-    (num-sym 4)
-    (opt-header-size 2)
-    (characteristics 2)))
-
-(define pe-opt-header-spec
-  '(
-    ; standard fields
-    (magic 2)
-    (lmajor 1)
-    (lminor 1)
-    (code-size 4)
-    (init-data-size 4)
-    (uninit-data-size 4)
-    (entry-rva 4)
-    (base-code 4)
-    (base-data 4)
-    ; nt specific fields
-    (image-base 4)
-    (section-align 4)
-    (file-align 4)
-    (os-major 2)
-    (os-minor 2)
-    (user-major 2)
-    (user-minor 2)
-    (subsys-major 2)
-    (subsys-minor 2)
-    (reserved 4)
-    (image-size 4)
-    (header-size 4)
-    (file-checksum 4)
-    (subsys 2)
-    (dll-flags 2)
-    (stack-reserve 4)
-    (stack-commit 4)
-    (heap-reserve 4)
-    (heap-commit 4)
-    (loader-flags 4)
-    (num-data-dirs 4)
-    ; there's always 16 data directories
-    ;8 bytes encode rva and size of each
-    ; only 4 actually exist
-    (export-table 8)
-    (import-table-rva 4) ;exists
-    (import-table-size 4) ;exists
-    (resource-table 8)
-    (exception-table 8)
-    (certificate-table 8)
-    (base-reloc-table-rva 4);exists
-    (base-reloc-table-size 4);exists
-    (debug-table 8)
-    (copyright-table 8)
-    (global-ptr-table 8)
-    (tls-table 8)
-    (config-table 8)
-    (bound-import-table 8)
-    (iat-table-rva 4);exists
-    (iat-table-size 4);exists    
-    (delay-import-table 8)
-    (cli-header-table-rva 4);exists
-    (cli-header-table-size 4);exists
-    (reserved-table 8)
-
-    ))
-
-; PE32+ drops BaseOfData and widens ImageBase and the stack and heap sizes to 8 bytes
-(define pe32plus-opt-header-spec
-  (map (λ (x)
-         (case (car x)
-           [(image-base stack-reserve stack-commit heap-reserve heap-commit) (list (car x) 8)]
-           [else x]))
-       (filter (λ (x) (not (eq? (car x) 'base-data))) pe-opt-header-spec)))
-
-(define pe-section-header-spec
-  '(
-   (name 8)
-   (virt-size 4)
-   (virt-address 4)
-   (size-raw 4)
-   (ptr-raw 4)
-   (ptr-reloc 4)
-   (ptr-linenum 4)
-   (num-reloc 2)
-   (num-linenum 2)
-   (characteristics 4)))
-
 (define import-table-spec
   '(
     (lookup-rva 4)
@@ -274,12 +179,6 @@
 
 (define cli-meta-root-spec
   '((magic 4)))
-
-(define (read-spec spec port)
-  (make-hash
-   (map (λ (x) (let ([id (car x)]
-                     [size (cadr x)])
-                 (cons id (read-bytes size port)))) spec)))
 
 (define (parse-cli-stream-header port)
   ; offset to start of stream from metadata root
@@ -724,47 +623,8 @@
    (set-asm-reader-raw! rdr all-bytes)
    (define port (open-input-bytes all-bytes)) ;binary default
 
-   ;todo; we can skip some of the pe header
-   (define dos-header (read-spec ms-dos-header-spec port))
-   ; e_lfanew is the file offset of the PE signature
-   (define pe-offset (to-int (subbytes (hash-ref dos-header 'header) #x3C #x40)))
-   (file-position port pe-offset)
-   (define pe-headers (make-hash))
-   (hash-set! pe-headers 'ms-dos dos-header)
-   (hash-set! pe-headers 'pe (read-spec pe-file-header-spec port))
-   (define opt-start (file-position port))
-   (define opt-header-size (to-int (hash-ref (hash-ref pe-headers 'pe) 'opt-header-size)))
-   ; the magic tells PE32 and PE32+ apart
-   (define magic (to-int (peek-bytes 2 0 port)))
-   (hash-set! pe-headers 'pe-opt
-              (read-spec (if (= magic #x20B) pe32plus-opt-header-spec pe-opt-header-spec) port))
-   ; section headers follow the optional header, whose real size is recorded in the file header
-   (file-position port (+ opt-start opt-header-size))
-   
-   ; at this point we have read all the static header data, now there will be a number of section
-   ; headers as per pe-num-secs which we will stick in a list
-   (define num-secs
-     (to-int (hash-ref (hash-ref pe-headers 'pe) 'num-secs)))
-   (define section-headers
-     (for/list ([i (in-range 0 num-secs)]) (read-spec pe-section-header-spec port))) 
-   ;after this there is padding until the first section data as pointed to by
-   ;sec-header-ptr-raw (0x200 in example app)
-   ;to determine what lies in each section, we need to do some calcs.
-   ;for our 4 tables (import, reloc, cli, iat) we can determine which section they are in
-   ;by looking at their rva, and comparing to each section's rva.
-   ;for example, .text is at 0x2000 (sec-header-virt-address) with size 0x1d4 (sec-header-virt-address)
-   ;for a size of 0x21d4.
-   ;table cli has an rva of 0x2008 which is less than 0x21d4 and so lies within .text.
-   ;it's actual address in the file is   (sec-header-ptr-raw .text)+(cli-rva - sec-header-virt-address)
-   ;or, (0x200 + (0x2000 - 0x2008)) = 0x208
-   ; of course, we need to search from the lowest address section first.
-   (define (calc-file-pos rva)
-     (or (for/first ([header section-headers]
-                     #:when (let ([va (to-int (hash-ref header 'virt-address))])
-                              (and (<= va rva) (< rva (+ va (to-int (hash-ref header 'virt-size)))))))
-           (+ (to-int (hash-ref header 'ptr-raw)) (- rva (to-int (hash-ref header 'virt-address)))))
-         (error 'read-file "rva 0x~x is not in any section" rva)))
-   (set-asm-reader-resolve-rva! rdr calc-file-pos)
+   (define pe-headers (read-pe-headers port))
+   (set-asm-reader-resolve-rva! rdr (λ (rva) (rva->file-offset pe-headers rva)))
 
 ;;    (for ([k (hash-keys (hash-ref hash 'pe-opt))])
 ;;      (writeln k))
@@ -777,22 +637,19 @@
 ;;    (writeln (format "import table : ~x" (calc-file-pos (to-int (hash-ref (hash-ref hash 'pe-opt) 'import-table-rva)))))
    ;cli header
    (define cli-header
-     (begin (file-position port (calc-file-pos (to-int (hash-ref (hash-ref pe-headers 'pe-opt) 'cli-header-table-rva))))
+     (begin (file-position port (rva->file-offset pe-headers (to-int (hash-ref (hash-ref pe-headers 'pe-opt) 'cli-header-table-rva))))
             (read-spec cli-header-spec port)))
 
 ;;    (writeln (format "cli metadata : ~x" (calc-file-pos (to-int (hash-ref cli-header 'metadata-rva)))))
    ;now onto the cli metadata itself
-   (define md-root (calc-file-pos (to-int (hash-ref cli-header 'metadata-rva))))
+   (define md-root (rva->file-offset pe-headers (to-int (hash-ref cli-header 'metadata-rva))))
    (set-asm-reader-metadata-root! rdr md-root)
    (define cli-meta
      (parse-cli-metadata md-root rdr port))
       
    ;(writeln cli-meta)
    ;the rest gets more complex and is handled in other functions
-   (hash-set! pe-headers 'sec-headers section-headers)
-
    ;(writeln (format "ended at location 0x~X ~a" (file-position port)(file-position port)))
-
    ;(hash-count (hash-ref cli-meta 'strings))
    ;cli-meta
    rdr

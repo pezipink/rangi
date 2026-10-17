@@ -1,66 +1,41 @@
 #lang racket/base
 ; Section and chunk layout for PE images (ECMA-335 II.25.2 and II.25.3).
-; This module knows nothing about CLI metadata. A chunk is a named blob of
-; bytes with fixups: 4-byte holes that are filled in once every chunk has an RVA.
-(require "../private/binary.rkt")
-(provide (struct-out image-params)
-         (struct-out chunk)
-         (struct-out fixup)
-         (struct-out digest)
-         (struct-out section)
-         (struct-out placement)
-         (struct-out placed-section)
-         (struct-out placed-image)
-         chunk-size render-chunk
+; This module knows nothing about CLI metadata. The structs are in model.rkt.
+(require "../private/binary.rkt"
+         "model.rkt")
+(provide (all-from-out "model.rkt")
+         chunk-size fixup-size render-chunk
          layout-image layout-report lookup-placement placed-rva)
 
-(struct image-params (image-base section-align file-align))
-
-; bytes: the chunk contents with zeros in each fixup hole
-(struct chunk (name align bytes fixups))
-
-; A 32-bit field at offset inside the chunk, filled with the value for target (a chunk name):
-;   'rva32  the RVA of target
-;   'va32   image-base plus the RVA of target; the field needs a base relocation
-(struct fixup (offset kind target))
-
-; A 16-byte field at offset holding the first 16 bytes of the SHA-256 of the
-; chunk's rendered bytes at each (start . end) span. It is filled after the
-; rva32 fixups, so a span may cover RVA fields. Spans must not cover the field itself.
-(struct digest (offset spans))
-
-; name: string; chars: section characteristics
-(struct section (name chars chunks))
-
-; rva: absolute RVA of the chunk
-(struct placement (chunk rva))
-
-(struct placed-section (name chars rva vsize raw-ptr raw-size placements))
-
-; symbols: hasheq from chunk name to placement
-(struct placed-image (params headers-size sections size-of-image symbols))
-
 (define (chunk-size c) (bytes-length (chunk-bytes c)))
+
+; width in bytes of the field a fixup kind fills in
+(define (fixup-size kind)
+  (case kind
+    [(rva32 va32 file-offset) 4]
+    [(va64) 8]
+    [else (error 'rangi "unknown fixup kind ~a" kind)]))
 
 ; copies the chunk bytes and fills each fixup and digest once layout is known
 (define (render-chunk img p)
   (define c (placement-chunk p))
   (define bs (bytes-copy (chunk-bytes c)))
   (define base (image-params-image-base (placed-image-params img)))
-  (define (check-field off)
-    (unless (<= 0 off (- (bytes-length bs) 4))
+  (define (check-field off size)
+    (unless (<= 0 off (- (bytes-length bs) size))
       (error 'rangi "fixup at 0x~a is outside chunk ~a (~a bytes)"
              (number->string off 16) (chunk-name c) (bytes-length bs))))
   (for ([f (in-list (chunk-fixups c))] #:when (fixup? f))
     (define off (fixup-offset f))
-    (check-field off)
-    (define target (placed-rva img (fixup-target f)))
-    (bytes-copy! bs off
-                 (le (case (fixup-kind f)
-                       [(rva32) target]
-                       [(va32) (+ base target)]
-                       [else (error 'rangi "unknown fixup kind ~a" (fixup-kind f))])
-                     4)))
+    (define size (fixup-size (fixup-kind f)))
+    (check-field off size)
+    (define target (fixup-target f))
+    (define value
+      (case (fixup-kind f)
+        [(rva32) (placed-rva img target)]
+        [(va32 va64) (+ base (placed-rva img target))]
+        [(file-offset) (placement-file-offset (lookup-placement img target))]))
+    (bytes-copy! bs off (le value size)))
   (for ([d (in-list (chunk-fixups c))] #:when (digest? d))
     (define off (digest-offset d))
     (unless (<= 0 off (- (bytes-length bs) 16))
@@ -71,17 +46,19 @@
     (bytes-copy! bs off (subbytes (sha256-bytes input) 0 16)))
   bs)
 
-; DOS header with PE signature (0x84) + COFF header (20) + PE32 optional header (224)
-(define fixed-header-size #x178)
+; DOS header with PE signature (0x84) + COFF header (20) + optional header
+; (224 bytes for PE32, 240 for PE32+)
+(define (fixed-header-size params)
+  (+ #x84 20 (if (eq? (image-params-format params) 'pe32+) 240 224)))
 (define section-header-size 40)
 
-; places chunks in order inside a section starting at base; returns the
-; placements and the section's virtual size
-(define (place-chunks base chunks)
+; places chunks in order inside a section starting at rva and raw at file offset raw;
+; returns the placements and the section's virtual size
+(define (place-chunks rva raw chunks)
   (define-values (rev end)
     (for/fold ([acc '()] [pos 0]) ([c (in-list chunks)])
       (define off (align pos (chunk-align c)))
-      (values (cons (placement c (+ base off)) acc) (+ off (chunk-size c)))))
+      (values (cons (placement c (+ rva off) (+ raw off)) acc) (+ off (chunk-size c)))))
   (values (reverse rev) end))
 
 ; Sections are laid out in order. The first section starts at the first
@@ -91,11 +68,11 @@
   (define sa (image-params-section-align params))
   (define fa (image-params-file-align params))
   (define headers-size
-    (align (+ fixed-header-size (* section-header-size (length secs))) fa))
+    (align (+ (fixed-header-size params) (* section-header-size (length secs))) fa))
   (define-values (placed rva-end _raw-end)
     (for/fold ([acc '()] [rva (align headers-size sa)] [raw headers-size])
               ([s (in-list secs)])
-      (define-values (ps vsize) (place-chunks rva (section-chunks s)))
+      (define-values (ps vsize) (place-chunks rva raw (section-chunks s)))
       (define raw-size (align vsize fa))
       (values (cons (placed-section (section-name s) (section-chars s) rva vsize raw raw-size ps)
                     acc)
@@ -125,8 +102,7 @@
           (hex (placed-section-raw-ptr s)) (hex (placed-section-raw-size s)))
     (for ([p (in-list (placed-section-placements s))])
       (define c (placement-chunk p))
-      (define file-off
-        (+ (placed-section-raw-ptr s) (- (placement-rva p) (placed-section-rva s))))
+      (define file-off (placement-file-offset p))
       (line "  ~a rva 0x~a file 0x~a size 0x~a align 0x~a"
             (chunk-name c) (hex (placement-rva p)) (hex file-off)
             (hex (chunk-size c)) (hex (chunk-align c)))))

@@ -52,10 +52,10 @@ The core rule: the PE image layer knows nothing about CLI metadata, and the meta
 rangi/
   private/binary.rkt        little-endian ints, alignment, pad-to (built)
   pe/
-    model.rkt               (planned) image, section, chunk, symbol, fixup structs; today these live in layout.rkt
+    model.rkt               image-params, section, chunk, fixup, digest, placement structs (built)
     layout.rkt              chunk and section model; RVAs, file offsets, layout map (built)
-    write.rkt               headers, section table, sections, data directories by chunk name (built)
-    read.rkt                (planned) parses headers and sections; rva->offset
+    write.rkt               headers, section table, sections, data directories by chunk name (built, PE32 only)
+    read.rkt                parses headers and sections; rva->file-offset (built)
     imports.rkt             mscoree import, IAT, entry stub chunks (built, x86 only)
     relocs.rkt              base relocation chunk built from chunk relocs (built)
   cli/
@@ -88,7 +88,7 @@ bytes -> pe/read -> cli/reader -> model/dumps (round trip, verification)
 
 ### PE layer contract
 
-A section is an ordered list of chunks. Each chunk has a name, an alignment, plain bytes, and a list of fixups. The bytes hold zeros in each field that depends on layout. A `fixup` is a typed 4-byte field at an offset, with a kind and a target chunk name: `rva32` writes the target's RVA, and `va32` writes the image base plus the target's RVA and needs a base relocation. A `digest` is a 16-byte field filled with the SHA-256 of spans of the chunk's rendered bytes, used for the MVID. Chunks name their targets, not numbers, so data directories refer to chunk names too. Layout runs in two passes: assign sizes and positions, then render each chunk by copying its bytes and filling its fixups and digests. The layout pass also produces a text layout map for snapshots. `file-offset` and `va64` fixups are not implemented yet.
+A section is an ordered list of chunks. Each chunk has a name, an alignment, plain bytes, and a list of fixups. The bytes hold zeros in each field that depends on layout. A `fixup` is a typed 4-byte field at an offset, with a kind and a target chunk name: `rva32` writes the target's RVA, and `va32` writes the image base plus the target's RVA and needs a base relocation. A `digest` is a 16-byte field filled with the SHA-256 of spans of the chunk's rendered bytes, used for the MVID. Chunks name their targets, not numbers, so data directories refer to chunk names too. Layout runs in two passes: assign sizes and positions, then render each chunk by copying its bytes and filling its fixups and digests. The layout pass also produces a text layout map for snapshots. `va64` fixups (8 bytes, DIR64 relocation) are used by the PE32+ entry stub, which is `movabs rax, [IAT]; jmp rax` (`48 A1 <abs64> FF E0`). `FF 25` takes only a 32-bit operand, so it cannot reach an IAT above 4 GB. The stub operand needs a real DIR64 relocation. The CLR loader rejects a PE32+ image whose `.reloc` holds only ABSOLUTE padding. `file-offset` fixups (the chunk's file offset, 4 bytes) are supported by the layout engine and covered by unit tests, but the writer does not use them yet. The writer emits PE32 by default and PE32+ when a program says `(.format pe32+)`. Image bases are `#x400000` for PE32 and `#x140000000` for PE32+.
 
 ### CLI layer contract
 

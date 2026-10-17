@@ -76,4 +76,4 @@ Decided by the user (October 2026). Plans must follow these unless the user chan
 * **Fix every writer and reader bug, not a subset.** Unknown IL nodes raise an error. They are never skipped.
 * **The reader stays lazy and fast.** The macro expander calls it repeatedly at phase 1. Decode rows on demand. `read-file` must not cache: each call reads the file. Add eager work or caches only with a benchmark.
 
-Consequence: fixtures are PE32 only. The PE32+ reader fix landed in `ca7aa13` and is checked against `ilasm /X64` images. The PE32+ writer stays out of scope for Framework fixtures.
+Consequence: most fixtures are PE32. `nano-x64` is the one PE32+ writer fixture. The PE32+ reader fix landed in `ca7aa13` and is checked against `ilasm /X64` images. ARM64 stays out of scope.

@@ -137,7 +137,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes; tiny and fat hea
 |------------------------------------------------------|---------|---------|---------|
 | PE32, x86 `ILONLY` EXE                               | done    | partial |         |
 | DLL output (`IMAGE_FILE_DLL`, `_CorDllMain`)         | n/a     | none    |         |
-| PE32+ (AMD64, ARM64), no import stub needed          | partial (AMD64, checked by hand) | out of scope |     |
+| PE32+ (AMD64, ARM64), import stub `movabs`+DIR64    | partial (AMD64 writer via `nano-x64`; ARM64 out of scope) | out of scope |     |
 | AnyCPU and `32BITPREFERRED`                          | n/a     | none    |         |
 | Subsystem GUI versus console                         | n/a     | none    |         |
 | Multiple sections (`.text`, `.rsrc`, `.reloc`, `.sdata`) | partial | partial (`.text`, `.reloc`) |  |
@@ -158,4 +158,4 @@ Tracked in [opcodes.md](opcodes.md). Summary: 4 of 226 opcodes; tiny and fat hea
 5. Generics (TypeSpec, MethodSpec, GenericParam, GenericParamConstraint).
 6. Properties, events, custom attributes, constants.
 7. DLL output and AnyCPU for Framework targets.
-8. P/Invoke and Win32 resources. PDB, strong naming, PE32+, and .NET (Core) are out of scope until requested.
+8. P/Invoke and Win32 resources. PDB, strong naming, ARM64, and .NET (Core) are out of scope until requested. PE32+ (AMD64) output is covered by `nano-x64`.

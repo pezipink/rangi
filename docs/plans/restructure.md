@@ -28,14 +28,14 @@ Each step ends with `raco test tests/` green. R1 and R2 must not change any emit
 
 ### R3 PE layer and layout engine
 
-Deviations so far: the model structs live in `pe/layout.rkt` rather than `pe/model.rkt`. A chunk holds plain bytes with zeroed holes and a list of typed `fixup` records (offset, kind, target chunk). `rva32` and `va32` are implemented. The `digest` record fills the MVID from a SHA-256 over the other metadata streams once layout is known, which keeps existing MVIDs unchanged. The fixup kinds `va64` and `file-offset` are not implemented. `va32` is used for the entry stub and the `.reloc` table.
+Deviations so far: a chunk holds plain bytes with zeroed holes and a list of typed `fixup` records (offset, kind, target chunk). The `digest` record fills the MVID from a SHA-256 over the other metadata streams once layout is known, which keeps existing MVIDs unchanged. `va32` is used for the PE32 entry stub and the `.reloc` table, and `va64` for the PE32+ stub. The image struct is named `image-params`, and the writer supports `'pe32` and `'pe32+`, selected by `(.format pe32+)`.
 
-* [ ] `pe/model.rkt`: `image` (machine, characteristics, subsystem, dll flags, image base, alignments, PE32 or PE32+), `section` (name, characteristics, chunks), `chunk` (name, alignment, bytes, fixups), `fixup` (offset, target, kind `rva32`/`va32`/`va64`/`file-offset`). Partly done: `image-params`, `section`, `chunk`, `fixup`, `digest`, and `placed-image` exist in `pe/layout.rkt`. Still missing: `image` (machine, subsystem, PE32+).
-* [x] `pe/layout.rkt`: assign RVAs (section alignment `0x2000`) and file offsets (file alignment `0x200`); compute all optional header size fields; return a layout plus the text map used by snapshot L2. The layout map is `layout-report`, snapshotted as `layout.txt` (V5).
-* [x] `pe/write.rkt`: serialise the DOS stub, COFF header, optional header, data directories (by symbol), section table, and sections.
-* [x] `pe/imports.rkt`: build the import directory, ILT, IAT, hint/name entry for `_CorExeMain` or `_CorDllMain`, the `mscoree.dll` name, and the `FF 25` entry stub as chunks with fixups. The entry stub's absolute operand is a `va32` fixup. Built for `_CorExeMain` only, with no x64 or DLL variant.
-* [x] `pe/relocs.rkt`: generate `.reloc` blocks from all `va32` fixups. `va64` is not implemented.
-* [ ] `pe/read.rkt`: the header parsing currently inside `read-file`, shared with the reader.
+* [x] `pe/model.rkt`: `image-params` (format, machine, characteristics, subsystem, dll flags, image base, section and file alignment), `section`, `chunk`, `fixup` (kind `rva32`/`va32`/`va64`/`file-offset`), `digest`, `placement` (with `file-offset`), `placed-section`, and `placed-image`. `layout.rkt` re-exports these, so existing consumers do not change.
+* [x] `pe/layout.rkt`: assign RVAs (section alignment `0x2000`) and file offsets (file alignment `0x200`); compute all optional header size fields (the fixed header size depends on the format); return a layout plus the text map used by snapshot L2. The layout map is `layout-report`, snapshotted as `layout.txt` (V5). Each fixup kind has its own width (`rva32`/`va32`/`file-offset` are 4 bytes, `va64` is 8).
+* [x] `pe/write.rkt`: serialise the DOS stub, COFF header, optional header, data directories (by symbol), section table, and sections. The COFF and optional header values come from `image-params`.
+* [x] `pe/imports.rkt`: build the import directory, ILT, IAT, hint/name entry for `_CorExeMain` or `_CorDllMain`, the `mscoree.dll` name, and the entry stub as chunks with fixups. The PE32 stub is `FF 25 <abs32>` with a `va32` operand fixup. The PE32+ stub is `movabs rax, [abs64]; jmp rax` with a `va64` operand fixup, because `FF 25` cannot reach a 64-bit IAT. Built for `_CorExeMain` only, with no DLL variant.
+* [x] `pe/relocs.rkt`: generate `.reloc` blocks from `va32` (HIGHLOW) and `va64` (DIR64) fixups.
+* [x] `pe/read.rkt`: `read-pe-headers` parses the DOS, PE, optional, and section headers, and `rva->file-offset` maps an RVA through them. `cli-reader.rkt` uses both. `tests/pe-read-test.rkt` checks the round trip against the writer's placements.
 
 ### R4 CLI layer emits chunks
 

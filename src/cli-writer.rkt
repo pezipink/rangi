@@ -28,7 +28,7 @@
 ; ---------------------------------------------------------------------------
 ; layout constants (the PE layout itself lives in pe/)
 
-(define image-base #x400000)
+(define image-bases (hasheq 'pe32 #x400000 'pe32+ #x140000000))
 (define section-align #x2000)
 (define file-align #x200)
 
@@ -38,7 +38,7 @@
 (struct ctx (asm-refs typerefs memberrefs))
 (struct tdef (flags name ns extends methods))
 (struct mdef (name flags sig body entry?))
-(struct il-program (asm-refs typerefs memberrefs typedefs module-name entry-rid))
+(struct il-program (asm-refs typerefs memberrefs typedefs module-name entry-rid format))
 
 ; insertion-ordered interner: rids are 1-based and follow first-seen order
 (struct interner (table [rows #:mutable]))
@@ -194,6 +194,7 @@
   (define cx (ctx asm-refs typerefs memberrefs))
   (define asm-def? #f)
   (define mod-name #f)
+  (define fmt #f)
   (define classes
     (for/fold ([acc '()] #:result (reverse acc)) ([node (in-list program)])
       (match node
@@ -210,6 +211,11 @@
         [(list '.module name)
          (when mod-name (error 'rangi "only one .module directive is allowed"))
          (set! mod-name (symbol->string name))
+         acc]
+        [(list '.format f)
+         (when fmt (error 'rangi "only one .format directive is allowed"))
+         (unless (memq f '(pe32 pe32+)) (error 'rangi "unknown .format ~a, expected pe32 or pe32+" f))
+         (set! fmt f)
          acc]
         [(list '.class flags name body)
          (cons (list flags name body) acc)]
@@ -254,7 +260,8 @@
               (interner-keys memberrefs)
               tdefs
               mod-name
-              (car entries)))
+              (car entries)
+              (or fmt 'pe32)))
 
 ; ---------------------------------------------------------------------------
 ; heaps
@@ -455,13 +462,14 @@
   (define asm-name (regexp-replace #rx"[.][^.]*$" file-name ""))
   (define mod-name (or (il-program-module-name p) file-name))
   (define entry-rid (il-program-entry-rid p))
+  (define fmt (il-program-format p))
   (define bodies
     (for*/list ([td (in-list (il-program-typedefs p))] [m (in-list (tdef-methods td))])
       (mdef-body m)))
 
   (define-values (md-bytes md-fixups) (metadata-bytes p asm-name mod-name))
   (match-define (list iat import-dir lookup hint-name dll-name entry-stub)
-    (mscoree-chunks))
+    (mscoree-chunks fmt))
   (define cli-header
     (chunk 'cli-header 4
            (bytes-append (le #x48 4) (le 2 2) (le 0 2)
@@ -479,7 +487,10 @@
              (append (list iat cli-header metadata) body-chunks
                      (list import-dir lookup hint-name dll-name entry-stub))))
 
-  (define params (image-params image-base section-align file-align))
+  (define params
+    (if (eq? fmt 'pe32+)
+        (image-params 'pe32+ #x8664 #x22 3 #x8540 (hash-ref image-bases fmt) section-align file-align)
+        (image-params 'pe32 #x14C #x102 3 #x8540 (hash-ref image-bases fmt) section-align file-align)))
   ; the relocation table holds the addresses of .text, so lay out .text before building it
   (define reloc
     (section ".reloc" #x42000040
