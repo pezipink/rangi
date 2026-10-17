@@ -15,11 +15,11 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x00 | Module                 | partial | partial | MVID is a content hash; generation and EnC ids fixed     |         |
 | 0x01 | TypeRef                | partial | partial | ResolutionScope is the referenced AssemblyRef            |         |
 | 0x02 | TypeDef                | partial | partial | Flags from keywords; FieldList from each class's field run |         |
-| 0x03 | FieldPtr               | partial | n/a     | Count only                                               |         |
+| 0x03 | FieldPtr               | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
 | 0x04 | Field                  | partial | partial | Same-module fields from `.field` keywords and FieldSig; `ldsfld`/`stsfld` checked for static-ness and type. Instance fields have no positive fixture yet | static-fields |
-| 0x05 | MethodPtr              | partial | n/a     | Count only                                               |         |
+| 0x05 | MethodPtr              | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
 | 0x06 | MethodDef              | partial | partial | Flags from keywords; ImplFlags 0; ParamList hardcoded to 1; same-module `call` targets (`(call ret (Class) name (params))`, static only; forward calls and recursion) | calls-multi |
-| 0x07 | ParamPtr               | partial | n/a     | Count only                                               |         |
+| 0x07 | ParamPtr               | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
 | 0x08 | Param                  | done    | done    | One row per named param, in method order; Sequence 1-based; flags from `(param [in] [out] [opt] TY NAME [= value])`; unnamed params get no row | param-constants |
 | 0x09 | InterfaceImpl          | done | done | Sorted; `.implements` rows (same-module and external interfaces); interface inheritance (an interface's `.implements` lists the interfaces it extends) | interfaces, interface-inheritance |
 | 0x0A | MemberRef              | partial | partial | Parent is the TypeRef of the call target                 |         |
@@ -31,10 +31,10 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x10 | FieldLayout            | done    | done    | Sorted; one row per field with `offset N` in an explicit class (II.22.16)  | class-layout |
 | 0x11 | StandAloneSig          | partial | partial | Reader parses it; row helper added; LocalVarSig blobs in `sigs.rkt`; `calli` pending | ops-locals-args |
 | 0x12 | EventMap               | done    | done    | Sorted by parent                                         | props-events |
-| 0x13 | EventPtr               | partial | n/a     | Count only                                               |         |
+| 0x13 | EventPtr               | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
 | 0x14 | Event                  | done    | done    | Sorted; type is a module delegate TypeDef or an external TypeRef | props-events, events-delegate |
 | 0x15 | PropertyMap            | done    | done    | Sorted by parent                                         | props-events |
-| 0x16 | PropertyPtr            | partial | n/a     | Count only                                               |         |
+| 0x16 | PropertyPtr            | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
 | 0x17 | Property               | done    | done    | Flags 0 unless specialname/rtspecialname; HASTHIS instance, indexers with params; HasDefault rejected (Constant is metadata-rows) | props-events, events-delegate |
 | 0x18 | MethodSemantics        | done    | done    | Sorted by association; getter, setter, add, remove       | props-events |
 | 0x19 | MethodImpl             | partial | partial | Sorted; `.override` rows (same-module and external base, and same-module or external interfaces in the class's implements closure); the body must be a virtual method of the class | virtual-override, interface-inheritance |
@@ -42,14 +42,14 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x1B | TypeSpec               | partial | partial | Row helper and `read-row`; blob via `sigs.rkt` and reader; generic instance types | generic-calls |
 | 0x1C | ImplMap                | partial | done    | Sorted by MemberForwarded; P/Invoke (II.22.22)           | pinvoke |
 | 0x1D | FieldRVA               | none    | done    | Sorted; RVA of the static field's `.data` chunk in `.sdata` (II.22.18) | static-data |
-| 0x1E | ENCLog                 | partial | n/a     | Count only                                               |         |
-| 0x1F | ENCMap                 | partial | n/a     | Count only                                               |         |
+| 0x1E | ENCLog                 | out of scope | n/a | Edit-and-continue table; we never emit edits | |
+| 0x1F | ENCMap                 | out of scope | n/a | Edit-and-continue table; we never emit edits | |
 | 0x20 | Assembly               | partial | partial | Version, flags, public key, and culture are zero         |         |
-| 0x21 | AssemblyProcessor      | partial | n/a     | Count only; should be ignored by readers                 |         |
-| 0x22 | AssemblyOS             | partial | n/a     | Count only                                               |         |
+| 0x21 | AssemblyProcessor      | out of scope | n/a | Obsolete; we never emit it, and readers ignore it | |
+| 0x22 | AssemblyOS             | out of scope | n/a | Obsolete; we never emit it, and readers ignore it | |
 | 0x23 | AssemblyRef            | partial | partial | Name, version, and public key token come from `.assembly extern` (II.22.5); Flags and HashValue are zero, and full public keys are not written | asm-refs-versioned |
-| 0x24 | AssemblyRefProcessor   | partial | n/a     | Count only                                               |         |
-| 0x25 | AssemblyRefOS          | partial | n/a     | Count only                                               |         |
+| 0x24 | AssemblyRefProcessor   | out of scope | n/a | Obsolete; we never emit it, and readers ignore it | |
+| 0x25 | AssemblyRefOS          | out of scope | n/a | Obsolete; we never emit it, and readers ignore it | |
 | 0x26 | File                   | none    | none    | Out of scope for P5: multi-module assemblies (needs `.file` and a second module)  |         |
 | 0x27 | ExportedType           | none    | none    | Out of scope for P5: type forwarders are not cheap (needs `.exptype` syntax and the implementation ref coded index), so not started | |
 | 0x28 | ManifestResource       | done    | done    | Embedded managed resources; covered by `managed-resources`                  | managed-resources |
