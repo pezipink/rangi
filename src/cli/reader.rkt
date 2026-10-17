@@ -1,6 +1,5 @@
 #lang racket/base
 (require racket/string)
-(require racket/port)
 (require "../pe/read.rkt")
 (require "../private/binary.rkt")
 (require "schema.rkt")
@@ -439,7 +438,8 @@
   ;(time
    (define rdr (asm-reader))
    (set-asm-reader-filename! rdr filename)
-   (define all-bytes (call-with-input-file filename port->bytes))
+   ; one exact-size read: port->bytes grows a buffer and costs about 8x more on mscorlib
+   (define all-bytes (call-with-input-file filename (λ (in) (read-bytes (file-size filename) in))))
    (set-asm-reader-raw! rdr all-bytes)
    (define port (open-input-bytes all-bytes)) ;binary default
 

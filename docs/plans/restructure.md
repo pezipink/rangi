@@ -60,4 +60,4 @@ Deviations so far: a chunk holds plain bytes with zeroed holes and a list of typ
 
 * [x] Corpus test against every reference assembly (verification milestone V7).
 * [x] Benchmark `read-file` plus `get-public-typedefs` on `mscorlib.dll` and record the timing in a test. Timings are recorded, not asserted, so this does not yet guard against a load-time regression.
-* [ ] Consider memory-mapping or reading only the metadata section instead of the whole file.
+* [x] Consider memory-mapping or reading only the metadata section instead of the whole file. Decision: keep whole-file reads, but read them in one exact-size `read-bytes` instead of `port->bytes`. Measured on 4.7.1 mscorlib (2,724,496 bytes, median of 30): `port->bytes` 5.1 ms, exact `read-bytes` 0.64 ms, metadata-only read 0.23 ms. The metadata-only read saves about 0.4 ms more, but IL bodies lie outside the metadata section, and table offsets are file-relative, so it would need a second read and a new offset base. Not done. Racket has no portable mmap, and an FFI mapping would be Windows-only. Open-time median went from 7.25 ms to 3.36 ms (`tests/read-bench-test.rkt`, 20 runs).
