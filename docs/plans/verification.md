@@ -96,6 +96,7 @@ For fixtures that have an equivalent `program.il`, assemble it with `ilasm.exe` 
 ## Snapshot workflow
 
 * `raco test tests/` runs every layer and fails on any snapshot difference, printing a unified diff.
+* `RANGI_FIXTURES=<name>[,<name>...] raco test tests/` limits every fixture-based test to the named fixtures, for fast iteration. Unknown names are an error. Run the full suite before merging a large section.
 * `RANGI_UPDATE_SNAPSHOTS=1 raco test tests/` rewrites snapshots. Commit them with an explanation of why bytes or layout changed.
 * Snapshots live beside their fixture so a single diff shows program, layout, metadata, and disassembly changes together.
 

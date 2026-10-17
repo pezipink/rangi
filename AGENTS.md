@@ -45,6 +45,8 @@ raco test tests/
 
 It runs the fixture checks (image hash, stdout, exit code) and the external oracles. Oracles are skipped when their tool is missing. It also runs the structural lint (`tests/lib/pe-lint.rkt`, tested by `tests/image-lint-test.rkt`) on every fixture. The metadata dump decodes MethodSpec rows (they match SRM on mscorlib), and it decodes every II.22 table except the pointer and edit-and-continue tables, which it rejects when they hold rows. The V7 corpus test diffs 133 reference assemblies against SRM (see [verification.md](docs/plans/verification.md)). `RANGI_UPDATE_SNAPSHOTS=1 raco test tests/` rewrites reviewed snapshots; only do that when the change to emitted bytes is intended and explained in the commit.
 
+For a quick check of one fixture, set `RANGI_FIXTURES=<name>[,<name>...]`. Every fixture-based test then runs only those fixtures. An unknown name is an error. Run the full suite before merging a large section.
+
 The smoke test is still:
 
 ```powershell

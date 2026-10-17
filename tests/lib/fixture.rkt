@@ -1,18 +1,33 @@
 #lang racket/base
 ; Shared fixture plumbing: each fixture is a directory under tests/fixtures/ holding a
 ; program.rktd. Images are assembled into a fresh temp directory, which is removed afterwards.
-(require racket/file racket/port racket/runtime-path file/sha1
+(require racket/file racket/port racket/runtime-path racket/string file/sha1
          "../../src/ilasm/syntax.rkt" "../../src/image.rkt")
 (provide fixture-names with-built-image sha256-hex run-image normalize-newlines)
 
 (define-runtime-path fixtures-dir "../fixtures")
 
+; RANGI_FIXTURES=name1,name2 restricts every fixture-based test to the named fixtures.
+; Unset runs them all. An unknown name is an error, so a typo cannot silently skip everything.
 (define (fixture-names)
-  (sort
-   (for/list ([p (directory-list fixtures-dir)]
-              #:when (directory-exists? (build-path fixtures-dir p)))
-     (path->string p))
-   string<?))
+  (define all
+    (sort
+     (for/list ([p (directory-list fixtures-dir)]
+                #:when (directory-exists? (build-path fixtures-dir p)))
+       (path->string p))
+     string<?))
+  (define filter-var (getenv "RANGI_FIXTURES"))
+  (cond
+    [(not filter-var) all]
+    [else
+     (define wanted
+       (for/list ([s (regexp-split #rx"," filter-var)]
+                  #:unless (equal? (string-trim s) ""))
+         (string-trim s)))
+     (define unknown (filter (λ (w) (not (member w all))) wanted))
+     (unless (null? unknown)
+       (error 'fixture-names "RANGI_FIXTURES names unknown fixtures: ~a" unknown))
+     (filter (λ (f) (member f wanted)) all)]))
 
 ; calls (proc fixture-dir exe-path) with the program assembled into a temp directory
 (define (with-built-image name proc)
