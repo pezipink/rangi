@@ -1,0 +1,28 @@
+Module rows=1
+  Module[1] Name="value-types.exe" Mvid=7240d30ec1dcfdd179da1992b84616a8
+TypeRef rows=3
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+  TypeRef[3] ResolutionScope=0x23000001 Name="ValueType" Namespace="System"
+TypeDef rows=4
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Ops" Namespace="" Extends=0x01000001 Fields=[] Methods=[2..3]
+  TypeDef[4] Flags=265 Name="Pair" Namespace="" Extends=0x01000003 Fields=[1..2] Methods=[4..4]
+Field rows=2
+  Field[1] Flags=6 Name="first" Signature=0608
+  Field[2] Flags=6 Name="second" Signature=0608
+MethodDef rows=4
+  MethodDef[1] Rva=8848 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=12001f141f162804000006062802000006280100000a0628030000060b12017b01000004280100000a12017b02000004280100000a12021d1e28040000061202fe150400000212027b01000004280100000a2a
+  MethodDef[2] Rva=8944 ImplFlags=0 Flags=22 Name="Sum" Signature=0001081110 Params=[] Il=027b01000004027b02000004582a
+  MethodDef[3] Rva=8960 ImplFlags=0 Flags=22 Name="Swap" Signature=000111101110 Params=[] Il=1200027b02000004027b010000042804000006062a
+  MethodDef[4] Rva=8996 ImplFlags=0 Flags=6150 Name=".ctor" Signature=2002010808 Params=[] Il=02037d0100000402047d020000042a
+MemberRef rows=1
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+StandAloneSig rows=2
+  StandAloneSig[1] Signature=0703111011101110
+  StandAloneSig[2] Signature=07011110
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
