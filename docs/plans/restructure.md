@@ -22,10 +22,10 @@ Status: `src/private/binary.rkt` is the shared source for the little-endian, ali
 
 ### R2 One metadata schema
 
-* [ ] Create `rangi/cli/schema.rkt` describing all 45 table ids (0x00-0x2C) as data: name, id, sorted key (if any), and columns. Column kinds: `u8`, `u16`, `u32`, `string`, `guid`, `blob`, `(index table)`, `(coded kind)`.
-* [ ] Describe the 13 coded index kinds (II.24.2.6) as data: tag bits and the ordered table list, including unused tags in `CustomAttributeType`.
-* [ ] Derive row sizes and coded index widths from the schema. Delete the two hand-written `case` blocks.
-* [ ] Port `src/cli-reader.rkt` to `rangi/cli/reader.rkt` on top of the schema. Add a generic `(read-row rdr table rid)` that returns a vector, keeping the fast paths (`get-public-typedefs`) as specialised readers.
+* [x] Create `src/cli/schema.rkt` describing all 45 table ids (0x00-0x2C) as data: name, id, sorted key (if any), and columns. Column kinds: `u8`, `u16`, `u32`, `string`, `guid`, `blob`, `(index table)`, `(coded kind)`. Merged from `stream/a2`.
+* [x] Describe the 13 coded index kinds (II.24.2.6) as data: tag bits and the ordered table list, including unused tags in `CustomAttributeType`.
+* [x] Derive row sizes and coded index widths from the schema. Delete the two hand-written `case` blocks.
+* [x] Port `src/cli-reader.rkt` onto the schema, in place. Add a generic `(read-row rdr table rid)` that returns a vector, keeping the fast paths (`get-public-typedefs`) as specialised readers. Deviation: the reader was not moved to `rangi/cli/reader.rkt`; the shim step in R5 covers the move. `read-row` on mscorlib matches `get-public-typedefs` (1520 public types, same order).
 * [x] Fix the remaining reader defects in [architecture.md](../architecture.md#reader): the `#-` stream and the extra-data flag. Already fixed in `ca7aa13`: PE32+, missing tables, `declsecurity` tag, visibility mask, and the port leak.
 
 ### R3 PE layer and layout engine
