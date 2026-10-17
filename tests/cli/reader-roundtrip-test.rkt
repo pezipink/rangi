@@ -70,7 +70,17 @@
                #f
                'console
                'anycpu
+               '()
                '()))
+
+(test-case "InterfaceImpl rows read back with the class and the typedeforref interface"
+  (define p (struct-copy cli-program program
+                         [interfaceimpls (list (interfaceimpl 1 (cons 'typeref 1)))]))
+  (define rdr
+    (read-metadata-root (chunk-bytes (build-metadata p "rangi-test" "rangi.dll"))))
+  (define ii (read-row rdr 'interfaceimpl 1))
+  (check-equal? (vector-ref ii 0) 1)
+  (check-equal? (vector-ref ii 1) (cons 'typeref 1)))
 
 (define (add-generics-rows! tb sh bh)
   (add-typespec-row! tb bh (encode-typespec '(genericinst (class (typeref . 1)) (int32 (var 0)))))

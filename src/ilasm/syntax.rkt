@@ -31,7 +31,8 @@
 ; external class, or #f for the default System.Object (II.22.37).
 ; name is the full name: Outer/Inner for a nested class (II.10.3). enclosing is the full name of
 ; the enclosing class, or #f for a top-level class. overrides is a list of override-decl, in source order.
-(struct class-decl (flags name gparams extends methods fields enclosing overrides))
+; implements is a list of interface names in source order, each as in extends (II.22.23).
+(struct class-decl (flags name gparams extends methods fields enclosing overrides implements))
 ; A .override directive (II.22.27 MethodImpl): owner is the base class as in extends, name, ret and
 ; params are the base method's signature. The body is the method of the same name and signature in
 ; the class that declares the override.
@@ -238,6 +239,14 @@
   (for ([p (in-list params)]) (check-type name p ncls 0))
   (override-decl owner name ret params))
 
+; .implements Iface, or .implements (Assembly Ty) for an interface in another assembly (II.22.23).
+; The result is the name as in extends: a symbol, or (Assembly Ty).
+(define (parse-implements class-name node)
+  (match node
+    [(list '.implements (? symbol? iface)) iface]
+    [(list '.implements (list (? symbol? asm) (? symbol? ty))) (list asm ty)]
+    [_ (error 'rangi "malformed .implements in ~a: ~s" class-name node)]))
+
 ; (.field (flags ...) type name) or (.field (flags ...) type name = (prim value)). Field types may
 ; use the class's type variables !N (II.23.2.12).
 (define integral-ranges
@@ -388,13 +397,18 @@
   (define overrides
     (for/list ([node (in-list members)] #:when (and (pair? node) (eq? (car node) '.override)))
       (parse-override name node ncls)))
+  (define implements
+    (for/list ([node (in-list members)] #:when (and (pair? node) (eq? (car node) '.implements)))
+      (parse-implements name node)))
+  (when (check-duplicates implements)
+    (error 'rangi "duplicate .implements ~a in ~a" (check-duplicates implements) name))
   (define methods
     (for/list ([node (in-list members)]
-               #:unless (and (pair? node) (memq (car node) '(.field .override))))
+               #:unless (and (pair? node) (memq (car node) '(.field .override .implements))))
       (parse-method name node ncls)))
   (when (check-duplicates (map field-decl-name fields))
     (error 'rangi "duplicate field ~a in ~a" (check-duplicates (map field-decl-name fields)) name))
-  (cons (class-decl flags name gparams ext methods fields enclosing overrides)
+  (cons (class-decl flags name gparams ext methods fields enclosing overrides implements)
         (append* (for/list ([node (in-list body)] #:when (nested-class-node? node))
                    (flatten-class (nested-class-raw node) name)))))
 
@@ -467,8 +481,11 @@
   (define module-cls
     (or (findf (class-named? '<Module>) raw-classes) (list '() '<Module> #f #f '())))
   (when (for/or ([node (in-list (list-ref module-cls 4))])
-          (and (pair? node) (eq? (car node) '.override)))
-    (error 'rangi ".override is not allowed in <Module>"))
+          (and (pair? node) (memq (car node) '(.override .implements))))
+    (error 'rangi "~a is not allowed in <Module>"
+           (for/first ([node (in-list (list-ref module-cls 4))]
+                       #:when (and (pair? node) (memq (car node) '(.override .implements))))
+             (car node))))
   (define others (remove module-cls raw-classes))
   (define module-body (list-ref module-cls 4))
   (when (ormap nested-class-node? module-body)
