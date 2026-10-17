@@ -50,6 +50,8 @@ Notes:
 * `RANGI_SKIP_CORPUS=1` skips the reader corpus (`tests/oracles/reader-corpus-test.rkt`). It is the single longest file and sets the floor for any `-j` run. Never skip it at a section boundary.
 * `RANGI_FIXTURES` filters only fixture-based tests. Oracle files that do not use fixtures still run in full, so pass a single file to `raco test` as well when you want the fastest loop.
 * `-j 4` is safe for tests because each test writes to its own temp files. The oracle builds are the exception and are guarded by a lock (below).
+* Under `-j 4`, `raco test` can exit non-zero for files that pass when run alone. Trust the final `N tests passed` line (and any `N/M test failures` line). If one file's status is in doubt, run that file by itself.
+* A merge can add a field to a shared struct without any textual conflict, for example `module-model` or `class-decl`. After every merge, grep for each constructor call in `src/` and `tests/` and fix the arity before running tests.
 * Do not run `raco make -j 4 tests/` on Windows. It fails with "open-input-file: Access is denied" because it tries to open a directory. `raco test` compiles the files it needs as it runs, so skip the separate compile step. If you see "instantiate-linklet: mismatch" after changing a struct's arity, run `raco test` on the changed files to recompile them.
 
 ## Oracle builds and the build lock
