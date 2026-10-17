@@ -18,7 +18,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x03 | FieldPtr               | partial | n/a     | Count only                                               |         |
 | 0x04 | Field                  | none    | none    |                                                          |         |
 | 0x05 | MethodPtr              | partial | n/a     | Count only                                               |         |
-| 0x06 | MethodDef              | partial | partial | Flags from keywords; ImplFlags 0; ParamList hardcoded to 1 |         |
+| 0x06 | MethodDef              | partial | partial | Flags from keywords; ImplFlags 0; ParamList hardcoded to 1; same-module `call` targets (`(call ret (Class) name (params))`, static only) |         |
 | 0x07 | ParamPtr               | partial | n/a     | Count only                                               |         |
 | 0x08 | Param                  | none    | none    | Needed for parameter names and `[out]`                   |         |
 | 0x09 | InterfaceImpl          | none    | none    | Sorted                                                   |         |
