@@ -1,0 +1,30 @@
+Module rows=1
+  Module[1] Name="generic-calls.exe" Mvid=081e1ea41f1266f6c415ec103abd3a2b
+TypeRef rows=3
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="List`1" Namespace="System.Collections.Generic"
+  TypeRef[3] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=2
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..2]
+MethodDef rows=2
+  MethodDef[1] Rva=8852 ImplFlags=0 Flags=22 Name="Id" Signature=1001011e001e00 Params=[] Il=022a
+  MethodDef[2] Rva=8856 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=730100000a0a061f296f0200000a06176f0200000a066f0300000a1833181d280100002b280400000a06166f0500000a280400000a2a15280400000a2a
+MemberRef rows=5
+  MemberRef[1] Parent=0x1b000001 Name=".ctor" Signature=200001
+  MemberRef[2] Parent=0x1b000001 Name="Add" Signature=2001011300
+  MemberRef[3] Parent=0x1b000001 Name="get_Count" Signature=200008
+  MemberRef[4] Parent=0x01000003 Name="WriteLine" Signature=00010108
+  MemberRef[5] Parent=0x1b000001 Name="get_Item" Signature=2001130008
+StandAloneSig rows=1
+  StandAloneSig[1] Signature=07011512090108
+TypeSpec rows=1
+  TypeSpec[1] Signature=1512090108
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
+GenericParam rows=1
+  GenericParam[1] Number=0 Flags=0 Owner=0x06000001 Name="T"
+MethodSpec rows=1
+  MethodSpec[1] Method=0x06000001 Instantiation=0a0108
