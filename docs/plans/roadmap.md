@@ -34,7 +34,7 @@ Done:
 * V0 determinism: insertion-ordered rows and heaps, content-hash MVID, COFF timestamp 0.
 * V4 L5 structural lint (`tests/lib/pe-lint.rkt`, tested by `tests/image-lint-test.rkt`).
 * Writer rewrite: `<Module>` methods move to a generated `Program` class; `.entrypoint` sets the entry token; unknown IL raises.
-* Reader defects R1 to R10 fixed. PE32 and PE32+ nano dumps match System.Reflection.Metadata. The mscorlib public type count matches the SRM oracle (1520; the earlier 1521 figure was wrong, see `tests/read-bench-test.rkt`). Stream D baseline: lazy open median about 6.5 ms, enumerate public types median about 0.5 ms (20 runs, 4.7.1 mscorlib).
+* Reader defects R1 to R10 fixed. PE32 and PE32+ nano dumps match System.Reflection.Metadata. The mscorlib public type count matches the SRM oracle (1520; the earlier 1521 figure was wrong, see `tests/read-bench-test.rkt`). Stream D baseline: lazy open median about 6.5 ms, enumerate public types median about 0.5 ms (20 runs, 4.7.1 mscorlib). After the exact-size read the open median is about 3.4 ms (the run-to-run figure varies by about 1 ms).
 * P3 bigger fixtures: `tests/fixtures/text-over-400` (`.text` VirtualSize 0x476) and `tests/fixtures/text-over-2000` (0x2346). Both pass PEVerify, ildasm, SRM, and the lint. `fixtures-test.rkt` asserts the 0x400 and 0x2000 limits. The O4 short-form `ldc.i4` change had shrunk them, so they were grown back. The layout map (V5) is in place.
 * O4 method bodies merged: `.locals`, computed maxstack, catch, finally, fault, and `filter` EH, plus prefix validation, and the `ops-*` opcode batch fixtures (PEVerify and ILVerify clean).
 * `ldstr-hello` (UTF-16 `#US` text, including non-ASCII) and `switch-dispatch` execution fixtures merged.
@@ -66,7 +66,7 @@ Open items, in order:
 | P3 | Done | R3, V5, R4, and R5 are done. The threshold fixtures pass the 0x400 and 0x2000 limits (0x476 and 0x2346), and a person reviewed the layout snapshots. PE constants are named. Still open: the DOS stub blob and the CLI-side literals in `encode-il`. |
 | P4 | Done | O1 to O5 are merged, including `filter` EH, prefix validation, and the `il-all-opcodes` fixture. Its stdout is checked, and PEVerify and ILVerify pass. Unverifiable opcodes are in `il-unverifiable-opcodes`, and TypedReference and calli are in `il-runtime-only-opcodes`. |
 | P5 | Partly done | Done: generic methods and types (signatures, TypeSpec, MethodSpec, GenericParam), same-module calls, same-module static fields, instance methods, `.ctor`, `newobj`, single-dimension arrays, catch, finally, and fault EH. External instance calls via the `instance` keyword are done (`instance-external-call`). Open: multiple types, interfaces, value types, attributes, and DLLs (see [cli-coverage.md](cli-coverage.md)). |
-| P6 | Mostly done | V7 corpus diff matches SRM on 133 of 133 assemblies. The benchmark and memory-mapping items in R6 are open. |
+| P6 | Mostly done | V7 corpus diff matches SRM on 133 of 133 assemblies. The R6 benchmark is recorded, and the memory-mapping item is decided (exact-size whole-file read; see [restructure.md](restructure.md)). |
 
 ## Next steps
 
