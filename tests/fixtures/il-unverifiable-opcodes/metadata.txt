@@ -1,0 +1,25 @@
+Module rows=1
+  Module[1] Name="il-unverifiable-opcodes.exe" Mvid=0c8a1d22215a791e1ed7f978ac4536f0
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=3
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Helpers" Namespace="" Extends=0x01000001 Fields=[] Methods=[2..9]
+MethodDef rows=9
+  MethodDef[1] Rva=8888 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=7201000070280100000a2a
+  MethodDef[2] Rva=8900 ImplFlags=0 Flags=22 Name="Jumper" Signature=000001 Params=[] Il=27030000062a
+  MethodDef[3] Rva=8908 ImplFlags=0 Flags=22 Name="Target" Signature=000001 Params=[] Il=7207000070280100000a2a
+  MethodDef[4] Rva=8920 ImplFlags=0 Flags=22 Name="Allocate" Signature=000001 Params=[] Il=1f10fe0f262a
+  MethodDef[5] Rva=8928 ImplFlags=0 Flags=22 Name="Copy" Signature=000001 Params=[] Il=16d316d31afe172a
+  MethodDef[6] Rva=8940 ImplFlags=0 Flags=22 Name="Fill" Signature=000001 Params=[] Il=16d3161afe182a
+  MethodDef[7] Rva=8948 ImplFlags=0 Flags=22 Name="Args" Signature=000001 Params=[] Il=fe00262a
+  MethodDef[8] Rva=8956 ImplFlags=0 Flags=22 Name="Virtual" Signature=000001 Params=[] Il=14fe0709000006262a
+  MethodDef[9] Rva=8968 ImplFlags=0 Flags=6 Name="Inst" Signature=200001 Params=[] Il=2a
+MemberRef rows=1
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=0001010e
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

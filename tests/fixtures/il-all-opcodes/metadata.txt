@@ -1,0 +1,35 @@
+Module rows=1
+  Module[1] Name="il-all-opcodes.exe" Mvid=8db0d956af1035076fc03dc21d4cf5b2
+TypeRef rows=4
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Int32" Namespace="System"
+  TypeRef[3] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+  TypeRef[4] ResolutionScope=0x23000001 Name="String" Namespace="System"
+TypeDef rows=4
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Helpers" Namespace="" Extends=0x01000001 Fields=[1..1] Methods=[2..6]
+  TypeDef[4] Flags=1 Name="Store" Namespace="" Extends=0x01000001 Fields=[2..2] Methods=[7..7]
+Field rows=2
+  Field[1] Flags=22 Name="counter" Signature=0608
+  Field[2] Flags=6 Name="weight" Signature=0608
+MethodDef rows=7
+  MethodDef[1] Rva=9000 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=28020000062803000006280400000628050000062a
+  MethodDef[2] Rva=9024 ImplFlags=0 Flags=22 Name="BoxOps" Signature=000001 Params=[] Il=1f2a8c02000001a502000001280100000a1d8c0200000179020000014a280100000a72010000707404000001280200000a720b0000707504000001280200000a2a
+  MethodDef[3] Rva=9104 ImplFlags=0 Flags=22 Name="AddressOps" Signature=000001 Params=[] Il=fe1c02000001280100000a12001b810200000112007102000001280100000a12011200700200000107280100000a1201fe150200000107280100000ad002000001261973070000067c020000044a280100000a7f010000041f09547e01000004280100000a2a
+  MethodDef[4] Rva=9220 ImplFlags=0 Flags=22 Name="ConstrainedOps" Signature=000001 Params=[] Il=1b0a1200fe16020000016f0300000a280200000a2a
+  MethodDef[5] Rva=9256 ImplFlags=0 Flags=22 Name="FunctionPointers" Signature=000001 Params=[] Il=fe0606000006262a
+  MethodDef[6] Rva=9268 ImplFlags=0 Flags=22 Name="Target" Signature=000001 Params=[] Il=2a
+  MethodDef[7] Rva=9272 ImplFlags=0 Flags=6150 Name=".ctor" Signature=20010108 Params=[] Il=02280400000a02037d020000042a
+MemberRef rows=4
+  MemberRef[1] Parent=0x01000003 Name="WriteLine" Signature=00010108
+  MemberRef[2] Parent=0x01000003 Name="WriteLine" Signature=0001010e
+  MemberRef[3] Parent=0x01000001 Name="ToString" Signature=20000e
+  MemberRef[4] Parent=0x01000001 Name=".ctor" Signature=200001
+StandAloneSig rows=2
+  StandAloneSig[1] Signature=07020808
+  StandAloneSig[2] Signature=070108
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

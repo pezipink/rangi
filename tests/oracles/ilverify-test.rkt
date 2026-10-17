@@ -13,7 +13,7 @@
   [(and dotnet reference-dir)
    (define project (path->string ilverify-project))
    (dotnet-build! dotnet project)
-   (for ([name (fixture-names)])
+   (for ([name (fixture-names)] #:unless (member name unverified-fixtures))
      (test-case name
        (with-built-image
         name

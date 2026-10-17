@@ -220,9 +220,9 @@
   (define static? (vector-ref hit 2))
   (unless (equal? declared type)
     (error 'rangi "field ~a.~a has type ~s, not ~s" cls name declared type))
-  (when (and (memq op '(ldsfld stsfld)) (not static?))
+  (when (and (memq op '(ldsfld stsfld ldsflda)) (not static?))
     (error 'rangi "~a.~a is an instance field; ~a needs a static field" cls name op))
-  (when (and (memq op '(ldfld stfld)) static?)
+  (when (and (memq op '(ldfld stfld ldflda)) static?)
     (error 'rangi "~a.~a is a static field; ~a needs an instance field" cls name op))
   (token #x04000000 (vector-ref hit 0)))
 
@@ -237,7 +237,9 @@
     ShortInlineVar InlineVar ShortInlineBrTarget InlineBrTarget InlineSwitch))
 
 (define token-instructions
-  '(call callvirt newobj ldfld stfld ldsfld stsfld ldstr newarr ldelem ldelema stelem))
+  '(call callvirt newobj ldfld stfld ldflda ldsfld stsfld ldsflda ldstr newarr ldelem ldelema
+    stelem box unbox unbox.any castclass isinst ldobj stobj cpobj initobj sizeof refanyval
+    mkrefany ldtoken constrained. ldftn ldvirtftn jmp calli))
 
 ; Element types for newarr, ldelem, ldelema, and stelem. A primitive name maps to its
 ; mscorlib System type explicitly. Void, typedref, and array element types are rejected.
@@ -251,16 +253,16 @@
     (intptr . "System.IntPtr") (uintptr . "System.UIntPtr")
     (object . "System.Object") (string . "System.String")))
 
-(define (element-type-token! cx elem)
+(define (element-type-token! cx elem [what "array element type"])
   (match elem
     [(? symbol?)
      (define entry (assq elem primitive-element-types))
-     (unless entry (error 'rangi "array element type ~a is not supported" elem))
+     (unless entry (error 'rangi "~a ~a is not supported" what elem))
      (bitwise-ior #x01000000 (typeref-rid! cx 'mscorlib (string->symbol (cdr entry)) 0))]
     [(list (? symbol? asm) (? symbol? ty))
      #:when (not (memq asm '(szarray class valuetype)))
      (bitwise-ior #x01000000 (typeref-rid! cx asm ty 0))]
-    [_ (error 'rangi "array element type ~s is not supported" elem)]))
+    [_ (error 'rangi "~a ~s is not supported" what elem)]))
 
 ; II.25.4.6: a catch handler, and a filter block and its handler, start with the exception
 ; object on the stack. finally and fault handlers start with an empty stack.
@@ -312,15 +314,23 @@
     [(list (or 'ldc.i 'ldc.i4) n) (ldc-i4-item n)]
     [(list (and base (or 'ldarg 'starg 'ldarga)) n) (var-item base n nparams "parameters")]
     [(list (and base (or 'ldloc 'stloc 'ldloca)) n) (var-item base n nlocals "locals")]
-    [(list (or 'call 'callvirt) _ ...) (call-item cx scope node)]
+    [(list (or 'call 'callvirt 'ldftn 'ldvirtftn 'jmp) _ ...) (call-item cx scope node)]
     [(list 'newobj _ ...) (newobj-item cx scope node)]
-    [(list (and op (or 'ldfld 'stfld 'ldsfld 'stsfld)) (list asm ty) (? symbol? name) type)
+    [(list (and op (or 'ldfld 'stfld 'ldflda 'ldsfld 'stsfld 'ldsflda)) (list asm ty) (? symbol? name) type)
      (list op (field-token! cx asm ty name type))]
-    [(list (and op (or 'ldfld 'stfld 'ldsfld 'stsfld)) (? symbol? cls) (? symbol? name) type)
+    [(list (and op (or 'ldfld 'stfld 'ldflda 'ldsfld 'stsfld 'ldsflda)) (? symbol? cls) (? symbol? name) type)
      (list op (module-field-token cx cls name type op))]
     [(list 'ldstr s) (list 'ldstr (string-token cx s))]
     [(list (and op (or 'newarr 'ldelem 'ldelema 'stelem)) elem)
      (list op (element-type-token! cx elem))]
+    [(list (and op (or 'box 'unbox 'unbox.any 'castclass 'isinst 'ldobj 'stobj 'cpobj 'initobj
+                       'sizeof 'refanyval 'mkrefany 'ldtoken 'constrained.))
+           type)
+     (list op (element-type-token! cx type "type operand"))]
+    ; calli takes a StandAloneSig (II.22.36) with the call-site signature (II.23.2.2)
+    [(list 'calli ret params)
+     (list 'calli (bitwise-ior #x11000000
+                               (intern! (ctx-standalone-sigs cx) (method-sig cx scope ret params))))]
     [(list (? symbol? op) _ ...)
      (when (memq op token-instructions) (error 'rangi "malformed IL instruction ~s" node))
      (check-passable op)
@@ -352,22 +362,23 @@
 
 (define (call-has-this? cx node)
   (match node
-    [(list (and op (or 'call 'callvirt)) ret owner (? symbol? name) params _ ...)
+    [(list (and op (or 'call 'callvirt 'ldftn 'ldvirtftn 'jmp)) ret owner (? symbol? name) params _ ...)
      (cond
        [(same-module-owner? owner)
         (define hit (hash-ref (ctx-method-rids cx) (list (car owner) name ret params) #f))
         (and hit (vector-ref hit 2))]
-       [else (or (eq? op 'callvirt) (eq? name '.ctor))])]
+       [else (or (and (memq op '(callvirt ldvirtftn)) #t) (eq? name '.ctor))])]
     [_ #f]))
 
-; call and callvirt. A symbol owner names a method in this module, with a MethodDef token
-; (II.22.26). Any other owner is an external MemberRef (II.22.25). A generic method call
-; names its instantiation with a MethodSpec (II.22.29).
+; call, callvirt, and the function-pointer forms ldftn, ldvirtftn, and jmp share this path. A
+; symbol owner names a method in this module, with a MethodDef token (II.22.26). Any other owner
+; is an external MemberRef (II.22.25). A generic method call names its instantiation with a
+; MethodSpec (II.22.29).
 (define (call-item cx scope node)
   (match node
-    [(list (and op (or 'call 'callvirt)) ret owner (? symbol? name) params more ...)
+    [(list (and op (or 'call 'callvirt 'ldftn 'ldvirtftn 'jmp)) ret owner (? symbol? name) params more ...)
      (define inst (inst-arg more node))
-     (define callvirt? (eq? op 'callvirt))
+     (define callvirt? (and (memq op '(callvirt ldvirtftn)) #t))
      (define this? (call-has-this? cx node))
      (cond
        [(same-module-owner? owner)
@@ -441,6 +452,9 @@
              'next '())]
     [(and (pair? node) (eq? (car node) 'newobj))
      (effect 'newobj (length (caddr node)) 1 'next '())]
+    ; calli pops its arguments and the function pointer, and pushes the result unless void
+    [(and (pair? node) (eq? (car node) 'calli))
+     (effect 'calli (+ (length (caddr node)) 1) (if (eq? (cadr node) 'void) 0 1) 'next '())]
     [else
      (define name (if (symbol? item) item (car item)))
      (define op (opcode-named name))

@@ -11,7 +11,10 @@
         (with-built-image
          name
          (λ (dir exe)
+           ; metadata-only fixtures get /md without /il, so their IL is not checked
+           (define flags
+             (if (member name unverified-fixtures) '("/md") '("/md" "/il")))
            (define-values (code out)
-             (run-tool pe-verify (list "/md" "/il" "/nologo" (path->string exe)) exe))
+             (run-tool pe-verify (append flags (list "/nologo" (path->string exe))) exe))
            (check-snapshot (build-path dir "pe-verify.txt") (format "exit ~a\n~a" code out))))))
     (oracle-missing "PEVerify.exe"))

@@ -1,0 +1,25 @@
+Module rows=1
+  Module[1] Name="il-runtime-only-opcodes.exe" Mvid=a4f136e76786ffd9f27e074acee08f3a
+TypeRef rows=3
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Int32" Namespace="System"
+  TypeRef[3] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=3
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Helpers" Namespace="" Extends=0x01000001 Fields=[] Methods=[2..4]
+MethodDef rows=4
+  MethodDef[1] Rva=8816 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=280200000628030000062a
+  MethodDef[2] Rva=8828 ImplFlags=0 Flags=22 Name="Typed" Signature=000001 Params=[] Il=1b0a1200c602000001c2020000014a280100000a2a
+  MethodDef[3] Rva=8864 ImplFlags=0 Flags=22 Name="Indirect" Signature=000001 Params=[] Il=fe060400000629020000112a
+  MethodDef[4] Rva=8880 ImplFlags=0 Flags=22 Name="Target" Signature=000001 Params=[] Il=7201000070280200000a2a
+MemberRef rows=2
+  MemberRef[1] Parent=0x01000003 Name="WriteLine" Signature=00010108
+  MemberRef[2] Parent=0x01000003 Name="WriteLine" Signature=0001010e
+StandAloneSig rows=2
+  StandAloneSig[1] Signature=070108
+  StandAloneSig[2] Signature=000001
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

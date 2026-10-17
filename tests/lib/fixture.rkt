@@ -3,7 +3,14 @@
 ; program.rktd. Images are assembled into a fresh temp directory, which is removed afterwards.
 (require racket/file racket/port racket/runtime-path racket/string file/sha1
          "../../src/ilasm/syntax.rkt" "../../src/image.rkt")
-(provide fixture-names with-built-image sha256-hex run-image normalize-newlines)
+(provide fixture-names unverified-fixtures
+         with-built-image sha256-hex run-image normalize-newlines)
+
+; Fixtures that neither IL verifier can check. il-unverifiable-opcodes is unverifiable on purpose
+; (II.1.7.5). il-runtime-only-opcodes uses TypedReference and calli, which ILVerify does not implement
+; and PEVerify rejects. The verifier oracles check these fixtures' metadata only (PEVerify /md) and
+; skip them for ILVerify. Their runtime output is still checked.
+(define unverified-fixtures '("il-unverifiable-opcodes" "il-runtime-only-opcodes"))
 
 (define-runtime-path fixtures-dir "../fixtures")
 

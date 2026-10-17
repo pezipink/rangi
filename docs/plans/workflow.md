@@ -56,10 +56,18 @@ Notes:
 
 `build-srm!` (SRM dumper) and the ilverify test both run `dotnet build` in fixed `bin/` and `obj/` folders. Parallel test processes would race on them. `tests/lib/dotnet-build.rkt` serialises those builds with a machine-wide file lock (`rangi-dotnet-build.lock` in the temp directory). After the first build each one is an incremental no-op, so the lock adds little time. Do not call `dotnet build` on these projects directly from a test; go through `dotnet-build!`.
 
+## Fixture and verifier conventions
+
+* `<Module>` is special. If `<Module>` has any members, `parse-il` (`src/ilasm/syntax.rkt`) moves every member into a generated `Program` class and leaves `<Module>` empty. So a static field or helper on `<Module>` cannot be found by `(ldsfld <Module> ...)` or `(call ... (<Module>) ...)`. Keep `main` in `<Module>`, and put helpers and fields in named classes such as `Helpers` or `Store`. Changing this rule would change existing snapshots, so decide that deliberately.
+* Verifier limits. ILVerify (.NET Core) does not implement TypedReference (`mkrefany`, `refanyval`) or `calli`. PEVerify rejects `calli` on an `ldftn` pointer (`Instruction cannot be verified`). These are verifier limits, not image errors. Keep such instructions out of verified fixtures.
+* `tests/lib/fixture.rkt` lists `unverified-fixtures`. The PEVerify test runs those with `/md` only, and the ILVerify test skips them. Both still run the fixture's stdout check. Add a fixture to the list only when a verifier cannot accept its IL on purpose or by limit, and say why in the list comment.
+* Runtime-only check. A fixture that neither verifier accepts is still run for stdout and exit code. That covers the instruction's behaviour, which is the point of the fixture.
+
 ## Timings we measured
 
 * Wave 1 had four narrow lanes. Agent time per lane: 250 s (ldstr-switch), 265 s (field-sigs), 271 s (pe-constants), 600 s (p4-close, which had more to read). Wall time for the wave was about 10 minutes.
-* A serial full suite and a `-j 4` full suite both pass. `-j 4` runs in about 53 s.
+* Wave 2 slice 4 (`il-all-opcodes`) needed three oracle rounds. The first ILVerify run found TypedReference and `calli` limits, and the second PEVerify run found the `calli` limit on `ldftn`. Each round costs one oracle run, so run the verifiers on a new fixture early.
+* A serial full suite and a `-j 4` full suite both pass. `-j 4` runs in about 53 s. The full suite with oracles passed 1137 tests after slice 4.
 * Rough planning figure for a lane that adds a new opcode group, table column, or signature form: 5–10 minutes of agent time, plus about 2 minutes for the coordinator to merge and run the section suite. Lanes that touch the PE writer or DLL output take longer because failures there are harder to diagnose.
 
 ## Checklist for a lane agent

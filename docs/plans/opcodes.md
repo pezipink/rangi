@@ -77,5 +77,5 @@ Status: label resolution and fixed-point relaxation in `src/il/labels.rkt` (stre
 
 * [x] Unit tests per operand kind and per macro boundary (`-1`, `0`, `8`, `9`, `127`, `128`, `-128`, `-129`). Merged from `stream/b-tests` in `tests/il/operand-boundary-test.rkt`.
 * [x] Branch relaxation tests with a branch exactly at the int8 limit (127 and 128 bytes). In `tests/il/relaxation-boundary-test.rkt`.
-* [ ] An `il-all-opcodes` fixture that uses every opcode at least once in valid, verifiable (where possible) code, run through ildasm and the SRM dumper. Unverifiable opcodes (`cpblk`, `localloc`, `jmp`, `calli`, `arglist`) go in a separate fixture that checks PEVerify `/md` only.
+* [x] An `il-all-opcodes` fixture that uses every opcode at least once in valid, verifiable (where possible) code, run through ildasm and the SRM dumper. Its stdout is checked, and PEVerify and ILVerify both pass. The unverifiable opcodes are in `il-unverifiable-opcodes` (PEVerify `/md` only, no ILVerify). `mkrefany`, `refanyval`, and `calli` are in `il-runtime-only-opcodes`. Neither verifier accepts them, so that fixture is checked by running it only.
 * [ ] ILVerify on every IL fixture. Execution tests exist for loops, catch, finally, fault, filter (`ops-branch`, `ops-eh`, `ops-eh-finally`, `ops-eh-filter`), `ldstr-hello`, and `switch-dispatch`. Not every fixture is covered yet.

@@ -109,7 +109,7 @@ Parse ilasm keyword lists (`(public static hidebysig)`) into these flag values i
 
 ## Method bodies and IL (II.25.4, Partition III)
 
-Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (`src/il/opcodes.rkt`) can be encoded, and the lint decodes all of them. Tiny and fat headers, `.locals` (LocalVarSig), and computed maxstack are done. Catch, finally, fault, and `filter` EH are done, and prefix validation is in. The `il-all-opcodes` fixture is not. The `ops-*` fixtures run arithmetic, branches, constants, conversions, locals and args, and EH.
+Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (`src/il/opcodes.rkt`) can be encoded, and the lint decodes all of them. Tiny and fat headers, `.locals` (LocalVarSig), and computed maxstack are done. Catch, finally, fault, and `filter` EH are done, and prefix validation is in. The `il-all-opcodes` fixture covers the verifiable opcodes, including the box, field-address, type-token, constrained, and `ldftn` groups. `il-unverifiable-opcodes` covers `jmp`, `ldvirtftn`, and the unverifiable ops (PEVerify `/md` only). `il-runtime-only-opcodes` covers `mkrefany`, `refanyval`, and `calli`, which no verifier accepts, so it is checked by running only. The `ops-*` fixtures run arithmetic, branches, constants, conversions, locals and args, and EH.
 
 ## Module and type model
 
@@ -119,7 +119,8 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | `extends` (`System.Object`, `System.ValueType`, `System.Enum`) | none |         |
 | Static methods, same-module calls (forward and recursive), parameters | done | calls-multi |
 | Static fields (same module)                                | done    | `static-fields` |
-| Instance fields, `.ctor`, `.cctor`                         | partial (`.ctor` done; instance fields and `.cctor` not) | instance-methods |
+| Instance fields (same module: `ldfld`, `stfld`, `ldflda`), `.ctor` | done | instance-methods, il-all-opcodes |
+| Instance fields on external types, `.cctor`                | none    |         |
 | Instance methods, `newobj`, virtual dispatch, `.override`  | partial (instance methods, `newobj`, `callvirt` done; `.override` and virtual dispatch not) | instance-methods |
 | Interfaces and implementation                              | none    |         |
 | Nested types                                               | none    |         |
@@ -131,6 +132,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | P/Invoke                                                   | none    |         |
 | Multiple assembly references with versions and public key tokens | none |       |
 | Entry point token taken from `.entrypoint`                 | done    | nano    |
+| `<Module>` members move to a generated `Program` class (`parse-il`). Helpers must live in a named class, not `<Module>` | done | nano |
 | Static data (`.data`, FieldRVA)                            | none    |         |
 | Embedded managed resources                                 | none    |         |
 
@@ -155,7 +157,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 
 ## Suggested order
 
-1. Static fields are done (`static-fields`). Instance methods, `.ctor`, and `newobj` on same-module types are done (`instance-methods`). Known limit: a non-virtual `call` to an external instance method other than `.ctor` is lowered as static. It needs an explicit `instance` keyword or a clear error. Instance fields and `.cctor` are next. Locals, fat bodies, branching, catch, finally, fault, and filter EH are done. The `ldstr` hello world and `switch` fixtures are done.
+1. Static fields are done (`static-fields`). Instance methods, `.ctor`, `newobj`, and same-module instance fields are done (`instance-methods`, `il-all-opcodes`). Known limit: a non-virtual `call` to an external instance method other than `.ctor` is lowered as static, which is silently wrong. It needs an explicit `instance` keyword or a clear error; decide before P5 external calls. `.cctor` is next. Locals, fat bodies, branching, catch, finally, fault, and filter EH are done. The `ldstr` hello world and `switch` fixtures are done.
 3. Multiple types with namespaces, extends, interfaces, nested types.
 4. Value types, enums, static data. Single-dimension arrays are done (`arrays-sum`); multi-dimensional arrays are not.
 5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam are done. GenericParamConstraint and generic types are not.
