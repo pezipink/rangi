@@ -41,7 +41,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x1A | ModuleRef              | none    | none    | Needed for P/Invoke                                      |         |
 | 0x1B | TypeSpec               | partial | partial | Row helper and `read-row`; blob via `sigs.rkt` and reader; generic instance types | generic-calls |
 | 0x1C | ImplMap                | none    | none    | Sorted; P/Invoke                                         |         |
-| 0x1D | FieldRVA               | none    | none    | Sorted; static data, needs a `.sdata` or `.text` chunk   |         |
+| 0x1D | FieldRVA               | none    | done    | Sorted; RVA of the static field's `.data` chunk in `.sdata` (II.22.18) | static-data |
 | 0x1E | ENCLog                 | partial | n/a     | Count only                                               |         |
 | 0x1F | ENCMap                 | partial | n/a     | Count only                                               |         |
 | 0x20 | Assembly               | partial | partial | Version, flags, public key, and culture are zero         |         |
@@ -135,7 +135,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Multiple assembly references with versions and public key tokens | done | asm-refs-versioned |
 | Entry point token taken from `.entrypoint`                 | done    | nano    |
 | `<Module>` members move to a generated `Program` class (`parse-il`). Helpers must live in a named class, not `<Module>`. Kept for now; future option: resolve `<Module>` references to `Program` (changes snapshots) | done | nano |
-| Static data (`.data`, FieldRVA)                            | none    |         |
+| Static data (`.data`, FieldRVA)                            | done    | static-data |
 | Embedded managed resources                                 | none    |         |
 
 
@@ -148,7 +148,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | PE32+ (AMD64, ARM64), import stub `movabs`+DIR64    | partial (AMD64 writer via `nano-x64`; ARM64 out of scope) | out of scope |     |
 | AnyCPU, `32BITREQUIRED`, and `32BITPREFERRED` (`.platform anycpu\|x86\|32bitpreferred`) | n/a | done | platform-x86 |
 | Subsystem GUI versus console (`.subsystem console\|windows`) | n/a | done | subsystem-gui |
-| Multiple sections (`.text`, `.rsrc`, `.reloc`, `.sdata`) | partial | partial (`.text`, `.reloc`) |  |
+| Multiple sections (`.text`, `.rsrc`, `.reloc`, `.sdata`) | partial | partial (`.text`, `.reloc`, `.sdata` when there is static data) | static-data |
 | Sections of any size (no 0x400 limit)                | done    | done    | text-over-400, text-over-2000 |
 | Base relocations generated from fixups               | n/a     | partial |         |
 | Deterministic timestamp and MVID                     | n/a     | done    | nano    |
@@ -161,7 +161,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 
 1. Static fields are done (`static-fields`). Instance methods, `.ctor`, `newobj`, and same-module instance fields are done (`instance-methods`, `il-all-opcodes`). External instance calls use the `instance` keyword, as in ilasm: `(call instance int32 (mscorlib System.String) get_Length ())`. The keyword sets HASTHIS in the MemberRef signature. Without it, a non-virtual call to an external instance method is still lowered as static, so the runtime call fails; a same-module `instance` on a static method is rejected (`instance-external-call`). `.cctor` is done (`cctor-init`), and external instance fields are done (`external-instance-field`). Locals, fat bodies, branching, catch, finally, fault, and filter EH are done. The `ldstr` hello world and `switch` fixtures are done.
 3. Multiple types with namespaces, extends, interfaces, nested types.
-4. Value types, enums, static data. Single-dimension arrays are done (`arrays-sum`); multi-dimensional arrays are not.
+4. Value types, enums, static data. Single-dimension arrays are done (`arrays-sum`); multi-dimensional arrays are not. Static data is done (`static-data`). Syntax: a static field takes its initial bytes from a top-level `.data` block, `(.data D_Table = (bytearray (01 00 00 00)))` with hex bytes, and the field names it with `at`, `(.field (public static) int32 Table at D_Table)`. This is the ilasm spelling, so the `bytes` keyword is rejected. The length must equal the primitive's size, and each block belongs to one field. The field gets HasFieldRVA and a FieldRVA row (II.22.18) whose RVA points into the `.sdata` section (II.16). A literal field cannot have data.
 5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam are done. GenericParamConstraint and generic types are not.
 6. Properties, events, custom attributes, constants.
 7. DLL output and AnyCPU for Framework targets.
