@@ -26,7 +26,7 @@ Status: `src/private/binary.rkt` is the shared source for the little-endian, ali
 * [ ] Describe the 13 coded index kinds (II.24.2.6) as data: tag bits and the ordered table list, including unused tags in `CustomAttributeType`.
 * [ ] Derive row sizes and coded index widths from the schema. Delete the two hand-written `case` blocks.
 * [ ] Port `src/cli-reader.rkt` to `rangi/cli/reader.rkt` on top of the schema. Add a generic `(read-row rdr table rid)` that returns a vector, keeping the fast paths (`get-public-typedefs`) as specialised readers.
-* [ ] Fix the remaining reader defects in [architecture.md](../architecture.md#reader): the `#-` stream and the extra-data flag. Already fixed in `ca7aa13`: PE32+, missing tables, `declsecurity` tag, visibility mask, and the port leak.
+* [x] Fix the remaining reader defects in [architecture.md](../architecture.md#reader): the `#-` stream and the extra-data flag. Already fixed in `ca7aa13`: PE32+, missing tables, `declsecurity` tag, visibility mask, and the port leak.
 
 ### R3 PE layer and layout engine
 
@@ -57,5 +57,5 @@ Deviations so far: a chunk holds plain bytes with zeroed holes and a list of typ
 ### R6 Reader hardening
 
 * [x] Corpus test against every reference assembly (verification milestone V7).
-* [ ] Benchmark `read-file` plus `get-public-typedefs` on `mscorlib.dll` and record the timing in a test, so phase-1 load time does not regress.
+* [x] Benchmark `read-file` plus `get-public-typedefs` on `mscorlib.dll` and record the timing in a test. Timings are recorded, not asserted, so this does not yet guard against a load-time regression.
 * [ ] Consider memory-mapping or reading only the metadata section instead of the whole file.
