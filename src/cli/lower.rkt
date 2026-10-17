@@ -4,9 +4,11 @@
          "../ilasm/syntax.rkt"
          "../private/binary.rkt"
          "heaps.rkt"
-         (only-in "../il/encode.rkt" find-opcode)
+         (only-in "../il/encode.rkt" find-opcode opcode-named)
          (only-in "../il/opcodes.rkt" opcode-operand)
-         (only-in "../il/labels.rkt" assemble-items assembly-code label-symbol?))
+         (only-in "../il/stack.rkt" compute-max-stack effect label-at
+                  opcode-pop-count opcode-push-count opcode-flow-kind)
+         (only-in "../il/labels.rkt" assemble-items assembly-code label-symbol? label-name-of))
 (provide lower-module
          (struct-out cli-program)
          (struct-out tdef)
@@ -198,12 +200,53 @@
      node]
     [_ (error 'rangi "unsupported IL item ~s" node)]))
 
-; Lowers the instruction list to labels.rkt items and assembles them. Branch
-; relaxation and fixed encodings are in labels.rkt and encode.rkt.
-(define (encode-il cx code nparams nlocals)
-  (assembly-code
-   (assemble-items
-    (for/list ([node (in-list code)]) (lower-instruction cx node nparams nlocals)))))
+; Stack effect of one source node, for the depth analysis in il/stack.rkt. Call-like
+; instructions take their pop and push counts from the signature, because the table has Varpop.
+(define (node-effect node item ret-void?)
+  (cond
+    [(and (symbol? node) (label-symbol? node)) (label-at (label-name-of node))]
+    [(and (pair? node) (eq? (car node) 'label)) (label-at (cadr node))]
+    [(or (eq? node 'ret) (and (pair? node) (eq? (car node) 'ret)))
+     (effect 'ret (if ret-void? 0 1) 0 'return '())]
+    [(and (pair? node) (memq (car node) '(call callvirt)))
+     (effect (car node)
+             (+ (length (list-ref node 4)) (if (eq? (car node) 'callvirt) 1 0))
+             (if (eq? (cadr node) 'void) 0 1)
+             'next '())]
+    [(and (pair? node) (eq? (car node) 'newobj))
+     (effect 'newobj (length (caddr node)) 1 'next '())]
+    [else
+     (define name (if (symbol? item) item (car item)))
+     (define op (opcode-named name))
+     (define flow (opcode-flow-kind op))
+     (define targets
+       (cond
+         [(not (memq flow '(branch cond leave))) '()]
+         [(eq? name 'switch) (cdr item)]
+         [else (list (cadr item))]))
+     (effect name (opcode-pop-count op) (opcode-push-count op) flow targets)]))
+
+; Lowers the instruction list to labels.rkt items and assembles them. Returns the code
+; bytes and the maximum stack depth computed from the control-flow graph.
+(define (encode-il cx code nparams nlocals ret-void?)
+  (define items
+    (for/list ([node (in-list code)]) (lower-instruction cx node nparams nlocals)))
+  (define effects
+    (for/list ([node (in-list code)] [item (in-list items)])
+      (node-effect node item ret-void?)))
+  (values (assembly-code (assemble-items items))
+          (compute-max-stack effects)))
+
+; .maxstack given: it is an explicit override and must be at least the computed depth.
+; Otherwise the default of 8 is kept unless the code needs more.
+(define (effective-maxstack explicit computed)
+  (cond
+    [explicit
+     (when (< explicit computed)
+       (error 'rangi ".maxstack ~a is smaller than the computed maximum stack depth ~a"
+              explicit computed))
+     explicit]
+    [else (max 8 computed)]))
 
 ; III.1.7.5: a tiny header is possible only without locals, code under 64 bytes,
 ; and maxstack 8 or less. Otherwise the fat header is used, with LocalVarSigTok
@@ -224,7 +267,10 @@
   (define params (method-decl-params m))
   (define locals (method-decl-locals m))
   (define sig (method-sig (method-decl-ret m) params))
-  (define code (encode-il cx (method-decl-code m) (length params) (length locals)))
+  (define-values (code computed)
+    (encode-il cx (method-decl-code m) (length params) (length locals)
+               (eq? (method-decl-ret m) 'void)))
+  (define maxstack (effective-maxstack (method-decl-maxstack m) computed))
   ; StandAloneSig table tag 0x11, II.22.36
   (define locals-tok
     (if (null? locals)
@@ -233,7 +279,7 @@
   (mdef (symbol->string (method-decl-name m))
         flags
         sig
-        (method-body code (method-decl-maxstack m) locals-tok
+        (method-body code maxstack locals-tok
                      (and (method-decl-init? m) (pair? locals)))
         (method-decl-entry? m)))
 

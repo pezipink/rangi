@@ -18,9 +18,10 @@
 (define (class-named? sym)
   (lambda (c) (eq? (cadr c) sym)))
 
-; .entrypoint, .maxstack, and .locals are directives inside a body, so they are lifted out of the code
+; .entrypoint, .maxstack, and .locals are directives inside a body, so they are lifted out of the code.
+; maxstack is #f when there is no .maxstack, so lowering can tell an explicit value from the default.
 (define (split-directives il)
-  (for/fold ([code '()] [maxstack 8] [entry? #f] [locals #f] [init? #f]
+  (for/fold ([code '()] [maxstack #f] [entry? #f] [locals #f] [init? #f]
              #:result (values (reverse code) maxstack entry? (or locals '()) init?))
             ([node (in-list il)])
     (match node

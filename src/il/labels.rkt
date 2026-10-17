@@ -19,7 +19,8 @@
 (provide (struct-out assembly)
          assemble-items
          assembly-label-offset
-         label-symbol?)
+         label-symbol?
+         label-name-of)
 
 ;; code: bytes. labels: alist of (name . byte offset), in definition order.
 (struct assembly (code labels) #:transparent)
