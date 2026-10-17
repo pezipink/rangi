@@ -5,6 +5,7 @@
          "cli/lower.rkt"
          "cli/build.rkt"
          "cli/header.rkt"
+         "pe/constants.rkt"
          "pe/imports.rkt"
          "pe/layout.rkt"
          "pe/relocs.rkt"
@@ -14,11 +15,15 @@
 ; ---------------------------------------------------------------------------
 ; layout constants (the PE layout itself lives in pe/)
 
-(define image-bases (hasheq 'pe32 #x400000 'pe32+ #x140000000))
-(define section-align #x2000)
-(define file-align #x200)
+(define image-bases (hasheq 'pe32 default-image-base-pe32 'pe32+ default-image-base-pe32+))
+(define section-align default-section-align)
+(define file-align default-file-align)
 
-(define pe-data-dirs '((1 . import-dir) (5 . reloc) (12 . iat) (14 . cli-header)))
+; data directory index -> name of the chunk it covers
+(define pe-data-dirs (list (cons dir-import-table 'import-dir)
+                           (cons dir-base-relocation-table 'reloc)
+                           (cons dir-iat 'iat)
+                           (cons dir-clr-runtime-header 'cli-header)))
 
 ; writes the module model to out-path and returns out-path
 (define (write-image m out-path)
@@ -53,18 +58,20 @@
                       #:entry-rid entry-rid))
   (define body-chunks
     (for/list ([b (in-list bodies)] [i (in-naturals)])
-      (chunk (method-sym i) 4 b '())))
+      (chunk (method-sym i) dword-align b '())))
   (define text
-    (section ".text" #x60000020
+    (section ".text" section-chars-text
              (append (list iat cli-header md) body-chunks
                      (list import-dir lookup hint-name dll-name entry-stub))))
 
   (define params
     (if (eq? fmt 'pe32+)
-        (image-params 'pe32+ #x8664 #x22 3 #x8540 (hash-ref image-bases fmt) section-align file-align)
-        (image-params 'pe32 #x14C #x102 3 #x8540 (hash-ref image-bases fmt) section-align file-align)))
+        (image-params 'pe32+ machine-amd64 pe32plus-characteristics subsystem-windows-cui
+                      default-dll-characteristics (hash-ref image-bases fmt) section-align file-align)
+        (image-params 'pe32 machine-i386 pe32-characteristics subsystem-windows-cui
+                      default-dll-characteristics (hash-ref image-bases fmt) section-align file-align)))
   ; the relocation table holds the addresses of .text, so lay out .text before building it
   (define reloc
-    (section ".reloc" #x42000040
+    (section ".reloc" section-chars-reloc
              (list (base-relocation-chunk (layout-image params (list text))))))
   (layout-image params (list text reloc)))
