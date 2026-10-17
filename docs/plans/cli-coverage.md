@@ -139,7 +139,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Entry point token taken from `.entrypoint`                 | done    | nano    |
 | `<Module>` members move to a generated `Program` class (`parse-il`). Helpers must live in a named class, not `<Module>`. Kept for now; future option: resolve `<Module>` references to `Program` (changes snapshots) | done | nano |
 | Static data (`.data`, FieldRVA)                            | done    | static-data |
-| Embedded managed resources                                 | none    |         |
+| Embedded managed resources (`.mresource`, ManifestResource, CLI resources blob) | done | managed-resources |
 
 
 ## PE image (II.25, PE/COFF)

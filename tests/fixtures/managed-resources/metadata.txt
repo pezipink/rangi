@@ -1,0 +1,27 @@
+Module rows=1
+  Module[1] Name="managed-resources.exe" Mvid=40fd92e21204ba1b40d6fc819a094103
+TypeRef rows=4
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Assembly" Namespace="System.Reflection"
+  TypeRef[3] ResolutionScope=0x23000001 Name="Stream" Namespace="System.IO"
+  TypeRef[4] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=2
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+MethodDef rows=1
+  MethodDef[1] Rva=8896 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=280100000a72010000706f0200000a0a066f0300000a280400000a066f0500000a280600000a2a
+MemberRef rows=6
+  MemberRef[1] Parent=0x01000002 Name="GetExecutingAssembly" Signature=00001209
+  MemberRef[2] Parent=0x01000002 Name="GetManifestResourceStream" Signature=2001120d0e
+  MemberRef[3] Parent=0x01000003 Name="get_Length" Signature=20000a
+  MemberRef[4] Parent=0x01000004 Name="WriteLine" Signature=0001010a
+  MemberRef[5] Parent=0x01000003 Name="ReadByte" Signature=200008
+  MemberRef[6] Parent=0x01000004 Name="WriteLine" Signature=00010108
+StandAloneSig rows=1
+  StandAloneSig[1] Signature=0701120d
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=
+ManifestResource rows=1
+  ManifestResource[1] Offset=0 Flags=1 Name="Data" Implementation=0x00000000

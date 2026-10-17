@@ -20,7 +20,8 @@
          (struct-out fdef)
          (struct-out mdef)
          (struct-out methodimpl)
-         (struct-out interfaceimpl))
+         (struct-out interfaceimpl)
+         (struct-out manifest-resource))
 
 ; The CLI-level program: flags are bits, signatures and bodies are bytes, and
 ; references are rids. asm-refs rows are (name version token), where version is four ints and
@@ -30,10 +31,16 @@
 ; is (cons 'methoddef|'memberref rid); a genericparam owner is (cons 'methoddef rid).
 ; subsystem and platform are the module model's names ('console|'windows, 'anycpu|'x86|'32bitpreferred).
 ; methodimpls are the MethodImpl rows for .override, in source order. interfaceimpls are the
-; InterfaceImpl rows for .implements, in source order.
+; methodimpls are the MethodImpl rows for .override, in source order. interfaceimpls are the
+; InterfaceImpl rows for .implements, in source order. resources are the ManifestResource rows
+; for .mresource, in source order.
 (struct cli-program (asm-refs typerefs memberrefs typespecs methodspecs genericparams
                      typedefs module-name entry-rid format standalone-sigs us-heap
-                     subsystem platform methodimpls interfaceimpls))
+                     subsystem platform methodimpls interfaceimpls resources))
+; A ManifestResource row (II.22.24): name is the string, flags are the ManifestResource
+; attribute bits (public or private), offset is the byte offset of its length prefix within the
+; CLI resources blob (II.25.3.3), and data is its content.
+(struct manifest-resource (name flags offset data))
 ; A MethodImpl row (II.22.27): class is the TypeDef rid, body is (cons 'methoddef rid) of an
 ; override in that class, and decl is (cons 'methoddef|'memberref rid) of the base method.
 (struct methodimpl (class body decl))
@@ -1060,6 +1067,20 @@
        (define-values (asm ty) (asm-type-parts i))
        (interfaceimpl class-rid (cons 'typeref (typeref-rid! cx asm ty 0)))])))
 
+; Lays out the embedded resources in source order (II.25.3.3). Each entry is a u32 length prefix
+; followed by its bytes, with no padding, so the offset of each entry is the running total.
+(define (lower-resources rs)
+  (let loop ([rs rs] [offset 0] [acc '()])
+    (cond
+      [(null? rs) (reverse acc)]
+      [else
+       (define r (car rs))
+       (define data (resource-decl-bytes r))
+       (define flags (if (eq? (resource-decl-flags r) 'public) 1 2))
+       (loop (cdr rs)
+             (+ offset 4 (bytes-length data))
+             (cons (manifest-resource (symbol->string (resource-decl-name r)) flags offset data)
+                   acc))])))
 
 (define (lower-module m)
   (define classes (module-model-classes m))
@@ -1145,6 +1166,7 @@
   (define interfaceimpls
     (append* (for/list ([cls (in-list classes)] #:unless (null? (class-decl-implements cls)))
                (lower-implements cx cls class-decls))))
+  (define resources (lower-resources (module-model-resources m)))
   (cli-program (for/list ([name (in-list (interner-keys asm-refs))])
                  (define r (findf (λ (r) (equal? (asm-ref-name r) name)) (module-model-asm-refs m)))
                  (list name (asm-ref-version r) (asm-ref-token r)))
@@ -1162,5 +1184,6 @@
                (module-model-subsystem m)
                (module-model-platform m)
                methodimpls
-               interfaceimpls))
+               interfaceimpls
+               resources))
 

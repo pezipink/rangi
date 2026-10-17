@@ -23,14 +23,18 @@
 
 ; metadata-size is the byte length of the metadata chunk. entry-rid is the MethodDef
 ; row of the entry point, which the entry token names (II.22.22). A DLL with no entry point
-; passes #f, and the token is 0 (II.25.3.3).
+; passes #f, and the token is 0 (II.25.3.3). resources-size is the byte length of the CLI resources
+; blob (II.25.3.3), or 0 when there are none; a non-zero size gets an RVA fixup to the blob.
 (define (cli-header-chunk #:metadata-size metadata-size
                           #:entry-rid entry-rid
+                          #:resources-size [resources-size 0]
                           #:flags [flags cli-flag-ilonly])
   (chunk 'cli-header 4
          (bytes-append (le #x48 4) (le 2 2) (le 0 2)
                        (make-bytes 4 0) (le metadata-size 4)
                        (le flags 4)
                        (le (if entry-rid (bitwise-ior #x06000000 entry-rid) 0) 4)
-                       (make-bytes 48 0))
-         (list (fixup 8 'rva32 'metadata))))
+                       (le 0 4) (le resources-size 4)
+                       (make-bytes 40 0))
+         (append (list (fixup 8 'rva32 'metadata))
+                 (if (zero? resources-size) '() (list (fixup 24 'rva32 'cli-resources))))))

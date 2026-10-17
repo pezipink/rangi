@@ -12,6 +12,7 @@
          (struct-out override-decl)
          (struct-out field-decl)
          (struct-out data-decl)
+         (struct-out resource-decl)
          (struct-out method-decl)
          (struct-out generic-param)
          (struct-out locals-decl)
@@ -22,8 +23,9 @@
 ; heap indexes, or flag bits. cli/lower.rkt resolves those.
 ; subsystem is 'console (the default) or 'windows (.subsystem). platform is 'anycpu (the default),
 ; 'x86, or '32bitpreferred (.platform). Both are names here; lower and image map them to flags.
-; data is the list of data-decl blocks (.data, II.16) in source order.
-(struct module-model (asm-refs classes module-name format dll? subsystem platform data))
+; data is the list of data-decl blocks (.data, II.16) in source order. resources is the list of
+; resource-decl in source order (.mresource).
+(struct module-model (asm-refs classes module-name format dll? subsystem platform data resources))
 ; An .assembly extern (II.22.5 AssemblyRef). name comes from the referenced file. version is four
 ; 16-bit parts, and token is the 8-byte public key token or #"" when none is given.
 (struct asm-ref (name version token) #:transparent)
@@ -43,6 +45,9 @@
 (struct field-decl (flags type name init at) #:transparent)
 ; A data block (II.16): name is the symbol a field's `at` refers to, bytes its initial value.
 (struct data-decl (name bytes) #:transparent)
+; An embedded managed resource (II.22.24 ManifestResource, II.25.3.3): name is the symbol the
+; resource is looked up by, flags is 'public or 'private, bytes is its content.
+(struct resource-decl (name flags bytes) #:transparent)
 ; handlers: list of eh-clause in source order. maxstack is #f when there is no .maxstack.
 (struct method-decl (flags ret name gparams params code maxstack entry? locals handlers))
 ; exception clause (II.25.4.6): kind is catch, finally, fault or filter. class is (asm ty) for a
@@ -308,6 +313,23 @@
      (data-decl name (apply bytes (for/list ([x (in-list items)]) (parse-data-byte name x))))]
     [_ (error 'rangi "malformed .data: ~s" node)]))
 
+; .mresource public|private NAME bytearray (HEX ...) (II.22.24): an embedded managed resource with
+; inline content. The content is stored in the CLI resources blob (II.25.3.3).
+(define (parse-resource-decl node)
+  (match node
+    [(list '.mresource (and flags (or 'public 'private)) (? symbol? name)
+           (list 'bytearray (? list? items)))
+     (resource-decl name flags
+                    (apply bytes (for/list ([x (in-list items)]) (parse-data-byte name x))))]
+    [_ (error 'rangi "malformed .mresource (expected .mresource public|private NAME (bytearray (HEX ...))): ~s"
+              node)]))
+
+; Each resource name is used once. Returns the list unchanged.
+(define (check-resources rs)
+  (define dup (check-duplicates (map resource-decl-name rs)))
+  (when dup (error 'rangi "duplicate .mresource ~a" dup))
+  rs)
+
 ; Byte size of a fixed-size primitive, for checking FieldRVA data (II.23.1.16).
 (define primitive-sizes
   '((boolean . 1) (int8 . 1) (uint8 . 1) (char . 2) (int16 . 2) (uint16 . 2)
@@ -428,6 +450,7 @@
   (define subsystem #f)
   (define platform #f)
   (define data-decls '())
+  (define resource-decls '())
   (define (add-asm-extern! filename body)
     (define name (read-assembly-meta (read-file filename)))
     (when (findf (λ (r) (equal? (asm-ref-name r) name)) asm-refs)
@@ -477,6 +500,9 @@
          (cons (list flags name tp ext body) acc)]
         [(list '.data _ '= _)
          (set! data-decls (cons (parse-data-decl node) data-decls))
+         acc]
+        [(list '.mresource _ ...)
+         (set! resource-decls (cons (parse-resource-decl node) resource-decls))
          acc]
         [_ (error 'rangi "unsupported top-level directive ~s" node)])))
 
@@ -532,4 +558,5 @@
     (error 'rangi "exactly one .entrypoint is required, found ~a" (length entries)))
 
   (module-model (reverse asm-refs) classes mod-name (or fmt 'pe32) dll?
-                (or subsystem 'console) (or platform 'anycpu) (reverse data-decls)))
+                (or subsystem 'console) (or platform 'anycpu) (reverse data-decls)
+                (check-resources (reverse resource-decls))))
