@@ -35,7 +35,7 @@ Done:
 * V4 L5 structural lint (`tests/lib/pe-lint.rkt`, tested by `tests/image-lint-test.rkt`).
 * Writer rewrite: `<Module>` methods move to a generated `Program` class; `.entrypoint` sets the entry token; unknown IL raises.
 * Reader defects R1 to R10 fixed. PE32 and PE32+ nano dumps match System.Reflection.Metadata. The mscorlib public type count matches the SRM oracle (1520; the earlier 1521 figure was wrong, see `tests/read-bench-test.rkt`). Stream D baseline: lazy open median about 6.5 ms, enumerate public types median about 0.5 ms (20 runs, 4.7.1 mscorlib).
-* P3 bigger fixtures: `tests/fixtures/text-over-400` and `tests/fixtures/text-over-2000`. Both pass PEVerify, ildasm, SRM, and the lint. The O4 short-form `ldc.i4` change shrank their `.text` below the names' limits (see the P3 row below). The layout map (V5) is in place.
+* P3 bigger fixtures: `tests/fixtures/text-over-400` (`.text` VirtualSize 0x476) and `tests/fixtures/text-over-2000` (0x2346). Both pass PEVerify, ildasm, SRM, and the lint. `fixtures-test.rkt` asserts the 0x400 and 0x2000 limits. The O4 short-form `ldc.i4` change had shrunk them, so they were grown back. The layout map (V5) is in place.
 * O4 method bodies merged: `.locals`, computed maxstack, catch, finally, and fault EH (`filter` is open), and the `ops-*` opcode batch fixtures (PEVerify and ILVerify clean).
 * Same-module calls merged (`calls-multi`): forward calls and recursion. The writer gap where `call` only accepted MemberRef is closed.
 * Generics merged: data layer, signatures, reader, ilasm syntax, and generic same-module calls (`generic-calls`).
@@ -61,7 +61,7 @@ Open items, in order:
 | P0 | Done | None |
 | P1 | Done | None |
 | P2 | Done | R1 and R2 merged. Signed compressed integers are deferred until a caller needs them |
-| P3 | Partly done | R3, V5, R4, and R5 are done. The P3 gate says `.text` is larger than 0x400 and 0x2000. The O4 short-form `ldc.i4` change put `text-over-400` at 0x37E and `text-over-2000` at 0x12E2, so the gate is not met by these fixtures now. Open: grow the fixtures past the limits, then a person reviews the layout snapshots. The partial literal removal in R4 stays open until the PE constants move. |
+| P3 | Partly done | R3, V5, R4, and R5 are done. The threshold fixtures pass the 0x400 and 0x2000 limits (0x476 and 0x2346). Open: a person reviews the layout snapshots. The partial literal removal in R4 stays open until the PE constants move. |
 | P4 | Mostly done | O1 to O4 are merged, except `filter` EH and prefix validation. O5: unit and relaxation tests are merged, and the opcode batch fixtures pass ILVerify and PEVerify. Still open: the `il-all-opcodes` fixture, ILVerify on every fixture, and execution tests for `switch` and `ldstr`. |
 | P5 | Partly done | Done: generic methods and types (signatures, TypeSpec, MethodSpec, GenericParam), same-module calls, single-dimension arrays, catch, finally, and fault EH. Open: fields, instance methods and `newobj`, multiple types, interfaces, value types, attributes, DLLs. |
 | P6 | Mostly done | V7 corpus diff matches SRM on 133 of 133 assemblies. The benchmark and memory-mapping items in R6 are open. |

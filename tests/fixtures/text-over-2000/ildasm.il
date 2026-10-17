@@ -35,12 +35,12 @@
 // Magic:                          0x010b
 // Major linker version:           0x06
 // Minor linker version:           0x05
-// Size of code:                   0x00001400
+// Size of code:                   0x00002400
 // Size of init.data:              0x00000200
 // Size of uninit.data:            0x00000000
-// Addr. of entry point:           0x000032dc
+// Addr. of entry point:           0x00004340
 // Base of code:                   0x00002000
-// Base of data:                   0x00004000
+// Base of data:                   0x00006000
 // Section alignment:              0x00002000
 // File alignment:                 0x00000200
 // Major OS version:               0x0004
@@ -49,7 +49,7 @@
 // Minor image version:            0x0000
 // Major subsystem version:        0x0004
 // Minor subsystem version:        0x0000
-// Size of image:                  0x00006000
+// Size of image:                  0x00008000
 // Size of headers:                0x00000200
 // Checksum:                       0x00000000
 // Subsystem:                      0x0003
@@ -61,11 +61,11 @@
 // Loader flags:                   0x00000000
 // Directories:                    0x00000010
 // 0x00000000 [0x00000000] address [size] of Export Directory:          
-// 0x00003290 [0x00000028] address [size] of Import Directory:          
+// 0x000042f4 [0x00000028] address [size] of Import Directory:          
 // 0x00000000 [0x00000000] address [size] of Resource Directory:        
 // 0x00000000 [0x00000000] address [size] of Exception Directory:       
 // 0x00000000 [0x00000000] address [size] of Security Directory:        
-// 0x00004000 [0x0000000c] address [size] of Base Relocation Table:     
+// 0x00006000 [0x0000000c] address [size] of Base Relocation Table:     
 // 0x00000000 [0x00000000] address [size] of Debug Directory:           
 // 0x00000000 [0x00000000] address [size] of Architecture Specific:     
 // 0x00000000 [0x00000000] address [size] of Global Pointer:            
@@ -79,9 +79,9 @@
 
 // Image sections:
 //              .text
-//              0x000012e2 Virtual Size
+//              0x00002346 Virtual Size
 //              0x00002000 Virtual Address
-//              0x00001400 Size of Raw Data
+//              0x00002400 Size of Raw Data
 //              0x00000200 Pointer to Raw Data
 //              0x00000000 Pointer to Relocations
 //              0x00000000 Pointer to Linenumbers
@@ -94,9 +94,9 @@
 
 //              .reloc
 //              0x0000000c Virtual Size
-//              0x00004000 Virtual Address
+//              0x00006000 Virtual Address
 //              0x00000200 Size of Raw Data
-//              0x00001600 Pointer to Raw Data
+//              0x00002600 Pointer to Raw Data
 //              0x00000000 Pointer to Relocations
 //              0x00000000 Pointer to Linenumbers
 //                  0x0000 Number of Relocations
@@ -107,16 +107,16 @@
 //                         MEM_READ
 
 // Base Relocation Table
-//              0x00003000 Page RVA
+//              0x00004000 Page RVA
 //              0x0000000c Block Size
 //              0x00000002 Number of Entries
-//              Entry 1: Type 0x3 Offset 0x000002de
+//              Entry 1: Type 0x3 Offset 0x00000342
 //              Entry 2: Type 0x0 Offset 0x00000000
 
 // Import Address Table
 //     DLL : mscoree.dll
 //              0x00002000 Import Address Table
-//              0x000032ce Import Name Table
+//              0x00004332 Import Name Table
 //              0          Time Date Stamp
 //              0          Index of First Forwarder Reference
 //
@@ -133,7 +133,7 @@
 // Header size:                        0x00000048
 // Major runtime version:              0x0002
 // Minor runtime version:              0x0000
-// 0x00002050 [0x000006d8] address [size] of Metadata Directory:        
+// 0x00002050 [0x0000172c] address [size] of Metadata Directory:        
 // Flags:                              0x00000001
 // Entry point token:                  0x06000001
 // 0x00000000 [0x00000000] address [size] of Resources Directory:       
@@ -156,22 +156,22 @@
 //                  0x0005 Number of Streams
 //    Stream 1:
 //              0x0000006c Offset
-//              0x00000494 Size
+//              0x000004b0 Size
 //              '#~' Name
 //    Stream 2:
-//              0x00000500 Offset
-//              0x000001b4 Size
+//              0x0000051c Offset
+//              0x000001bc Size
 //              '#Strings' Name
 //    Stream 3:
-//              0x000006b4 Offset
-//              0x00000004 Size
+//              0x000006d8 Offset
+//              0x00001034 Size
 //              '#US' Name
 //    Stream 4:
-//              0x000006b8 Offset
+//              0x0000170c Offset
 //              0x00000010 Size
 //              '#GUID' Name
 //    Stream 5:
-//              0x000006c8 Offset
+//              0x0000171c Offset
 //              0x00000010 Size
 //              '#Blob' Name
 
@@ -191,42 +191,42 @@
 // Export Address Table Jumps:
 // No data.
 
-// File size            : 6144
-// PE header size       : 512 (456 used)    ( 8.33%)
-// PE additional info   : 132               ( 2.15%)
+// File size            : 10240
+// PE header size       : 512 (456 used)    ( 5.00%)
+// PE additional info   : 132               ( 1.29%)
 // Num.of PE sections   : 2
-// CLR header size     : 72                 ( 1.17%)
-// CLR meta-data size  : 1752               (28.52%)
+// CLR header size     : 72                 ( 0.70%)
+// CLR meta-data size  : 5932               (57.93%)
 // CLR additional info : 0                  ( 0.00%)
-// CLR method headers  : 296                ( 4.82%)
-// Managed code         : 2515              (40.93%)
-// Data                 : 512               ( 8.33%)
-// Unaccounted          : 353               ( 5.75%)
+// CLR method headers  : 297                ( 2.90%)
+// Managed code         : 2528              (24.69%)
+// Data                 : 512               ( 5.00%)
+// Unaccounted          : 255               ( 2.49%)
 
 // Num.of PE sections   : 2
-//   .text    - 5120
+//   .text    - 9216
 //   .reloc   - 512
 
-// CLR meta-data size  : 1752
+// CLR meta-data size  : 5932
 //   Module        -    1 (10 bytes)
-//   TypeDef       -   10 (140 bytes)     0 interfaces, 0 explicit layout
+//   TypeDef       -   11 (154 bytes)     0 interfaces, 0 explicit layout
 //   TypeRef       -    2 (12 bytes)
-//   MethodDef     -   65 (910 bytes)     0 abstract, 0 native, 65 bodies
+//   MethodDef     -   66 (924 bytes)     0 abstract, 0 native, 66 bodies
 //   MemberRef     -    1 (6 bytes)
 //   Assembly      -    1 (22 bytes)
 //   AssemblyRef   -    1 (20 bytes)
-//   Strings       -   433 bytes
+//   Strings       -   441 bytes
 //   Blobs         -    16 bytes
-//   UserStrings   -     4 bytes
+//   UserStrings   -  4148 bytes
 //   Guids         -    16 bytes
 //   Uncategorized -   163 bytes
 
-// CLR method headers : 296
-//   Num.of method bodies  - 65
+// CLR method headers : 297
+//   Num.of method bodies  - 66
 //   Num.of fat headers    - 21
-//   Num.of tiny headers   - 44
+//   Num.of tiny headers   - 45
 
-// Managed code : 2515
+// Managed code : 2528
 //   Ave method size - 38
 // Classes defined in this module:
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -239,6 +239,7 @@
 // Class T5                             (public) (auto) (ansi) 
 // Class T6                             (public) (auto) (ansi) 
 // Class T7                             (public) (auto) (ansi) 
+// Class T64                            (public) (auto) (ansi) 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -269,7 +270,7 @@
   // SIG: 00 00 01
   {
     .entrypoint
-    // Method begins at RVA 0x2728
+    // Method begins at RVA 0x377c
     // Code size       117 (0x75)
     .maxstack  2
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -364,7 +365,7 @@
           M0_0() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x27ac
+    // Method begins at RVA 0x3800
     // Code size       6 (0x6)
     .maxstack  9
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -379,7 +380,7 @@
           M0_1() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x27c0
+    // Method begins at RVA 0x3814
     // Code size       12 (0xc)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -400,7 +401,7 @@
           M0_2() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x27d0
+    // Method begins at RVA 0x3824
     // Code size       19 (0x13)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -427,7 +428,7 @@
           M0_3() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x27e4
+    // Method begins at RVA 0x3838
     // Code size       28 (0x1c)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -460,7 +461,7 @@
           M0_4() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2804
+    // Method begins at RVA 0x3858
     // Code size       37 (0x25)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -499,7 +500,7 @@
           M0_5() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x282c
+    // Method begins at RVA 0x3880
     // Code size       46 (0x2e)
     .maxstack  9
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -544,7 +545,7 @@
           M0_6() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2868
+    // Method begins at RVA 0x38bc
     // Code size       55 (0x37)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -595,7 +596,7 @@
           M0_7() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x28a0
+    // Method begins at RVA 0x38f4
     // Code size       64 (0x40)
     .maxstack  2
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -657,7 +658,7 @@
           M1_0() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x28ec
+    // Method begins at RVA 0x3940
     // Code size       22 (0x16)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -686,7 +687,7 @@
           M1_1() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2904
+    // Method begins at RVA 0x3958
     // Code size       31 (0x1f)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -721,7 +722,7 @@
           M1_2() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2924
+    // Method begins at RVA 0x3978
     // Code size       40 (0x28)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -762,7 +763,7 @@
           M1_3() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2950
+    // Method begins at RVA 0x39a4
     // Code size       49 (0x31)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -809,7 +810,7 @@
           M1_4() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2984
+    // Method begins at RVA 0x39d8
     // Code size       58 (0x3a)
     .maxstack  9
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -862,7 +863,7 @@
           M1_5() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x29cc
+    // Method begins at RVA 0x3a20
     // Code size       67 (0x43)
     .maxstack  2
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -921,7 +922,7 @@
           M1_6() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2a1c
+    // Method begins at RVA 0x3a70
     // Code size       6 (0x6)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -936,7 +937,7 @@
           M1_7() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2a24
+    // Method begins at RVA 0x3a78
     // Code size       12 (0xc)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -962,7 +963,7 @@
           M2_0() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2a34
+    // Method begins at RVA 0x3a88
     // Code size       43 (0x2b)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1005,7 +1006,7 @@
           M2_1() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2a60
+    // Method begins at RVA 0x3ab4
     // Code size       52 (0x34)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1054,7 +1055,7 @@
           M2_2() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2a98
+    // Method begins at RVA 0x3aec
     // Code size       61 (0x3d)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1109,7 +1110,7 @@
           M2_3() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2ad8
+    // Method begins at RVA 0x3b2c
     // Code size       70 (0x46)
     .maxstack  9
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1170,7 +1171,7 @@
           M2_4() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2b2c
+    // Method begins at RVA 0x3b80
     // Code size       8 (0x8)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1187,7 +1188,7 @@
           M2_5() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2b38
+    // Method begins at RVA 0x3b8c
     // Code size       14 (0xe)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1210,7 +1211,7 @@
           M2_6() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2b48
+    // Method begins at RVA 0x3b9c
     // Code size       22 (0x16)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1239,7 +1240,7 @@
           M2_7() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2b60
+    // Method begins at RVA 0x3bb4
     // Code size       31 (0x1f)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1279,7 +1280,7 @@
           M3_0() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2b80
+    // Method begins at RVA 0x3bd4
     // Code size       64 (0x40)
     .maxstack  2
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1336,7 +1337,7 @@
           M3_1() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2bcc
+    // Method begins at RVA 0x3c20
     // Code size       73 (0x49)
     .maxstack  2
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1399,7 +1400,7 @@
           M3_2() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2c24
+    // Method begins at RVA 0x3c78
     // Code size       10 (0xa)
     .maxstack  9
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1418,7 +1419,7 @@
           M3_3() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2c3c
+    // Method begins at RVA 0x3c90
     // Code size       16 (0x10)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1443,7 +1444,7 @@
           M3_4() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2c50
+    // Method begins at RVA 0x3ca4
     // Code size       25 (0x19)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1474,7 +1475,7 @@
           M3_5() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2c6c
+    // Method begins at RVA 0x3cc0
     // Code size       34 (0x22)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1511,7 +1512,7 @@
           M3_6() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2c90
+    // Method begins at RVA 0x3ce4
     // Code size       43 (0x2b)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1554,7 +1555,7 @@
           M3_7() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2cbc
+    // Method begins at RVA 0x3d10
     // Code size       52 (0x34)
     .maxstack  9
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1608,7 +1609,7 @@
           M4_0() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2cfc
+    // Method begins at RVA 0x3d50
     // Code size       12 (0xc)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1629,7 +1630,7 @@
           M4_1() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2d0c
+    // Method begins at RVA 0x3d60
     // Code size       19 (0x13)
     .maxstack  9
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1656,7 +1657,7 @@
           M4_2() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2d2c
+    // Method begins at RVA 0x3d80
     // Code size       28 (0x1c)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1689,7 +1690,7 @@
           M4_3() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2d4c
+    // Method begins at RVA 0x3da0
     // Code size       37 (0x25)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1728,7 +1729,7 @@
           M4_4() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2d74
+    // Method begins at RVA 0x3dc8
     // Code size       46 (0x2e)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1773,7 +1774,7 @@
           M4_5() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2da4
+    // Method begins at RVA 0x3df8
     // Code size       55 (0x37)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1824,7 +1825,7 @@
           M4_6() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2ddc
+    // Method begins at RVA 0x3e30
     // Code size       64 (0x40)
     .maxstack  9
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1881,7 +1882,7 @@
           M4_7() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2e28
+    // Method begins at RVA 0x3e7c
     // Code size       73 (0x49)
     .maxstack  2
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1949,7 +1950,7 @@
           M5_0() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2e80
+    // Method begins at RVA 0x3ed4
     // Code size       31 (0x1f)
     .maxstack  9
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -1984,7 +1985,7 @@
           M5_1() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2eac
+    // Method begins at RVA 0x3f00
     // Code size       40 (0x28)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2025,7 +2026,7 @@
           M5_2() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2ed8
+    // Method begins at RVA 0x3f2c
     // Code size       49 (0x31)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2072,7 +2073,7 @@
           M5_3() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2f0c
+    // Method begins at RVA 0x3f60
     // Code size       58 (0x3a)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2125,7 +2126,7 @@
           M5_4() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2f48
+    // Method begins at RVA 0x3f9c
     // Code size       67 (0x43)
     .maxstack  2
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2184,7 +2185,7 @@
           M5_5() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2f98
+    // Method begins at RVA 0x3fec
     // Code size       6 (0x6)
     .maxstack  9
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2199,7 +2200,7 @@
           M5_6() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2fac
+    // Method begins at RVA 0x4000
     // Code size       12 (0xc)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2220,7 +2221,7 @@
           M5_7() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2fbc
+    // Method begins at RVA 0x4010
     // Code size       19 (0x13)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2252,7 +2253,7 @@
           M6_0() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x2fd0
+    // Method begins at RVA 0x4024
     // Code size       52 (0x34)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2301,7 +2302,7 @@
           M6_1() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x3008
+    // Method begins at RVA 0x405c
     // Code size       61 (0x3d)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2356,7 +2357,7 @@
           M6_2() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x3048
+    // Method begins at RVA 0x409c
     // Code size       70 (0x46)
     .maxstack  2
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2417,7 +2418,7 @@
           M6_3() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x309c
+    // Method begins at RVA 0x40f0
     // Code size       8 (0x8)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2434,7 +2435,7 @@
           M6_4() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x30a8
+    // Method begins at RVA 0x40fc
     // Code size       14 (0xe)
     .maxstack  9
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2457,7 +2458,7 @@
           M6_5() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x30c4
+    // Method begins at RVA 0x4118
     // Code size       22 (0x16)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2486,7 +2487,7 @@
           M6_6() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x30dc
+    // Method begins at RVA 0x4130
     // Code size       31 (0x1f)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2521,7 +2522,7 @@
           M6_7() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x30fc
+    // Method begins at RVA 0x4150
     // Code size       40 (0x28)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2567,7 +2568,7 @@
           M7_0() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x3128
+    // Method begins at RVA 0x417c
     // Code size       73 (0x49)
     .maxstack  2
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2630,7 +2631,7 @@
           M7_1() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x3180
+    // Method begins at RVA 0x41d4
     // Code size       10 (0xa)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2649,7 +2650,7 @@
           M7_2() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x318c
+    // Method begins at RVA 0x41e0
     // Code size       16 (0x10)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2674,7 +2675,7 @@
           M7_3() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x31a0
+    // Method begins at RVA 0x41f4
     // Code size       25 (0x19)
     .maxstack  9
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2705,7 +2706,7 @@
           M7_4() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x31c8
+    // Method begins at RVA 0x421c
     // Code size       34 (0x22)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2742,7 +2743,7 @@
           M7_5() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x31ec
+    // Method begins at RVA 0x4240
     // Code size       43 (0x2b)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2785,7 +2786,7 @@
           M7_6() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x3218
+    // Method begins at RVA 0x426c
     // Code size       52 (0x34)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2834,7 +2835,7 @@
           M7_7() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x3250
+    // Method begins at RVA 0x42a4
     // Code size       61 (0x3d)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -2886,6 +2887,46 @@
   } // end of method T7::M7_7
 
 } // end of class T7
+
+.class /*0200000B*/ public auto ansi T64
+       extends [mscorlib/*23000001*/]System.Object/*01000001*/
+{
+  .method /*06000042*/ public static void 
+          Pad() cil managed
+  // SIG: 00 00 01
+  {
+    // Method begins at RVA 0x42e4
+    // Code size       13 (0xd)
+    .maxstack  8
+    IL_0000:  /* 72   | (70)000001       */ ldstr      "01234567890123456789012345678901234567890123456789"
+    + "01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
+    + "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901"
+    + "23456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012"
+    + "34567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123"
+    + "45678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234"
+    + "56789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345"
+    + "67890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456"
+    + "78901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567"
+    + "89012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678"
+    + "90123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
+    + "01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
+    + "1234567890123456789" /* 70000001 */
+    IL_0005:  /* 26   |                  */ pop
+    IL_0006:  /* 72   | (70)00093C       */ ldstr      "01234567890123456789012345678901234567890123456789"
+    + "01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
+    + "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901"
+    + "23456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012"
+    + "34567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123"
+    + "45678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234"
+    + "56789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345"
+    + "67890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456"
+    + "78901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567"
+    + "89012345678901234567890123456789" /* 7000093C */
+    IL_000b:  /* 26   |                  */ pop
+    IL_000c:  /* 2A   |                  */ ret
+  } // end of method T64::Pad
+
+} // end of class T64
 
 
 // =============================================================

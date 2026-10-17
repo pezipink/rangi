@@ -35,10 +35,10 @@
 // Magic:                          0x010b
 // Major linker version:           0x06
 // Minor linker version:           0x05
-// Size of code:                   0x00000400
+// Size of code:                   0x00000600
 // Size of init.data:              0x00000200
 // Size of uninit.data:            0x00000000
-// Addr. of entry point:           0x00002378
+// Addr. of entry point:           0x00002470
 // Base of code:                   0x00002000
 // Base of data:                   0x00004000
 // Section alignment:              0x00002000
@@ -61,7 +61,7 @@
 // Loader flags:                   0x00000000
 // Directories:                    0x00000010
 // 0x00000000 [0x00000000] address [size] of Export Directory:          
-// 0x0000232c [0x00000028] address [size] of Import Directory:          
+// 0x00002424 [0x00000028] address [size] of Import Directory:          
 // 0x00000000 [0x00000000] address [size] of Resource Directory:        
 // 0x00000000 [0x00000000] address [size] of Exception Directory:       
 // 0x00000000 [0x00000000] address [size] of Security Directory:        
@@ -79,9 +79,9 @@
 
 // Image sections:
 //              .text
-//              0x0000037e Virtual Size
+//              0x00000476 Virtual Size
 //              0x00002000 Virtual Address
-//              0x00000400 Size of Raw Data
+//              0x00000600 Size of Raw Data
 //              0x00000200 Pointer to Raw Data
 //              0x00000000 Pointer to Relocations
 //              0x00000000 Pointer to Linenumbers
@@ -96,7 +96,7 @@
 //              0x0000000c Virtual Size
 //              0x00004000 Virtual Address
 //              0x00000200 Size of Raw Data
-//              0x00000600 Pointer to Raw Data
+//              0x00000800 Pointer to Raw Data
 //              0x00000000 Pointer to Relocations
 //              0x00000000 Pointer to Linenumbers
 //                  0x0000 Number of Relocations
@@ -110,13 +110,13 @@
 //              0x00002000 Page RVA
 //              0x0000000c Block Size
 //              0x00000002 Number of Entries
-//              Entry 1: Type 0x3 Offset 0x0000037a
+//              Entry 1: Type 0x3 Offset 0x00000472
 //              Entry 2: Type 0x0 Offset 0x00000000
 
 // Import Address Table
 //     DLL : mscoree.dll
 //              0x00002000 Import Address Table
-//              0x0000236a Import Name Table
+//              0x00002462 Import Name Table
 //              0          Time Date Stamp
 //              0          Index of First Forwarder Reference
 //
@@ -133,7 +133,7 @@
 // Header size:                        0x00000048
 // Major runtime version:              0x0002
 // Minor runtime version:              0x0000
-// 0x00002050 [0x000001fc] address [size] of Metadata Directory:        
+// 0x00002050 [0x000002a8] address [size] of Metadata Directory:        
 // Flags:                              0x00000001
 // Entry point token:                  0x06000001
 // 0x00000000 [0x00000000] address [size] of Resources Directory:       
@@ -156,22 +156,22 @@
 //                  0x0005 Number of Streams
 //    Stream 1:
 //              0x0000006c Offset
-//              0x000000f8 Size
+//              0x00000178 Size
 //              '#~' Name
 //    Stream 2:
-//              0x00000164 Offset
-//              0x00000074 Size
+//              0x000001e4 Offset
+//              0x000000a0 Size
 //              '#Strings' Name
 //    Stream 3:
-//              0x000001d8 Offset
+//              0x00000284 Offset
 //              0x00000004 Size
 //              '#US' Name
 //    Stream 4:
-//              0x000001dc Offset
+//              0x00000288 Offset
 //              0x00000010 Size
 //              '#GUID' Name
 //    Stream 5:
-//              0x000001ec Offset
+//              0x00000298 Offset
 //              0x00000010 Size
 //              '#Blob' Name
 
@@ -191,48 +191,49 @@
 // Export Address Table Jumps:
 // No data.
 
-// File size            : 2048
-// PE header size       : 512 (456 used)    (25.00%)
-// PE additional info   : 132               ( 6.45%)
+// File size            : 2560
+// PE header size       : 512 (456 used)    (20.00%)
+// PE additional info   : 132               ( 5.16%)
 // Num.of PE sections   : 2
-// CLR header size     : 72                 ( 3.52%)
-// CLR meta-data size  : 508                (24.80%)
+// CLR header size     : 72                 ( 2.81%)
+// CLR meta-data size  : 680                (26.56%)
 // CLR additional info : 0                  ( 0.00%)
-// CLR method headers  : 27                 ( 1.32%)
-// Managed code         : 188               ( 9.18%)
-// Data                 : 512               (25.00%)
-// Unaccounted          : 97                ( 4.74%)
+// CLR method headers  : 46                 ( 1.80%)
+// Managed code         : 228               ( 8.91%)
+// Data                 : 512               (20.00%)
+// Unaccounted          : 378               (14.77%)
 
 // Num.of PE sections   : 2
-//   .text    - 1024
+//   .text    - 1536
 //   .reloc   - 512
 
-// CLR meta-data size  : 508
+// CLR meta-data size  : 680
 //   Module        -    1 (10 bytes)
-//   TypeDef       -    4 (56 bytes)      0 interfaces, 0 explicit layout
+//   TypeDef       -    5 (70 bytes)      0 interfaces, 0 explicit layout
 //   TypeRef       -    2 (12 bytes)
-//   MethodDef     -    5 (70 bytes)      0 abstract, 0 native, 5 bodies
+//   MethodDef     -   13 (182 bytes)     0 abstract, 0 native, 13 bodies
 //   MemberRef     -    1 (6 bytes)
 //   Assembly      -    1 (22 bytes)
 //   AssemblyRef   -    1 (20 bytes)
-//   Strings       -   114 bytes
+//   Strings       -   157 bytes
 //   Blobs         -    16 bytes
 //   UserStrings   -     4 bytes
 //   Guids         -    16 bytes
-//   Uncategorized -   162 bytes
+//   Uncategorized -   165 bytes
 
-// CLR method headers : 27
-//   Num.of method bodies  - 5
-//   Num.of fat headers    - 2
-//   Num.of tiny headers   - 3
+// CLR method headers : 46
+//   Num.of method bodies  - 13
+//   Num.of fat headers    - 3
+//   Num.of tiny headers   - 10
 
-// Managed code : 188
-//   Ave method size - 37
+// Managed code : 228
+//   Ave method size - 17
 // Classes defined in this module:
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Class Program                        (auto) (ansi) 
 // Class T0                             (public) (auto) (ansi) 
 // Class T1                             (public) (auto) (ansi) 
+// Class T2                             (public) (auto) (ansi) 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -263,7 +264,7 @@
   // SIG: 00 00 01
   {
     .entrypoint
-    // Method begins at RVA 0x224c
+    // Method begins at RVA 0x22f8
     // Code size       117 (0x75)
     .maxstack  2
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -358,7 +359,7 @@
           M0_0() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x22d0
+    // Method begins at RVA 0x237c
     // Code size       6 (0x6)
     .maxstack  9
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -373,7 +374,7 @@
           M0_1() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x22e4
+    // Method begins at RVA 0x2390
     // Code size       12 (0xc)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -399,7 +400,7 @@
           M1_0() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x22f4
+    // Method begins at RVA 0x23a0
     // Code size       22 (0x16)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -428,7 +429,7 @@
           M1_1() cil managed
   // SIG: 00 00 08
   {
-    // Method begins at RVA 0x230c
+    // Method begins at RVA 0x23b8
     // Code size       31 (0x1f)
     .maxstack  8
     IL_0000:  /* 17   |                  */ ldc.i4.1
@@ -460,6 +461,115 @@
   } // end of method T1::M1_1
 
 } // end of class T1
+
+.class /*02000005*/ public auto ansi T2
+       extends [mscorlib/*23000001*/]System.Object/*01000001*/
+{
+  .method /*06000006*/ public static int32 
+          M2_0() cil managed
+  // SIG: 00 00 08
+  {
+    // Method begins at RVA 0x23d8
+    // Code size       4 (0x4)
+    .maxstack  8
+    IL_0000:  /* 17   |                  */ ldc.i4.1
+    IL_0001:  /* 18   |                  */ ldc.i4.2
+    IL_0002:  /* 58   |                  */ add
+    IL_0003:  /* 2A   |                  */ ret
+  } // end of method T2::M2_0
+
+  .method /*06000007*/ public static int32 
+          M2_1() cil managed
+  // SIG: 00 00 08
+  {
+    // Method begins at RVA 0x23e0
+    // Code size       4 (0x4)
+    .maxstack  8
+    IL_0000:  /* 19   |                  */ ldc.i4.3
+    IL_0001:  /* 1A   |                  */ ldc.i4.4
+    IL_0002:  /* 58   |                  */ add
+    IL_0003:  /* 2A   |                  */ ret
+  } // end of method T2::M2_1
+
+  .method /*06000008*/ public static int32 
+          M2_2() cil managed
+  // SIG: 00 00 08
+  {
+    // Method begins at RVA 0x23e8
+    // Code size       4 (0x4)
+    .maxstack  8
+    IL_0000:  /* 1B   |                  */ ldc.i4.5
+    IL_0001:  /* 1C   |                  */ ldc.i4.6
+    IL_0002:  /* 58   |                  */ add
+    IL_0003:  /* 2A   |                  */ ret
+  } // end of method T2::M2_2
+
+  .method /*06000009*/ public static int32 
+          M2_3() cil managed
+  // SIG: 00 00 08
+  {
+    // Method begins at RVA 0x23f0
+    // Code size       4 (0x4)
+    .maxstack  8
+    IL_0000:  /* 1D   |                  */ ldc.i4.7
+    IL_0001:  /* 1E   |                  */ ldc.i4.8
+    IL_0002:  /* 58   |                  */ add
+    IL_0003:  /* 2A   |                  */ ret
+  } // end of method T2::M2_3
+
+  .method /*0600000A*/ public static int32 
+          M2_4() cil managed
+  // SIG: 00 00 08
+  {
+    // Method begins at RVA 0x23f8
+    // Code size       6 (0x6)
+    .maxstack  8
+    IL_0000:  /* 1F   | 09               */ ldc.i4.s   9
+    IL_0002:  /* 1F   | 0A               */ ldc.i4.s   10
+    IL_0004:  /* 58   |                  */ add
+    IL_0005:  /* 2A   |                  */ ret
+  } // end of method T2::M2_4
+
+  .method /*0600000B*/ public static int32 
+          M2_5() cil managed
+  // SIG: 00 00 08
+  {
+    // Method begins at RVA 0x2400
+    // Code size       6 (0x6)
+    .maxstack  8
+    IL_0000:  /* 1F   | 0B               */ ldc.i4.s   11
+    IL_0002:  /* 1F   | 0C               */ ldc.i4.s   12
+    IL_0004:  /* 58   |                  */ add
+    IL_0005:  /* 2A   |                  */ ret
+  } // end of method T2::M2_5
+
+  .method /*0600000C*/ public static int32 
+          M2_6() cil managed
+  // SIG: 00 00 08
+  {
+    // Method begins at RVA 0x2408
+    // Code size       6 (0x6)
+    .maxstack  8
+    IL_0000:  /* 1F   | 0D               */ ldc.i4.s   13
+    IL_0002:  /* 1F   | 0E               */ ldc.i4.s   14
+    IL_0004:  /* 58   |                  */ add
+    IL_0005:  /* 2A   |                  */ ret
+  } // end of method T2::M2_6
+
+  .method /*0600000D*/ public static int32 
+          M2_7() cil managed
+  // SIG: 00 00 08
+  {
+    // Method begins at RVA 0x2410
+    // Code size       6 (0x6)
+    .maxstack  9
+    IL_0000:  /* 1F   | 0F               */ ldc.i4.s   15
+    IL_0002:  /* 1F   | 10               */ ldc.i4.s   16
+    IL_0004:  /* 58   |                  */ add
+    IL_0005:  /* 2A   |                  */ ret
+  } // end of method T2::M2_7
+
+} // end of class T2
 
 
 // =============================================================

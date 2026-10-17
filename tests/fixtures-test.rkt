@@ -4,8 +4,7 @@
          "../src/ilasm/syntax.rkt" "../src/image.rkt")
 
 ; fixtures that exist to push .text past a layout threshold (roadmap P3); each must stay above it
-; floors sit just under the real .text VirtualSize (0x37e and 0x12e2) once the padding was removed
-(define text-floors (hash "text-over-400" #x370 "text-over-2000" #x12e0))
+(define text-floors (hash "text-over-400" #x400 "text-over-2000" #x2000))
 
 ; VirtualSize of the .text section, read from the PE section table
 (define (text-vsize bs)

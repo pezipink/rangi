@@ -187,4 +187,63 @@
      (add)
      (ldc.i 13)
      (add)
-     (ret))))))
+     (ret)))))
+ (.class
+  (public auto ansi)
+  T2
+  ((.method
+    (public static)
+    int32
+    M2_0
+    ()
+    (cil managed)
+    ((.maxstack 2) (ldc.i 1) (ldc.i 2) (add) (ret)))
+   (.method
+    (public static)
+    int32
+    M2_1
+    ()
+    (cil managed)
+    ((.maxstack 2) (ldc.i 3) (ldc.i 4) (add) (ret)))
+   (.method
+    (public static)
+    int32
+    M2_2
+    ()
+    (cil managed)
+    ((.maxstack 2) (ldc.i 5) (ldc.i 6) (add) (ret)))
+   (.method
+    (public static)
+    int32
+    M2_3
+    ()
+    (cil managed)
+    ((.maxstack 2) (ldc.i 7) (ldc.i 8) (add) (ret)))
+   (.method
+    (public static)
+    int32
+    M2_4
+    ()
+    (cil managed)
+    ((.maxstack 2) (ldc.i 9) (ldc.i 10) (add) (ret)))
+   (.method
+    (public static)
+    int32
+    M2_5
+    ()
+    (cil managed)
+    ((.maxstack 2) (ldc.i 11) (ldc.i 12) (add) (ret)))
+   (.method
+    (public static)
+    int32
+    M2_6
+    ()
+    (cil managed)
+    ((.maxstack 2) (ldc.i 13) (ldc.i 14) (add) (ret)))
+   (.method
+    (public static)
+    int32
+    M2_7
+    ()
+    (cil managed)
+    ((.maxstack 9) (ldc.i 15) (ldc.i 16) (add) (ret))))))
