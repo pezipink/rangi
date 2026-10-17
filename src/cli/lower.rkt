@@ -25,8 +25,10 @@
 ; genericparams, and standalone-sigs are in row order. us-heap holds the string literals
 ; used by ldstr. A memberref parent is a (cons 'typeref|'typespec rid); a methodspec method
 ; is (cons 'methoddef|'memberref rid); a genericparam owner is (cons 'methoddef rid).
+; subsystem and platform are the module model's names ('console|'windows, 'anycpu|'x86|'32bitpreferred).
 (struct cli-program (asm-refs typerefs memberrefs typespecs methodspecs genericparams
-                     typedefs module-name entry-rid format standalone-sigs us-heap))
+                     typedefs module-name entry-rid format standalone-sigs us-heap
+                     subsystem platform))
 ; fields are the TypeDef's Field rows, in row order (II.22.15). extends is (typedef . rid),
 ; (typeref . rid), or #f for an interface or <Module> (II.22.37).
 (struct tdef (flags name ns extends methods fields))
@@ -859,5 +861,7 @@
                entry-rid
                (module-model-format m)
                (interner-keys standalone-sigs)
-               us-heap))
+               us-heap
+               (module-model-subsystem m)
+               (module-model-platform m)))
 

@@ -41,6 +41,7 @@
 (define linker-minor-version 5)
 (define os-major-version 4)
 (define subsystem-major-version 4)
+(define subsystem-windows-gui 2)
 (define subsystem-windows-cui 3)
 (define stack-reserve-size #x100000)
 (define stack-commit-size #x1000)

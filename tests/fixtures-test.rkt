@@ -1,6 +1,6 @@
 #lang racket/base
 ; L4 image hash and L7 execution for every fixture under tests/fixtures/
-(require rackunit racket/file "lib/fixture.rkt" "lib/snapshot.rkt"
+(require rackunit racket/file racket/string "lib/fixture.rkt" "lib/snapshot.rkt"
          "../src/ilasm/syntax.rkt" "../src/image.rkt")
 
 ; fixtures that exist to push .text past a layout threshold (roadmap P3); each must stay above it
@@ -31,7 +31,13 @@
          (check-snapshot (build-path dir "library-layout.txt")
                          (image-layout-report (parse-il library-program) "library.dll")))
        (define-values (status stdout) (run-image exe))
-       (check-equal? status 0 "exit status")
+       ; expected-exit.txt holds the exit code a fixture must return; absent means 0
+       (define expected-exit-file (build-path dir "expected-exit.txt"))
+       (define expected-exit
+         (if (file-exists? expected-exit-file)
+             (string->number (string-trim (file->string expected-exit-file)))
+             0))
+       (check-equal? status expected-exit "exit status")
        (check-snapshot (build-path dir "expected-stdout.txt") (normalize-newlines stdout))
        (define threshold (hash-ref text-floors name #f))
        (when threshold

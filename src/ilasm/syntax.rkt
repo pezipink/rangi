@@ -17,7 +17,9 @@
 
 ; The front end's output. It holds names and instructions as written, with no tokens,
 ; heap indexes, or flag bits. cli/lower.rkt resolves those.
-(struct module-model (asm-refs classes module-name format dll?))
+; subsystem is 'console (the default) or 'windows (.subsystem). platform is 'anycpu (the default),
+; 'x86, or '32bitpreferred (.platform). Both are names here; lower and image map them to flags.
+(struct module-model (asm-refs classes module-name format dll? subsystem platform))
 ; extends is the base type as written: a bare symbol for a class in this module, (asm ty) for an
 ; external class, or #f for the default System.Object (II.22.37).
 (struct class-decl (flags name gparams extends methods fields))
@@ -238,6 +240,8 @@
   (define mod-name #f)
   (define fmt #f)
   (define dll? #f)
+  (define subsystem #f)
+  (define platform #f)
   (define raw-classes
     (for/fold ([acc '()] #:result (reverse acc)) ([node (in-list program)])
       (match node
@@ -261,6 +265,18 @@
          (unless (member more '(() (dll))) (error 'rangi "unknown .format option ~s, expected dll" more))
          (set! fmt f)
          (set! dll? (pair? more))
+         acc]
+        [(list '.subsystem s)
+         (when subsystem (error 'rangi "only one .subsystem directive is allowed"))
+         (unless (memq s '(console windows))
+           (error 'rangi "unknown .subsystem ~a, expected console or windows" s))
+         (set! subsystem s)
+         acc]
+        [(list '.platform p)
+         (when platform (error 'rangi "only one .platform directive is allowed"))
+         (unless (memq p '(anycpu x86 32bitpreferred))
+           (error 'rangi "unknown .platform ~a, expected anycpu, x86, or 32bitpreferred" p))
+         (set! platform p)
          acc]
         [(list '.class flags name clause ... body)
          (define-values (tp ext) (class-clauses name clause))
@@ -308,4 +324,5 @@
   (unless (or (= (length entries) 1) (and dll? (null? entries)))
     (error 'rangi "exactly one .entrypoint is required, found ~a" (length entries)))
 
-  (module-model (reverse asm-refs) classes mod-name (or fmt 'pe32) dll?))
+  (module-model (reverse asm-refs) classes mod-name (or fmt 'pe32) dll?
+                (or subsystem 'console) (or platform 'anycpu)))
