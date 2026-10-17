@@ -26,7 +26,7 @@ P4 and P5 can interleave once P3 lands. P6 can start any time after P2, because 
 
 ## Status
 
-Last updated at commit `913b7fa` (October 17, 2026). `raco test tests/` passes (194 tests). Start here, then read [AGENTS.md](../../AGENTS.md) and [architecture.md](../architecture.md).
+Last updated after the A1, B, and D merges (October 17, 2026). `raco test tests/` passes (726 tests). Start here, then read [AGENTS.md](../../AGENTS.md) and [architecture.md](../architecture.md).
 
 Done:
 
@@ -43,7 +43,7 @@ Open items, in order:
 1. Done: the reader accepts the `#-` uncompressed stream and the HeapSizes extra-data bit (0x40), and skips unknown streams such as `#!`. The 6th-edition text does not define `#-` or 0x40, so this follows SRM (see [verification.md](verification.md#spec-sources-and-discovery)). `tests/stream-variants-test.rkt` patches nano into a `#-`/0x40 image and a `#!` variant. Both run, and their dumps match the `#~` dump and SRM. The patcher handles PE32 images only; PE32+ is not covered.
 2. Done: `tests/lib/metadata-dump.rkt` decodes MethodSpec rows, and the SRM oracle dumps them. mscorlib's 656 MethodSpec rows match SRM exactly. Item 3 completed the decoder for all II.22 tables.
 3. Done: V7 reader corpus test over the .NET 4.7.1 reference assemblies and `System.Private.CoreLib`, diffed against SRM. 133 of 133 assemblies match.
-4. Partly done: P2 (R1, R2). `src/private/binary.rkt` exists with `le`, `align`, and `pad-to`. It was extracted in R3 and is used by the PE layer and the writer. `src/cli/schema.rkt` does not exist. The reader still has its own `to-int`, `read-int`, and `cli-decompress-unsigned`, and the writer still has its own `compressed` and `tbl` list. Only the 2-byte compressed-integer fix (`0x3FFF`) is in. Boundary values `0x3FFF` and `0x4000` have no unit test yet.
+4. Partly done: P2 (R1 done, R2 open). `src/private/binary.rkt` holds the little-endian, compressed-integer, alignment, and pad-to helpers, and the reader and writer use them (A1). Boundary values `0x7F`, `0x80`, `0x3FFF`, `0x4000`, and `0x1FFFFFFF` are covered by `tests/binary-test.rkt`. Signed compressed integers are open. `src/cli/schema.rkt` does not exist yet. The reader still has its own `case` blocks for row sizes, and the writer still has its `tbl` list.
 5. Done: V5 L2 layout map, landed with R3.
 6. Not started: V6 ilasm differential fixtures. Start with the `ldstr` hello world, which needs `#US` content that the writer does not produce yet (R4 heaps).
 7. Writer gaps: follow the "Suggested order" in [cli-coverage.md](cli-coverage.md).

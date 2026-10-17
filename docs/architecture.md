@@ -50,7 +50,7 @@ The core rule: the PE image layer knows nothing about CLI metadata, and the meta
 
 ```text
 rangi/
-  private/binary.rkt        little-endian ints, alignment, pad-to (built)
+  private/binary.rkt        little-endian and compressed-integer helpers, alignment, pad-to (built)
   pe/
     model.rkt               image-params, section, chunk, fixup, digest, placement structs (built)
     layout.rkt              chunk and section model; RVAs, file offsets, layout map (built)
@@ -69,7 +69,8 @@ rangi/
     reader.rkt              lazy metadata reader built on schema.rkt
   il/
     opcodes.rkt             Partition III opcode table (data)
-    assembler.rkt           labels, branch relaxation, operand encoding
+    encode.rkt              operand encoders driven by opcodes.rkt (built, not yet wired to the writer)
+    labels.rkt              labels, fixed-point branch relaxation (built, not yet wired to the writer)
     body.rkt                tiny/fat headers, locals sig, EH sections
   ilasm/
     syntax.rkt              s-expression ilasm front end -> module model
