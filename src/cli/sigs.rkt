@@ -13,6 +13,7 @@
          "../private/binary.rkt")
 (provide element-codes
          callconv-codes
+         primitive-names
          encode-type
          encode-typespec
          encode-method-sig

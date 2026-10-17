@@ -48,7 +48,9 @@
 
 ; Adds the rows, sorts, and serialises the heaps and the #~ stream. The MVID is a
 ; zero placeholder in #GUID, filled at layout by the digest in metadata-chunk.
-(define (build-metadata p asm-name mod-name)
+; extra is called with (tb sh bh) after the program rows and before sorting, so tests can add
+; generics rows that the program model does not produce yet.
+(define (build-metadata p asm-name mod-name #:extra [extra (λ (tb sh bh) (void))])
   (define tb (make-tables))
   (define sh (make-strings-heap))
   (define bh (make-blob-heap))
@@ -80,6 +82,7 @@
   (for ([n (in-list (cli-program-asm-refs p))])
     (add-row! tb 'assemblyref 0 0 0 0 0 0 (s n) 0 0))
 
+  (extra tb sh bh)
   (sort-tables! tb)
   (define strs (pad-to (heap-serialise sh) 4))
   (define blobs (pad-to (heap-serialise bh) 4))
