@@ -14,6 +14,8 @@ Each step ends with `raco test tests/` green. R1 and R2 must not change any emit
 
 ### R1 Shared binary utilities
 
+Status: `src/private/binary.rkt` exists with `le`, `align`, and `pad-to`. R3 extracted these, and the PE layer and the writer use them. The writer's `write-le-*` helpers are gone. The reader still has its own `to-int`, `read-int`, and `cli-decompress-unsigned`, and the writer still has its own `compressed`. The items below are open until those are replaced.
+
 * [ ] Create `rangi/private/binary.rkt` with `write-u8/u16/u32/u64-le`, `read-u*-le`, `align-up`, `pad-to`, `compress-unsigned`, `compress-signed`, `decompress-unsigned`, `decompress-signed`.
 * [ ] Replace `write-le-*`, `to-int`, `read-int`, `compressed` (writer), and `cli-decompress-unsigned` (reader) with the shared versions.
 * [x] Fix the 2-byte compressed-integer limit (II.23.2, must be `#x3FFF`). The old `cli-compress-unsigned` is gone. The writer's `compressed` and the reader's `cli-decompress-unsigned` both use the correct bound. No boundary unit test exists yet.
