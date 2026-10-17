@@ -9,21 +9,23 @@
     (.assembly donothing {})
     (.module nano2.exe)
     (.class (private auto ansi) <Module>           
-      [
-       (.method
-        (public static) void main () (cil managed)
-        {
-         (.entrypoint)
-         (.maxstack 8)
-         (ldc.i 42)
-         (call void (mscorlib System.Console) WriteLine (int32))
-         (ret)     
-        })
+            [
+             (.method
+              (public static) void main () (cil managed)
+              {
+               (.entrypoint)
+               (.maxstack 8)
+               (ldc.i 42)
+            ;   (ldc.i 42)
+             ;  (add)
+               (call void (mscorlib System.Console) WriteLine (int32))
+               (ret)     
+               })
       
-       ]
+             ]
 
      
-      )))
+            )))
 
 (struct asm-ref
   ([filename]
@@ -48,7 +50,7 @@
    
    [refs]
    [class-defs]
-  )
+   )
   #:transparent
   #:mutable)
 
@@ -141,11 +143,11 @@
   ; but some things we need to associate together. eg, a call
   ; contains the type ref / def but also the method details, and the method
   ; has to be related to the typedef.
-; (call void (mscorlib System.Console) WriteLine (object))
+  ; (call void (mscorlib System.Console) WriteLine (object))
   
   
   (for   
-   ([node il-stream])
+      ([node il-stream])
     (begin
       (define s (hash-ref refs 'string))
       (define us (hash-ref refs 'us))
@@ -170,7 +172,7 @@
   (define s (hash-ref refs 'string))
   (hash-set! s (symbol->string name) #t)
   (for
-   ([node body])
+      ([node body])
     (match node
       [(list '.method prefix-list ret-type meth-name param-list suffix-list il-stream)
        ; we can't assemble until until we know the size of the metadata tokens,
@@ -208,16 +210,16 @@
 (define (parse-il program)
   (define
     acc (asm-builder
-          (make-hash)
-          #f #f
-          (make-hash
-           `((typeref ,@(make-hash))
-             (string ,@(make-hash))
-             (us ,@(make-hash))
-             (memref ,@(make-hash))))
-          (list)))
+         (make-hash)
+         #f #f
+         (make-hash
+          `((typeref ,@(make-hash))
+            (string ,@(make-hash))
+            (us ,@(make-hash))
+            (memref ,@(make-hash))))
+         (list)))
   (for   
-   ([node program])
+      ([node program])
     (define s (hash-ref (asm-builder-refs acc) 'string))
     (match node
       [(list '.assembly 'extern filename body)
@@ -278,18 +280,18 @@
   (match mr
     [(list ret-type type name param-list)
      (let([by1 (bytes #x0)] ; hasthis | explicthis | default (0) | vararg.  not supporting these yet, default 0 is good
-           [count-encoded (cli-compress-unsigned (length param-list))]
-           [ret-encoded
-            ; todo: we don't support everything here yet
-            ; missing custom mod, byref, typedbyref
-            (cond
-              [(equal? 'void ret-type) (bytes #x1)]
-              [else (encode-type-blob ret-type)])
-            ]
-           [param-encoded (if (empty? param-list) (bytes )  (reduce bytes-append (map encode-type-blob param-list)))]
-           )
+          [count-encoded (cli-compress-unsigned (length param-list))]
+          [ret-encoded
+           ; todo: we don't support everything here yet
+           ; missing custom mod, byref, typedbyref
+           (cond
+             [(equal? 'void ret-type) (bytes #x1)]
+             [else (encode-type-blob ret-type)])
+           ]
+          [param-encoded (if (empty? param-list) (bytes )  (reduce bytes-append (map encode-type-blob param-list)))]
+          )
        (bytes-append by1 count-encoded ret-encoded param-encoded)
-     )]))
+       )]))
 (define (encode-md-blob md)
   
   (define ret-type (meth-builder-ret-type md))
@@ -314,6 +316,8 @@
     (match x
       [(list 'ret)
        (write-byte #x2A port)]
+      [(list 'add)
+       (write-byte #x58 port)]
 
       [(list 'ldc.i num)
        ; assume 32 bit for now
@@ -338,19 +342,19 @@
 
        
        ]
-;;       [(list 'call ret-type type name param-list)
-;;        (define num (table-rid-lookup 'methoddef `(,ret-type ,type ,name ,param-list)))
-;;        
-;;        (write-byte #x28 port)
-;;        ; this could be a methoddef or methodspec; don't support spec yet
-;;        ; so assume def
-;;        (write-byte (bitwise-and #xFF num) port)
-;;        (write-byte (bitwise-and #xFF (arithmetic-shift num -8)) port)
-;;        (write-byte (bitwise-and #xFF (arithmetic-shift num -16)) port)
-;;        ;method
-;;        (write-byte #x06 port)
-;; 
-;;        ]
+      ;;       [(list 'call ret-type type name param-list)
+      ;;        (define num (table-rid-lookup 'methoddef `(,ret-type ,type ,name ,param-list)))
+      ;;        
+      ;;        (write-byte #x28 port)
+      ;;        ; this could be a methoddef or methodspec; don't support spec yet
+      ;;        ; so assume def
+      ;;        (write-byte (bitwise-and #xFF num) port)
+      ;;        (write-byte (bitwise-and #xFF (arithmetic-shift num -8)) port)
+      ;;        (write-byte (bitwise-and #xFF (arithmetic-shift num -16)) port)
+      ;;        ;method
+      ;;        (write-byte #x06 port)
+      ;; 
+      ;;        ]
       
       [else (wlf "warning, skipping ~s in il stream" x)]
       )))
@@ -410,14 +414,14 @@
   (let ([m (modulo (file-position port) align-to)])
     (if (equal? m 0)
         (void)
-        (for [(i (in-range (- 4 m )))] (write-byte 0 port)))))
+        (for [(i (in-range (- align-to m )))] (write-byte 0 port)))))
 
 (define (assemble asm)
   ; todo
   ; extract sets of things for heaps * strings, user strings, blobs.
-     ; most things are now extracted during parse, but we need to resolve/compose
-     ; blobs for the method signatures in member ref and method defs. can't do this
-     ; until we have typedef/ref indexes..
+  ; most things are now extracted during parse, but we need to resolve/compose
+  ; blobs for the method signatures in member ref and method defs. can't do this
+  ; until we have typedef/ref indexes..
 
   ; sort, place and encode top level table items and build lookups
   
@@ -512,7 +516,7 @@
     (for/hash ([s (hash-keys (hash-ref (asm-builder-refs asm) 'string))])
       
       (let([index (file-position string-heap)])
-        (writeln s)
+        ; (writeln s)
         (for ([b (string->bytes/latin-1 s)])
           (write-byte b string-heap))
         (write-byte 0 string-heap)
@@ -544,9 +548,9 @@
   (define guid-heap-size (file-position guid-heap))
   (wlf "guid ~x" guid-heap-size)
   
-   ;(writeln (collect (map hash-values (map class-builder-meth-builders (asm-builder-class-defs asm)))))
-;;   (writeln blob-index)    
-;;   (writeln index-blob)
+  ;(writeln (collect (map hash-values (map class-builder-meth-builders (asm-builder-class-defs asm)))))
+  ;;   (writeln blob-index)    
+  ;;   (writeln index-blob)
   
   ; determine metadata token sizes
 
@@ -560,7 +564,7 @@
   (define (write-br num port)
     (if (equal? ss 2) (write-le-2 num port) (write-le-4 num port)))
   (define (write-gr num port)
-     (write-le-2 num port))
+    (write-le-2 num port))
   
   ; calculate each table's row count and size
   ; first pass we can't do the size since we need all the rows available
@@ -635,11 +639,11 @@
    'hascustomattribute
    (if (<= (max-rows-lookup
             '(methoddef field typeref typedef param interfaceimpl memberref module
-              ;permission dunno what this is??
-              property event standalonesig moduleref typespec assembly
-               assemblyref file exportedtype manifestresource genericparam
-              genericparamconstraint methodspec))
-            #x7FF) 2 4)) ; 5 bits
+                        ;permission dunno what this is??
+                        property event standalonesig moduleref typespec assembly
+                        assemblyref file exportedtype manifestresource genericparam
+                        genericparamconstraint methodspec))
+           #x7FF) 2 4)) ; 5 bits
 
   ; we'll stick the heap sizes in as well for the assembler
   (hash-set! encodings 'ss ss)
@@ -724,7 +728,7 @@
     (case type
       ['memberref (hash-ref meth-row-lookup key)]
       ['methoddef (hash-ref meth-row-lookup key)]
-     [else (raise (format "unsupported key in table-rid-lookup ~a : ~a" type key))]))
+      [else (raise (format "unsupported key in table-rid-lookup ~a : ~a" type key))]))
   
   (for ([md  (collect (map hash-values (map class-builder-meth-builders (asm-builder-class-defs asm))))])
     (assemble-md md encodings table-rid-lookup il-heap))
@@ -759,13 +763,14 @@
   ; import lookup table
   ; hint/name table
 
-  ; the import lookup and subsequent reloc sections we still neeed to study properly, but we know we only need the same
-  ; fixups and the table sizes will be the same, it is the addresses that will neeed calculating.
-  ; the area for the import tables after the cli data is x68  
+  ; it is critical that the hint/name table is folllowed by the FF 25 bytes and then the entrypoint rva.
+  ; (this FF 25 is pointed at by the EntrypointRva in the PE header).  The actual RVA following the 2 bytes
+  ; must appear at the start of a 32 bit boundary, so we have to pad after the hint/name table so that the
+  ; FF 25 bytes appear at the end of the previous boundary;  all this means the final size of the section
+  ; has to be calculated with this in mind. 
 
-
-  ; to do the cli header we need to know the size of the il and the metadata first.
-  (define text-section-size
+  ; so first we can calculcate all the cli bits since we know the sizes of all that
+  (define cli-segment-size
     (+
      #x8   ; IAT
      #x48  ; cli header
@@ -777,19 +782,78 @@
      us-heap-size
      guid-heap-size
      blob-heap-size
-     #x68  ; trailing import tables     
+     #x28  ; import descriptor
+     #x8   ; lookup
      ))
+
+    
+  (define cli-to-hint-size
+    (+
+     (if (equal? (modulo cli-segment-size 16) 0)
+         0
+         (- 16 (modulo cli-segment-size 16)))))
+
+  
+  (wlf "il ~x" il-heap-size)
+  (wlf "~~ ~x" total-~-stream-size)
+  (wlf "strings ~x" string-heap-size)
+  (wlf "us ~x" us-heap-size)
+  (wlf "guid ~x" guid-heap-size)
+  (wlf "blob ~x" blob-heap-size)
+  (wlf "cli seg ~x" cli-segment-size)
+  (wlf "cli to hint ~x" cli-to-hint-size)
+  
+  (define import-size #x30)
+  
+  ; and we also know that the cli segment starts at a 32 bit aligned address
+  (define text-section-size
+    (+
+     cli-segment-size
+     cli-to-hint-size
+     import-size
+     ))
+
+
+  
   (wlf ".text section size x~x ~a" text-section-size text-section-size)
   (when (>= text-section-size #x400 )
     (raise ".text section larger than x400.  Now you'll have to do that work you've been putting off!"))
   
   ; calculate section sizes and determine layout
-  ; for now we'll pretend the .text is x400 so we don't have to modify the import table at all.
-  ; however, we will calcuate the cli header properly which will allow us to assemble different programs!!
   (define text-section-phys #x200)
   (define text-section-virt #x2000)
   (define reloc-section-phys #x600)
   (define reloc-section-virt #x4000)
+
+  ; the "import-lookup-start-phys" is the location after the cli, intial import table and padding.
+  ; this is where the hint table starts.
+  (define import-hint-start-phys (+ text-section-phys cli-segment-size cli-to-hint-size))
+  (wlf "hint start x~x " import-hint-start-phys)
+  
+  (define (calc-text-rva offset)
+    (+ text-section-virt offset))
+
+  ; start of the import table directly afer the blob heap
+  (define import-start-offset (- cli-segment-size #x30))
+  (define import-start-rva (calc-text-rva import-start-offset))
+
+;  (define dll-hint-rva (calc-text-rva (- (+ import-lookup-start-phys #x1F) text-section-phys)))
+  
+  ; this is the address that appears as the first item in the import table, pointing to the
+  ; lookup table below it
+  (define import-table-rva-to-lookup (calc-text-rva (- (+ text-section-phys import-start-offset #x28) text-section-phys)))
+
+  (define dll-hint-rva (+ import-table-rva-to-lookup #x8 ))
+  (define dll-name-rva (+ dll-hint-rva #xE))
+  ; points past the hint table 
+  (define entry-point-rva (+ dll-hint-rva #x1E ))
+  
+  (wlf "import start rva ~x" import-start-rva)
+  (wlf "import table rva to lookup  ~x" import-table-rva-to-lookup)
+  (wlf "entrypoint  ~x" entry-point-rva)
+
+  ;(wlf "dll off  ~x" (calc-text-rva (- (+ import-start-phys #x38) text-section-phys)))
+  (wlf "dll hint ~x" dll-hint-rva)
   ; write PE -
 
   ;   ms dos header
@@ -809,9 +873,19 @@
   ; a lot of important data in here that needs calculating, including the section sizes, entry point rva, base of code / data
   
   ; standard
-  (write-bytes (bytes #x0B #x01 #x0B #x00 #x00 #x04 #x00 #x00 #x00 #x02 #x00 #x00 #x00 #x00 #x00 #x00 #x1E #x22 #x00 #x00 #x00 #x20 #x00 #x00 #x00 #x40 #x00 #x00)
-               pe)
-
+  #;(write-bytes (bytes #x0B #x01 #x0B #x00 #x00 #x04 #x00 #x00 #x00 #x02 #x00 #x00 #x00 #x00 #x00 #x00 #x1E #x22 #x00 #x00 #x00 #x20 #x00 #x00 #x00 #x40 #x00 #x00)
+                 pe)
+  (write-le-2 #x10B pe) ;magic
+  (write-byte 6 pe)     ; l major always 6 
+  (write-byte 5 pe)     ; l minor always 5
+  (write-le-4 #x400 pe)    ; code size TODO: we already calculate the .text size but need to work on various areas when it grows beyond
+  (write-le-4 #x200 pe)    ; data size (no data yet)
+  (write-le-4 #x0 pe)    ; uninitdata size (no data yet)
+  (write-le-4 entry-point-rva pe)
+  (write-le-4 #x2000 pe)  ; code rva TODO: when this moves...
+  (write-le-4 #x4000 pe)  ; data rva TODO: when this moves...
+  
+  
   ; nt
   (write-bytes (bytes #x00 #x00 #x40 #x00 #x00 #x20 #x00 #x00 #x00 #x02 #x00 #x00 #x04 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x04 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x60 #x00 #x00 #x00 #x02 #x00 #x00 #x00 #x00 #x00 #x00 #x03 #x00 #x40 #x85 #x00 #x00 #x10 #x00 #x00 #x10 #x00 #x00 #x00 #x00 #x10 #x00 #x00 #x10 #x00 #x00 #x00 #x00 #x00 #x00 #x10 #x00 #x00 #x00 )
                pe)
@@ -819,8 +893,37 @@
 
   ;data dirs
   ; this includes the all important cli-header pointer
-  (write-bytes (bytes #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #xC8 #x21 #x00 #x00 #x53 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x40 #x00 #x00 #x0C #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x20 #x00 #x00 #x08 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x08 #x20 #x00 #x00 #x48 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 )
-               pe)
+  #;(write-bytes (bytes #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #xC8 #x21 #x00 #x00 #x53 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x40 #x00 #x00 #x0C #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x20 #x00 #x00 #x08 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x08 #x20 #x00 #x00 #x48 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 )
+                 pe)
+  (write-le-8 0 pe)   ; Export
+
+  (write-le-4 import-start-rva pe)   ; Import rva
+  (write-le-4 #x53 pe)   ; import size alwyas same
+  
+  (write-le-8 0 pe)   ; resoruce
+  (write-le-8 0 pe)   ; exception
+  (write-le-8 0 pe)   ; security
+  
+  (write-le-4 #x4000 pe)   ; reloc rva
+  (write-le-4 #xC pe)   ; reloc size always same
+
+  (write-le-8 0 pe)   ; debug
+  (write-le-8 0 pe)   ; copyright
+  (write-le-8 0 pe)   ; globalptr
+  (write-le-8 0 pe)   ; tls
+  (write-le-8 0 pe)   ; loadconfig
+  (write-le-8 0 pe)   ; boundimport
+
+  (write-le-4 #x2000 pe)   ; iat rva
+  (write-le-4 #x8 pe)   ; always same size
+
+  
+  (write-le-8 0 pe)   ; delayload
+
+  (write-le-4 #x2008 pe)   ; clr rva
+  (write-le-4 #x48 pe)   ; header always same size
+  
+  (write-le-8 0 pe)   ; reserved
   
   ; next are the section headers, this exe has 2 sections .text and .reloc
   ; each header is 40 bytes
@@ -837,15 +940,12 @@
     (write-byte 0 pe))
 
   ; iat table #x200
-  (write-bytes (bytes #x00 #x22 #x00 #x00 #x00 #x00 #x00 #x00 )
-               pe)
+  ; this is the rva to the dll in the hint/name table
+  (write-le-4 dll-hint-rva pe)
+  (write-le-4 0 pe)
   
   ;cli header : #x208
   ; this has some very important things to calculate, including the size of the metadata and entrypoint token
-  ;(write-bytes (bytes #x48 #x00 #x00 #x00 #x02 #x00 #x05 #x00 #x5C #x20 #x00 #x00 #x6C #x01 #x00 #x00 #x01 #x00 #x00 #x00 #x01 #x00 #x00 #x06 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 )
-  ;             pe)
-  (define (calc-text-rva offset)
-    (+ text-section-virt offset))
   
   (write-le-4 #x48 pe)  ; header size
   (write-le-2 2 pe)     ; major
@@ -858,6 +958,8 @@
        us-heap-size
        guid-heap-size
        blob-heap-size ) pe )  ; metadata size
+
+  ; rest is hardcoded : todo, output entrypoint token
   (write-bytes (bytes #x01 #x00 #x00 #x00 #x01 #x00 #x00 #x06 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 )
                pe)
   
@@ -987,11 +1089,11 @@
 
   (wlf "typedef start ~x" (file-position pe))
   (for ([cb (asm-builder-class-defs asm)])
-;    (wlf "~a" cb)
+    ;    (wlf "~a" cb)
     (write-le-4 0 pe)  ; flags TODO, we are not encoding these yet, they are zero for our type 
     (write-sr (hash-ref string-index (symbol->string (class-builder-name cb))) pe) ; name
     (write-sr 0 pe)  ;namespace
-     ; 'typedeforref  typedef extends.  module pseudo-classextends itself seemingly
+    ; 'typedeforref  typedef extends.  module pseudo-classextends itself seemingly
     (write-le-2 0  pe)         
 
     (write-le-2 1  pe) ; fieldlist - field index todo: proper size
@@ -1013,9 +1115,9 @@
       (write-le-2 1 pe)  ; paramlist todo
       
       
-;    (wlf "~a" mb)
+      ;    (wlf "~a" mb)
+      )
     )
-  )
 
   (wlf "memberref start ~x" (file-position pe))
   (for ([mb (sort (hash->list (hash-ref (asm-builder-refs asm) 'memref)) < #:key caddr)])
@@ -1023,19 +1125,19 @@
     (wlf "~a" (cdar mb))
     
     (match (car mb)
-     [(list ret (list asm type) name params)
-      ; class - memberrefparent - for us this is only typedef at the moment
-      ; 3 bits, zero
-      ; todo: lookup typeref index
-      (write-le-2 (bitwise-ior #x1 (arithmetic-shift #x1 3))  pe)
-      (write-sr (hash-ref string-index (symbol->string name)) pe) ; name
-      (write-br (car (cdr mb)) pe) ; signature
+      [(list ret (list asm type) name params)
+       ; class - memberrefparent - for us this is only typedef at the moment
+       ; 3 bits, zero
+       ; todo: lookup typeref index
+       (write-le-2 (bitwise-ior #x1 (arithmetic-shift #x1 3))  pe)
+       (write-sr (hash-ref string-index (symbol->string name)) pe) ; name
+       (write-br (car (cdr mb)) pe) ; signature
 
-      ]
+       ]
       [else (raise "!")])
     
     )
-; 
+  ; 
   (wlf "assembly start ~x" (file-position pe))
   (write-le-4 0 pe)  ;hashalgid
   (write-le-8 0 pe)  ;major, minor, build, rev
@@ -1084,30 +1186,66 @@
   (write-bytes (get-output-bytes blob-heap) pe)
   
   
-;;   (define (bytes-to-next n align)
-;;    (if (equal? (modulo n align) 0)
-;;        0
-;;        (- align (modulo n align))))
+  ;;   (define (bytes-to-next n align)
+  ;;    (if (equal? (modulo n align) 0)
+  ;;        0
+  ;;        (- align (modulo n align))))
 
   
   ;"import table : 3c8"  this is pointed to by the rva in the  "import" section header
   ; 31 bit rva into the "hint/name" table (which is the actual table...)
+  (define import-start (file-position pe))
+  
+  (wlf "import start ~x" (file-position pe))
+  (wlf "import start ~x" import-table-rva-to-lookup)
 
-  ; then the actual ttable with the mscoree bits.  we need to look at how to generate this properly
-  (write-bytes (bytes #xF0 #x21 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x0E #x22 #x00 #x00
-#x00 #x20 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00
-#x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x22 #x00 #x00 #x00 #x00 #x00 #x00
-#x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x5F #x43 #x6F #x72 #x45 #x78
-#x65 #x4D #x61 #x69 #x6E #x00 #x6D #x73 #x63 #x6F #x72 #x65 #x65 #x2E #x64 #x6C
-#x6C #x00 #x00 #x00 #x00 #x00 #xFF #x25 #x00 #x20 #x40 #x00 #x00 #x00 #x00 #x00
-#x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 ) pe)
 
+  (write-le-4 import-table-rva-to-lookup pe)  ; pointer to lookup table
+  (write-le-4 0 pe)   ; datestamp
+  (write-le-4 0 pe)   ; fwd chain
+  (write-le-4 dll-name-rva pe)   ; name rva
+  (write-le-4 #x2000 pe)   ; iat
+  ;some padding
+  (write-le-4 0 pe)
+  (write-le-8 0 pe)
+  (write-le-8 0 pe)
+
+  
+  ; now the import lookup table, it's the same as the iat before the cli metadata header
+  (write-le-4 dll-hint-rva pe)
+  (write-le-4 0 pe)
+  ; except some more padding
+;  (write-le-8 0 pe)
+  ; now the hint/name table, dll string and actual entry point bits  
+  (write-bytes (bytes   #x00 #x00 #x5F #x43 #x6F #x72 #x45 #x78
+                        #x65 #x4D #x61 #x69 #x6E #x00 #x6D #x73 #x63 #x6F #x72 #x65 #x65 #x2E #x64 #x6C
+                        #x6C #x00 #x00 #x00 #x00 #x00 ) pe)
+
+  ; before we write the FF 25 and the rva, we need to align so that the rva
+  ; will start on a 16 bit boundary
+  ;(align-stream 31 pe)
+  (write-byte #xFF pe)
+  (write-byte #x25 pe)
+  (define entry-point-physical (file-position pe))
+  
+  (write-le-4 #x402000 pe)  ; rva of reloc firs byte TODO this will need changing when the size of .text changes
+  
   (do ()
     ((equal? (file-position pe) #x600))
     (write-byte 0 pe))
   ;"base reloc table : 600"
-  ; also need to work out to to move this
-  (write-bytes (bytes #x00 #x20 #x00 #x00 #x0C #x00 #x00 #x00 #x20 #x32 #x00 #x00 #x00 #x00 #x00 #x00 ) pe)
+
+  (write-le-4 #x2000 pe)  ; page rva
+  (write-le-4 #xC pe)  ; block size
+  ; the offest to patch is the one that appaers after the FF 25 bytes at the end of the name table.
+  ; at tho moment we calculate thi backwards from the algined size of the text section, this will do for now
+  ; until we support different sized sections.
+  ; top 4 bits are x3 for IMAGE_REL_BASED_HIGHLOW
+  ; other 12 bits are the offest from the text start
+  ;(write-le-2 (bitwise-ior (arithmetic-shift 3 12) (- (+ entry-point-rva 2) text-section-virt)) pe)
+  
+  (write-le-2 (bitwise-ior (arithmetic-shift 3 12) (- text-section-size #x10)) pe)
+  ;(write-bytes (bytes #x00 #x20 #x00 #x00 #x0C #x00 #x00 #x00 #x20 #x32 #x00 #x00 #x00 #x00 #x00 #x00 ) pe)
   (do ()
     ((equal? (file-position pe) #x800))
     (write-byte 0 pe))
