@@ -2,31 +2,8 @@
 (require racket/match)
 (require racket/hash)
 (require "cli-reader.rkt") 
+(require "log.rkt")
 (provide assemble parse-il)
-(define nano2
-  '(
-    (.assembly extern "C:/Program Files (x86)/Reference Assemblies/Microsoft/Framework/.NETFramework/v4.7.1/mscorlib.dll" {})
-    (.assembly donothing {})
-    (.module nano2.exe)
-    (.class (private auto ansi) <Module>           
-            [
-             (.method
-              (public static) void main () (cil managed)
-              {
-               (.entrypoint)
-               (.maxstack 8)
-               (ldc.i 42)
-               (ldc.i 42)
-              (add)
-               (call void (mscorlib System.Console) WriteLine (int32))
-               (ret)     
-               })
-      
-             ]
-
-     
-            )))
-
 (struct asm-ref
   ([filename]
    [index]
@@ -248,8 +225,7 @@
   acc)
 
 (define (wlf . args)
-  ;(void)
-  (writeln (apply format args))
+  (log-rangi-debug "~a" (apply format args))
   )
 
 (define (cli-compress-unsigned num)
@@ -416,7 +392,7 @@
         (void)
         (for [(i (in-range (- align-to m )))] (write-byte 0 port)))))
 
-(define (assemble asm)
+(define (assemble asm [out-path (make-temporary-file "rangi-~a.exe")])
   ; todo
   ; extract sets of things for heaps * strings, user strings, blobs.
   ; most things are now extracted during parse, but we need to resolve/compose
@@ -524,11 +500,11 @@
         )))
   ; we know the heap will be placed at a 4-byte aligned address, so we can calculate
   ; any padding here to ensure it ends correctly aligned
-  (writeln (get-output-bytes string-heap))
+  (log-rangi-debug "string heap before align ~a" (get-output-bytes string-heap))
   (align-stream 4 string-heap)
   (define string-heap-size (file-position string-heap))
-  (writeln (get-output-bytes string-heap))
-  (writeln string-heap-size)
+  (log-rangi-debug "string heap ~a" (get-output-bytes string-heap))
+  (log-rangi-debug "string heap size ~a" string-heap-size)
   
   
 
@@ -659,7 +635,7 @@
                     (hash-ref encodings x)
                     (begin
                       ; this can happen when the table doesn't exist
-                      (writeln (format "warning, type ~a not found" x))
+                      (log-rangi-warning "type ~a not found" x)
                       2))
                 x)) items)))
   (for ([td (hash-values tables)])
@@ -700,7 +676,7 @@
         ['genericparam (list 2 2 'typeormethoddef ss)]
         ['methodspec (list 'methoddeforref bs)]
         ['genericparamconstraint (list 'genericparam 'typedeforref)]
-        [else (begin (writeln (format "warning: unknown type ~a in calc-size" (table-data-type td))) '(2))]))))
+        [else (begin (log-rangi-warning "unknown type ~a in calc-size" (table-data-type td)) '(2))]))))
            
   (define total-tables-size
     (apply + (map (λ (td) (* (table-data-row-count td) (table-data-row-size td))) (hash-values tables))))
@@ -746,7 +722,7 @@
   ; we want to produce an identical file to nano2.exe.
   ; then, once working we'll gradually introduce each calculation
   ; and layout
-  (define pe (open-output-file "c:\\temp\\rangi.exe" #:exists 'replace))
+  (define pe (open-output-file out-path #:exists 'replace))
   
 
   ; before we can write the exe we need to determine the size of the .text section
@@ -1253,7 +1229,7 @@
   (do ()
     ((equal? (file-position pe) #x800))
     (write-byte 0 pe))
-  (writeln (file-position pe))
+  (log-rangi-debug "file position after header ~a" (file-position pe))
   ;   pe & opt header
   ;   sections .text
   ;     cli metadata root
@@ -1263,9 +1239,9 @@
   ;     IL
 
   (close-output-port pe)
-  #f
+  out-path
   )
-(time (assemble (parse-il nano2)))
+
 
  
 

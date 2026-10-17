@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/string)
 (require racket/port)
+(require "log.rkt")
 (provide read-file get-public-typedefs read-assembly-meta)
 (define (int->hex n)
   (number->string n 16)) 
@@ -477,7 +478,7 @@
                     (hash-ref encodings x)
                     (begin
                       ; this can happen when the table doesn't exist
-                      (writeln (format "warning, type ~a not found" x))
+                      (log-rangi-warning "type ~a not found" x)
                       2))
                 x)) items)))
   
