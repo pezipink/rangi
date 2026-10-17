@@ -119,8 +119,8 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | `extends` (`System.Object`, `System.ValueType`, `System.Enum`) | none |         |
 | Static methods, same-module calls (forward and recursive), parameters | done | calls-multi |
 | Static fields (same module)                                | done    | `static-fields` |
-| Instance fields, `.ctor`, `.cctor`                         | none    |         |
-| Instance methods, `newobj`, virtual dispatch, `.override`  | none    |         |
+| Instance fields, `.ctor`, `.cctor`                         | partial (`.ctor` done; instance fields and `.cctor` not) | instance-methods |
+| Instance methods, `newobj`, virtual dispatch, `.override`  | partial (instance methods, `newobj`, `callvirt` done; `.override` and virtual dispatch not) | instance-methods |
 | Interfaces and implementation                              | none    |         |
 | Nested types                                               | none    |         |
 | Properties and events                                      | none    |         |
@@ -155,7 +155,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 
 ## Suggested order
 
-1. Static fields are done (`static-fields`). Instance fields, `.ctor`, instance methods, and `newobj` are next. Locals, fat bodies, branching, catch, finally, fault, and filter EH are done. The `ldstr` hello world and `switch` fixtures are done.
+1. Static fields are done (`static-fields`). Instance methods, `.ctor`, and `newobj` on same-module types are done (`instance-methods`). Known limit: a non-virtual `call` to an external instance method other than `.ctor` is lowered as static. It needs an explicit `instance` keyword or a clear error. Instance fields and `.cctor` are next. Locals, fat bodies, branching, catch, finally, fault, and filter EH are done. The `ldstr` hello world and `switch` fixtures are done.
 3. Multiple types with namespaces, extends, interfaces, nested types.
 4. Value types, enums, static data. Single-dimension arrays are done (`arrays-sum`); multi-dimensional arrays are not.
 5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam are done. GenericParamConstraint and generic types are not.

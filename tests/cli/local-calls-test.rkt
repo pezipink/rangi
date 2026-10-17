@@ -35,8 +35,8 @@
                 (ldarg.0) (ldarg.0) (ldc.i4.1) sub (call int32 (Program) fact (int32)) mul (ret)
                 base: (ldc.i4.1) (ret) })])))))))
 
-(test-case "callvirt on a same-module method is rejected"
-  (check-exn #rx"callvirt to same-module method f is not supported"
+(test-case "callvirt on a static same-module method is rejected"
+  (check-exn #rx"callvirt to static same-module method f"
              (λ () (lower-module (program-with '(ldc.i4.1) '(callvirt int32 (Program) f (int32)) '(pop))))))
 
 (test-case "a call whose signature does not match the MethodDef signature is rejected"

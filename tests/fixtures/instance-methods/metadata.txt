@@ -1,0 +1,23 @@
+Module rows=1
+  Module[1] Name="instance-methods.exe" Mvid=52dc12a0da991909925df11661c339a6
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=3
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Store" Namespace="" Extends=0x01000001 Fields=[1..1] Methods=[2..4]
+Field rows=1
+  Field[1] Flags=6 Name="weight" Signature=0608
+MethodDef rows=4
+  MethodDef[1] Rva=8784 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1f29730200000625176f040000066f03000006280100000a1d73020000066f03000006280100000a177302000006251a28040000066f03000006280100000a2a
+  MethodDef[2] Rva=8860 ImplFlags=0 Flags=6150 Name=".ctor" Signature=20010108 Params=[] Il=02280200000a02037d010000042a
+  MethodDef[3] Rva=8876 ImplFlags=0 Flags=6 Name="Get" Signature=200008 Params=[] Il=027b010000042a
+  MethodDef[4] Rva=8884 ImplFlags=0 Flags=6 Name="Bump" Signature=20010108 Params=[] Il=02027b0100000403587d010000042a
+MemberRef rows=2
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+  MemberRef[2] Parent=0x01000001 Name=".ctor" Signature=200001
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

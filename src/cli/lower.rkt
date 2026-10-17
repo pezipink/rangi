@@ -34,7 +34,7 @@
 (struct fdef (name flags sig))
 
 ; class-rids maps a module class name to its TypeDef rid. method-rids maps
-; (list class name ret params), as written in the source, to (cons MethodDef-rid arity).
+; (list class name ret params), as written in the source, to (vector MethodDef-rid arity instance?).
 ; field-rids maps (cons class name) to (vector Field-rid type static?) for fields of this module.
 (struct ctx (asm-refs typerefs memberrefs typespecs methodspecs standalone-sigs us-heap
              class-rids method-rids field-rids))
@@ -80,9 +80,10 @@
   '((static . #x10) (final . #x20) (virtual . #x40) (hidebysig . #x80) (newslot . #x100)
     (abstract . #x400) (specialname . #x800) (rtspecialname . #x1000)))
 
+; A method without static is an instance method and takes this as arg 0 (II.22.26, II.23.2.1).
+(define (instance-kws? kws) (not (memq 'static kws)))
+
 (define (method-flags kws)
-  (unless (memq 'static kws)
-    (error 'rangi "only static methods are supported; missing static in ~s" kws))
   (define access
     (for/list ([k (in-list kws)] #:when (assq k access-flags))
       (cdr (assq k access-flags))))
@@ -344,6 +345,21 @@
      (cdar more)]
     [else (error 'rangi "malformed generic method arguments in ~s; expected (inst T ...)" node)]))
 
+; Whether a call passes this. A same-module callee takes its flag from the MethodDef. An external
+; call has no signature lookup, so it passes this only for callvirt and for .ctor. Other
+; non-virtual instance calls to external methods are not supported yet; they are lowered as static.
+(define (same-module-owner? owner) (and (pair? owner) (null? (cdr owner)) (symbol? (car owner))))
+
+(define (call-has-this? cx node)
+  (match node
+    [(list (and op (or 'call 'callvirt)) ret owner (? symbol? name) params _ ...)
+     (cond
+       [(same-module-owner? owner)
+        (define hit (hash-ref (ctx-method-rids cx) (list (car owner) name ret params) #f))
+        (and hit (vector-ref hit 2))]
+       [else (or (eq? op 'callvirt) (eq? name '.ctor))])]
+    [_ #f]))
+
 ; call and callvirt. A symbol owner names a method in this module, with a MethodDef token
 ; (II.22.26). Any other owner is an external MemberRef (II.22.25). A generic method call
 ; names its instantiation with a MethodSpec (II.22.29).
@@ -352,16 +368,17 @@
     [(list (and op (or 'call 'callvirt)) ret owner (? symbol? name) params more ...)
      (define inst (inst-arg more node))
      (define callvirt? (eq? op 'callvirt))
+     (define this? (call-has-this? cx node))
      (cond
-       [(and (pair? owner) (null? (cdr owner)) (symbol? (car owner)))
-        (when callvirt?
-          (error 'rangi "callvirt to same-module method ~a is not supported; only static methods are lowered" name))
+       [(same-module-owner? owner)
         (define cls (car owner))
         (define hit (hash-ref (ctx-method-rids cx) (list cls name ret params) #f))
         (unless hit
           (error 'rangi "no method ~a in ~a with return ~a and parameters ~s" name cls ret params))
-        (define rid (car hit))
-        (define arity (cdr hit))
+        (when (and callvirt? (not this?))
+          (error 'rangi "callvirt to static same-module method ~a; callvirt needs an instance method" name))
+        (define rid (vector-ref hit 0))
+        (define arity (vector-ref hit 1))
         (define ninst (if inst (length inst) 0))
         (unless (= ninst arity)
           (error 'rangi "~a.~a takes ~a type arguments, but the call gives ~a"
@@ -378,7 +395,7 @@
         ; the callee's !N are the owner's type arguments and !!N its own, so they are
         ; lowered against (owner arity . method arity)
         (define sig (method-sig cx (cons (length args) ninst) ret params
-                                #:hasthis? callvirt? #:arity ninst))
+                                #:hasthis? this? #:arity ninst))
         (define mref (member-ref! cx parent name sig))
         (list op
               (if inst
@@ -387,18 +404,31 @@
                   (token #x0A000000 mref)))])]
     [_ (error 'rangi "malformed IL instruction ~s" node)]))
 
+; newobj on a same-module class names its .ctor by source signature with return void. The
+; .ctor must be an instance method, since it receives the new object as this (II.22.26).
 (define (newobj-item cx scope node)
   (match node
     [(list 'newobj owner params)
-     (define-values (asm ty args) (external-owner owner node))
-     (define parent (owner-parent! cx asm ty args scope))
-     (define sig (method-sig cx (cons (length args) 0) 'void params #:hasthis? #t))
-     (list 'newobj (token #x0A000000 (member-ref! cx parent '.ctor sig)))]
+     (cond
+       [(same-module-owner? owner)
+        (define cls (car owner))
+        (define hit (hash-ref (ctx-method-rids cx) (list cls '.ctor 'void params) #f))
+        (unless hit
+          (error 'rangi "no .ctor in ~a with parameters ~s" cls params))
+        (unless (vector-ref hit 2)
+          (error 'rangi "newobj of ~a: its .ctor must be an instance method" cls))
+        (list 'newobj (token #x06000000 (vector-ref hit 0)))]
+       [else
+        (define-values (asm ty args) (external-owner owner node))
+        (define parent (owner-parent! cx asm ty args scope))
+        (define sig (method-sig cx (cons (length args) 0) 'void params #:hasthis? #t))
+        (list 'newobj (token #x0A000000 (member-ref! cx parent '.ctor sig)))])]
     [_ (error 'rangi "malformed IL instruction ~s" node)]))
 
 ; Stack effect of one source node, for the depth analysis in il/stack.rkt. Call-like
 ; instructions take their pop and push counts from the signature, because the table has Varpop.
-(define (node-effect node item ret-void?)
+; this? says whether a call passes the receiver, which is one extra pop.
+(define (node-effect node item ret-void? this?)
   (cond
     [(and (symbol? node) (label-symbol? node)) (label-at (label-name-of node))]
     [(and (pair? node) (eq? (car node) 'label)) (label-at (cadr node))]
@@ -406,7 +436,7 @@
      (effect 'ret (if ret-void? 0 1) 0 'return '())]
     [(and (pair? node) (memq (car node) '(call callvirt)))
      (effect (car node)
-             (+ (length (list-ref node 4)) (if (eq? (car node) 'callvirt) 1 0))
+             (+ (length (list-ref node 4)) (if this? 1 0))
              (if (eq? (cadr node) 'void) 0 1)
              'next '())]
     [(and (pair? node) (eq? (car node) 'newobj))
@@ -527,7 +557,7 @@
     (for/list ([node (in-list code)]) (lower-instruction cx scope node nparams nlocals)))
   (define effects
     (for/list ([node (in-list code)] [item (in-list items)])
-      (node-effect node item ret-void?)))
+      (node-effect node item ret-void? (call-has-this? cx node))))
   (define handler-entries
     (append*
      (for/list ([h (in-list handlers)])
@@ -617,6 +647,9 @@
              class-name name)))
   (when (and (pair? gparams) (method-decl-entry? m))
     (error 'rangi "the entry point ~a.~a cannot be generic" class-name name))
+  (define instance? (instance-kws? (method-decl-flags m)))
+  (when (and instance? (method-decl-entry? m))
+    (error 'rangi "the entry point ~a.~a must be static" class-name name))
   (define scope (cons 0 nmth))
   (define flags (method-flags (method-decl-flags m)))
   (define params (method-decl-params m))
@@ -626,9 +659,11 @@
   (define clauses (method-decl-handlers m))
   (for ([t (in-list local-types)])
     (when (eq? t 'void) (error 'rangi "local of type void in ~a.~a" class-name name)))
-  (define sig (method-sig cx scope (method-decl-ret m) params #:arity nmth))
+  (define sig (method-sig cx scope (method-decl-ret m) params #:hasthis? instance? #:arity nmth))
+  ; arg 0 is this in an instance method, so ldarg indices and the depth analysis count it
+  (define nargs (+ (length params) (if instance? 1 0)))
   (define-values (asm computed)
-    (encode-il cx scope (method-decl-code m) (length params) (length local-types)
+    (encode-il cx scope (method-decl-code m) nargs (length local-types)
                (eq? (method-decl-ret m) 'void) clauses))
   (define code (assembly-code asm))
   (define maxstack (effective-maxstack (method-decl-maxstack m) computed))
@@ -688,7 +723,8 @@
                         (method-decl-ret md) (method-decl-params md)))
       (when (hash-ref method-rids key #f)
         (error 'rangi "duplicate method ~a in ~a" (method-decl-name md) (class-decl-name cls)))
-      (hash-set! method-rids key (cons next (length (method-decl-gparams md))))
+      (hash-set! method-rids key (vector next (length (method-decl-gparams md))
+                                         (instance-kws? (method-decl-flags md))))
       (add1 next)))
   (define field-rids (make-hash))
   (for/fold ([next 1]) ([cls (in-list classes)])
