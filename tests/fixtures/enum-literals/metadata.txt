@@ -1,0 +1,30 @@
+Module rows=1
+  Module[1] Name="enum-literals.exe" Mvid=fb2b2936d4a5ba2cefd002701cbab0e7
+TypeRef rows=3
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+  TypeRef[3] ResolutionScope=0x23000001 Name="Enum" Namespace="System"
+TypeDef rows=3
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..2]
+  TypeDef[3] Flags=257 Name="Color" Namespace="" Extends=0x01000003 Fields=[1..4] Methods=[]
+Field rows=4
+  Field[1] Flags=1542 Name="value__" Signature=0608
+  Field[2] Flags=32854 Name="Red" Signature=06110c
+  Field[3] Flags=32854 Name="Green" Signature=06110c
+  Field[4] Flags=32854 Name="Blue" Signature=06110c
+MethodDef rows=2
+  MethodDef[1] Rva=8828 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=182802000006280100000a170a062802000006280100000a2a
+  MethodDef[2] Rva=8868 ImplFlags=0 Flags=22 Name="Scale" Signature=000108110c Params=[] Il=021f0a5a2a
+MemberRef rows=1
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+Constant rows=3
+  Constant[1] Type=8 Parent=0x04000002 Value=00000000
+  Constant[2] Type=8 Parent=0x04000003 Value=01000000
+  Constant[3] Type=8 Parent=0x04000004 Value=02000000
+StandAloneSig rows=1
+  StandAloneSig[1] Signature=0701110c
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

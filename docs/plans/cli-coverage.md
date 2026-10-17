@@ -128,7 +128,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Properties and events                                      | none    |         |
 | Generic types and methods (generic instances, same-module generic calls) | partial | generic-calls |
 | Single-dimension arrays (`newarr`, `ldelem`, `stelem`, `ldlen`; `ldelema` unit-tested only) | done | arrays-sum |
-| Value types and enums                                      | none    |         |
+| Value types and enums (enum `value__` and literal fields with Constant rows) | done | enum-literals, value-types |
 | Custom attributes                                          | none    |         |
 | P/Invoke                                                   | none    |         |
 | Multiple assembly references with versions and public key tokens | none |       |

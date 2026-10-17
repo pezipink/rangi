@@ -22,7 +22,8 @@
 ; external class, or #f for the default System.Object (II.22.37).
 (struct class-decl (flags name gparams extends methods fields))
 ; A field (II.22.15). flags are FieldAttributes keywords; type is a type form (II.22.15).
-(struct field-decl (flags type name) #:transparent)
+; init is #f, or (prim . value) for a literal field: an integral primitive and its integer value.
+(struct field-decl (flags type name init) #:transparent)
 ; handlers: list of eh-clause in source order. maxstack is #f when there is no .maxstack.
 (struct method-decl (flags ret name gparams params code maxstack entry? locals handlers))
 ; exception clause (II.25.4.6): kind is catch, finally, fault or filter. class is (asm ty) for a
@@ -190,13 +191,32 @@
   (method-decl prefix ret name gparams params code maxstack entry?
                (parse-locals name raw-locals ncls nmth) handlers))
 
-; (.field (flags ...) type name). Field types may use the class's type variables !N (II.23.2.12).
+; (.field (flags ...) type name) or (.field (flags ...) type name = (prim value)). Field types may
+; use the class's type variables !N (II.23.2.12).
+(define integral-ranges
+  '((int8 -128 . 127) (uint8 0 . 255) (int16 -32768 . 32767) (uint16 0 . 65535)
+    (int32 -2147483648 . 2147483647) (uint32 0 . 4294967295)
+    (int64 -9223372036854775808 . 9223372036854775807) (uint64 0 . 18446744073709551615)))
+
+; A literal field (II.22.9) is static and has a value; a value is only allowed on a literal.
 (define (parse-field class-name node ncls)
   (match node
     [(list '.field (? list? flags) type (? symbol? name))
      (check-type name type ncls 0)
      (when (eq? type 'void) (error 'rangi "field ~a.~a cannot be void" class-name name))
-     (field-decl flags type name)]
+     (when (memq 'literal flags)
+       (error 'rangi "literal field ~a.~a needs a value" class-name name))
+     (field-decl flags type name #f)]
+    [(list '.field (? list? flags) type (? symbol? name) '= (list (? symbol? prim) (? exact-integer? v)))
+     (check-type name type ncls 0)
+     (define range (assq prim integral-ranges))
+     (unless range
+       (error 'rangi "literal field ~a.~a has non-integral type ~a" class-name name prim))
+     (unless (<= (cadr range) v (cddr range))
+       (error 'rangi "value ~a out of range for ~a in ~a.~a" v prim class-name name))
+     (unless (and (memq 'literal flags) (memq 'static flags))
+       (error 'rangi "a value needs a static literal field, ~a.~a is not" class-name name))
+     (field-decl flags type name (cons prim v))]
     [_ (error 'rangi "malformed .field in ~a: ~s" class-name node)]))
 
 ; Class clauses between the name and the body: .typarams declares generic parameters, and

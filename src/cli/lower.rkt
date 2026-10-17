@@ -5,8 +5,8 @@
          "../private/binary.rkt"
          "heaps.rkt"
          (only-in "sigs.rkt" encode-localvar-sig encode-method-sig encode-method-instantiation
-                  encode-typespec encode-type encode-field-sig primitive-names)
-         (only-in "flags.rkt" field-attributes-flags)
+                  encode-typespec encode-type encode-field-sig primitive-names element-codes)
+         (only-in "flags.rkt" field-attributes-flags fa-hasdefault)
          (only-in "../il/encode.rkt" find-opcode opcode-named)
          (only-in "../il/opcodes.rkt" opcode-operand opcode-type)
          (only-in racket/string string-prefix?)
@@ -31,8 +31,9 @@
 ; (typeref . rid), or #f for an interface or <Module> (II.22.37).
 (struct tdef (flags name ns extends methods fields))
 (struct mdef (name flags sig body entry?))
-; A Field row (II.22.15): flags are FieldAttributes bits, sig is a FieldSig blob.
-(struct fdef (name flags sig))
+; A Field row (II.22.15): flags are FieldAttributes bits, sig is a FieldSig blob. const is #f, or
+; (element-code . value-bytes) for a literal field's Constant row (II.22.9).
+(struct fdef (name flags sig const))
 
 ; class-rids maps a module class name to its TypeDef rid. method-rids maps
 ; (list class name ret params), as written in the source, to (vector MethodDef-rid arity instance?).
@@ -757,6 +758,33 @@
 ; ---------------------------------------------------------------------------
 ; model -> CLI program. Interning order matches the row order the writer emits.
 
+; The Constant value of a literal field (II.22.9): the value as little-endian bytes, typed by the
+; integral primitive written in the source. The field type is that primitive, or an enum in this
+; module whose value__ field has the same primitive type (II.22.9, enums in II.14.3).
+(define (field-constant fd class-decls)
+  (match (field-decl-init fd)
+    [#f #f]
+    [(cons prim v)
+     (define t (field-decl-type fd))
+     (match t
+       [(? symbol?)
+        (unless (eq? t prim)
+          (error 'rangi "literal field ~a has type ~a but its value is ~a" (field-decl-name fd) t prim))]
+       [(list 'valuetype (? symbol? e))
+        (define enum (hash-ref class-decls e #f))
+        (define vfield (and enum (findf (λ (f) (eq? (field-decl-name f) 'value__))
+                                        (class-decl-fields enum))))
+        (unless (and vfield (not (memq 'static (field-decl-flags vfield)))
+                     (eq? (field-decl-type vfield) prim))
+          (error 'rangi "literal field ~a: enum ~a must have an instance value__ of type ~a"
+                 (field-decl-name fd) e prim))]
+       [_ (error 'rangi "literal field ~a has type ~s, which cannot be an enum constant"
+                 (field-decl-name fd) t)])
+     (define size (case prim [(int8 uint8) 1] [(int16 uint16) 2] [(int32 uint32) 4] [else 8]))
+     (cons (cdr (assq prim element-codes))
+           (apply bytes (for/list ([i (in-range size)])
+                          (bitwise-and (arithmetic-shift v (* -8 i)) #xFF))))]))
+
 (define (lower-module m)
   (define classes (module-model-classes m))
   (for ([cls (in-list classes)] #:unless (null? (class-decl-gparams cls)))
@@ -801,9 +829,13 @@
       (define extends (lower-extends cx cls class-decls))
       (define fdefs
         (for/list ([fd (in-list (class-decl-fields cls))])
+          (define const (field-constant fd class-decls))
           (fdef (symbol->string (field-decl-name fd))
-                (field-attributes-flags (field-decl-flags fd))
-                (encode-field-sig (lower-type cx '(0 . 0) (field-decl-type fd))))))
+                ; a Constant row requires fdHasDefault (II.23.1.5)
+                (bitwise-ior (field-attributes-flags (field-decl-flags fd))
+                             (if const fa-hasdefault 0))
+                (encode-field-sig (lower-type cx '(0 . 0) (field-decl-type fd)))
+                const)))
       (define-values (mdefs rows) (encode-methods cx name next-rid (class-decl-methods cls)))
       (values (cons (tdef (typedef-flags flags) short ns extends mdefs fdefs) tdefs)
               (cons rows gps)

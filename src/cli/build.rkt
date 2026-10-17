@@ -75,6 +75,12 @@
               start))
   (for ([f (in-list (append-map tdef-fields tds))])
     (add-row! tb 'field (fdef-flags f) (s (fdef-name f)) (b (fdef-sig f))))
+  ; Constant rows (II.22.9) point back at their Field row by its 1-based rid
+  (for ([f (in-list (append-map tdef-fields tds))] [rid (in-naturals 1)]
+        #:when (fdef-const f))
+    (add-row! tb 'constant (car (fdef-const f)) 0
+              (coded-encode 'hasconstant 'field rid)
+              (b (cdr (fdef-const f)))))
   (for ([m (in-list mdefs)] [i (in-naturals)])
     (add-row! tb 'methoddef (rva-ref (method-sym i)) 0 (mdef-flags m) (s (mdef-name m))
               (b (mdef-sig m)) 1))
