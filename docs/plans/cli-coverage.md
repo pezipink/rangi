@@ -38,9 +38,9 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x17 | Property               | none    | none    |                                                          |         |
 | 0x18 | MethodSemantics        | none    | none    | Sorted                                                   |         |
 | 0x19 | MethodImpl             | partial | partial | Sorted; `.override` rows (same-module and external base); interface implementation not | virtual-override |
-| 0x1A | ModuleRef              | none    | none    | Needed for P/Invoke                                      |         |
+| 0x1A | ModuleRef              | partial | done    | One row per P/Invoke DLL, first-use order (II.22.31)     | pinvoke |
 | 0x1B | TypeSpec               | partial | partial | Row helper and `read-row`; blob via `sigs.rkt` and reader; generic instance types | generic-calls |
-| 0x1C | ImplMap                | none    | none    | Sorted; P/Invoke                                         |         |
+| 0x1C | ImplMap                | partial | done    | Sorted by MemberForwarded; P/Invoke (II.22.22)           | pinvoke |
 | 0x1D | FieldRVA               | none    | done    | Sorted; RVA of the static field's `.data` chunk in `.sdata` (II.22.18) | static-data |
 | 0x1E | ENCLog                 | partial | n/a     | Count only                                               |         |
 | 0x1F | ENCMap                 | partial | n/a     | Count only                                               |         |
@@ -102,7 +102,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | FieldAttributes                                 | constants only (`flags.rkt`), not wired to ilasm | |
 | ParamAttributes                                 | constants only (`flags.rkt`), not wired to ilasm | |
 | AssemblyFlags and AssemblyHashAlgorithm         | none         |         |
-| PInvokeAttributes                               | none         |         |
+| PInvokeAttributes                               | partial (calling convention, charset, SupportsLastError from `pinvokeimpl`; `flags.rkt`) | pinvoke |
 | GenericParamAttributes                          | none         |         |
 
 Parse ilasm keyword lists (`(public static hidebysig)`) into these flag values instead of writing literals.
@@ -134,7 +134,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Multi-dimensional arrays `(array ELEM RANK)` with `.ctor`, `Get`, `Set`, `Address` as `call instance` on a TypeSpec parent (II.14.2, II.23.2.13); bounded form (sizes, lower bounds) rejected | done | multidim-arrays |
 | Value types and enums (enum `value__` and literal fields with Constant rows) | done | enum-literals, value-types |
 | Custom attributes                                          | none    |         |
-| P/Invoke                                                   | none    |         |
+| P/Invoke (static, body-less `pinvokeimpl` with DLL, calling convention, optional charset and lasterr, entry point `as`; PreserveSig set) | done (instance P/Invoke rejected) | pinvoke |
 | Multiple assembly references with versions and public key tokens | done | asm-refs-versioned |
 | Entry point token taken from `.entrypoint`                 | done    | nano    |
 | `<Module>` members move to a generated `Program` class (`parse-il`). Helpers must live in a named class, not `<Module>`. Kept for now; future option: resolve `<Module>` references to `Program` (changes snapshots) | done | nano |
@@ -168,4 +168,4 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam are done. GenericParamConstraint and generic types are not.
 6. Properties, events, custom attributes, constants.
 7. DLL output and AnyCPU for Framework targets.
-8. P/Invoke and Win32 resources. PDB, strong naming, ARM64, and .NET (Core) are out of scope until requested. PE32+ (AMD64) output is covered by `nano-x64`.
+8. P/Invoke is done (`pinvoke`): `pinvokeimpl` methods lower to ModuleRef, ImplMap, and MethodDef rows with PinvokeImpl and PreserveSig. Win32 resources are not. PDB, strong naming, ARM64, and .NET (Core) are out of scope until requested. PE32+ (AMD64) output is covered by `nano-x64`.
