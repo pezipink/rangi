@@ -21,6 +21,7 @@
          encode-type
          encode-typespec
          encode-method-sig
+         encode-property-sig
          encode-localvar-sig
          encode-method-instantiation
          encode-field-sig
@@ -46,7 +47,7 @@
 ; II.23.2.1, II.23.2.4, II.23.2.6 and II.23.2.15 calling convention bits and signature kinds
 (define callconv-codes
   '((default . #x00) (vararg . #x05) (generic . #x10) (localsig . #x07) (field . #x06)
-    (hasthis . #x20) (explicitthis . #x40) (genericinst . #x0A)))
+    (property . #x08) (hasthis . #x20) (explicitthis . #x40) (genericinst . #x0A)))
 
 (define primitive-names
   '(void boolean char int8 uint8 int16 uint16 int32 uint32 int64 uint64
@@ -126,6 +127,16 @@
          (if (> arity 0) (compress-unsigned arity) #"")
          (compress-unsigned (length params))
          (encode-type ret)
+         (map encode-type params)))
+
+; II.23.2.5 PropertySig: PROPERTY (plus HASTHIS for an instance property), ParamCount, the
+; property Type, then the index Types. Its layout matches MethodDefSig, so no GENERIC bit.
+(define (encode-property-sig type params #:hasthis? [hasthis? #f])
+  (unless (list? params) (error 'sigs "malformed property parameter list ~s" params))
+  (apply bytes-append
+         (bytes (bitwise-ior (callconv-code 'property) (if hasthis? (callconv-code 'hasthis) 0)))
+         (compress-unsigned (length params))
+         (encode-type type)
          (map encode-type params)))
 
 ; II.23.2.6 LocalVarSig: LOCAL_SIG, the count, then one LOCAL_VAR per local. A local is

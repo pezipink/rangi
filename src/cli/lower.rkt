@@ -5,7 +5,8 @@
          "../private/binary.rkt"
          "heaps.rkt"
          (only-in "sigs.rkt" encode-localvar-sig encode-method-sig encode-method-instantiation
-                  encode-typespec encode-type encode-field-sig primitive-names element-codes)
+                  encode-typespec encode-type encode-field-sig encode-property-sig primitive-names
+                  element-codes)
          (only-in "flags.rkt" field-attributes-flags fa-hasdefault fa-hasfieldrva
                   pinvoke-attributes-flags)
          (only-in "../il/encode.rkt" find-opcode opcode-named)
@@ -24,7 +25,11 @@
          (struct-out methodimpl)
          (struct-out interfaceimpl)
          (struct-out manifest-resource)
-         (struct-out customattr))
+         (struct-out customattr)
+         (struct-out propevents)
+         (struct-out propdef)
+         (struct-out evdef)
+         (struct-out methodsem))
 
 ; The CLI-level program: flags are bits, signatures and bodies are bytes, and
 ; references are rids. asm-refs rows are (name version token), where version is four ints and
@@ -34,13 +39,24 @@
 ; is (cons 'methoddef|'memberref rid); a genericparam owner is (cons 'methoddef rid).
 ; subsystem and platform are the module model's names ('console|'windows, 'anycpu|'x86|'32bitpreferred).
 ; methodimpls are the MethodImpl rows for .override, in source order. interfaceimpls are the
-; methodimpls are the MethodImpl rows for .override, in source order. interfaceimpls are the
 ; InterfaceImpl rows for .implements, in source order. resources are the ManifestResource rows
 ; for .mresource, in source order. customattrs are the CustomAttribute rows (II.22.10) in source
-; order; the builder sorts them by parent.
+; order; the builder sorts them by parent. propevents holds the property and event rows.
 (struct cli-program (asm-refs typerefs memberrefs typespecs methodspecs genericparams
                      typedefs module-name entry-rid format standalone-sigs us-heap
-                     subsystem platform methodimpls interfaceimpls resources customattrs))
+                     subsystem platform methodimpls interfaceimpls resources customattrs
+                     propevents))
+; The property and event tables, in source order. propmaps and eventmaps are (cons parent first)
+; for each class with properties or events, where parent is a TypeDef rid and first is the rid of
+; its first Property or Event row (II.22.35, II.22.12). semantics are the MethodSemantics rows.
+(struct propevents (propmaps props eventmaps events semantics))
+; A Property row (II.22.34): flags are PropertyAttributes bits, sig is a PropertySig blob.
+(struct propdef (name flags sig))
+; An Event row (II.22.13): flags are EventAttributes bits, type is (cons 'typedef|'typeref rid).
+(struct evdef (name flags type))
+; A MethodSemantics row (II.22.28): kind is the semantics bits, method is a MethodDef rid, and
+; association is (cons 'property|'event rid).
+(struct methodsem (kind method association))
 ; ManifestResource row (II.22.24): name is the string, flags are the ManifestResource
 ; attribute bits (public or private), offset is the byte offset of its length prefix within the
 ; CLI resources blob (II.25.3.3), and data is its content.
@@ -886,12 +902,18 @@
    (for/list ([g (in-list gparams)] [i (in-naturals)])
      (list i (symbol->string (generic-param-name g)) (cons 'methoddef rid)))))
 
-; first-rid is the MethodDef rid of the first method of this class.
-(define (encode-methods cx class-name first-rid methods)
+; first-rid is the MethodDef rid of the first method of this class. Methods named in special are
+; accessors of a property or event, which get SpecialName (II.22.26, II.10.5.3.1).
+(define method-specialname #x800)
+(define (encode-methods cx class-name first-rid methods #:special [special '()])
   (define seen (make-hash))
   (for/fold ([mdefs '()] [gps '()] #:result (values (reverse mdefs) (append* (reverse gps))))
             ([m (in-list methods)] [rid (in-naturals first-rid)])
-    (define-values (enc rows) (encode-method cx class-name rid m))
+    (define-values (enc0 rows) (encode-method cx class-name rid m))
+    (define enc
+      (if (memq (method-decl-name m) special)
+          (struct-copy mdef enc0 [flags (bitwise-ior (mdef-flags enc0) method-specialname)])
+          enc0))
     (define key (list (mdef-name enc) (mdef-sig enc)))
     (when (hash-ref seen key #f)
       (error 'rangi "duplicate method ~a in ~a" (mdef-name enc) class-name))
@@ -1140,6 +1162,74 @@
           (for/list ([cu (in-list (method-decl-customs md))])
             (lower-custom cx (cons 'methoddef (vector-ref hit 0)) cu)))))))))
 
+; Property and event rows (II.22.34, II.22.13) with their PropertyMap and EventMap parents
+; (II.22.35, II.22.12) and MethodSemantics rows (II.22.28). Rows are in class order; sort-tables!
+; orders the sorted tables.
+(define semantic-codes
+  '((setter . #x0001) (getter . #x0002) (other . #x0004)
+    (add . #x0008) (remove . #x0010) (fire . #x0020)))
+
+; The names of the methods that accessors of cls's properties and events name.
+(define (accessor-names cls)
+  (append (for*/list ([p (in-list (class-decl-props cls))] [a (in-list (prop-decl-accessors p))])
+            (cdr a))
+          (for*/list ([e (in-list (class-decl-events cls))] [a (in-list (event-decl-accessors e))])
+            (cdr a))))
+
+; The MethodDef rid of the method of cls named mname.
+(define (accessor-rid cx cls mname)
+  (define md (findf (λ (md) (eq? (method-decl-name md) mname)) (class-decl-methods cls)))
+  (unless md (error 'rangi "accessor ~a names no method in ~a" mname (class-decl-name cls)))
+  (vector-ref (hash-ref (ctx-method-rids cx)
+                        (list (class-decl-name cls) mname (method-decl-ret md) (method-decl-params md)))
+              0))
+
+; An event type is a class: a module class is a TypeDef, and an external one is a TypeRef.
+(define (lower-event-type cx t)
+  (match t
+    [(list 'class (? symbol? owner)) (cons 'typedef (module-class-rid cx owner))]
+    [(list 'class owner)
+     (define-values (asm ty) (asm-type-parts owner))
+     (cons 'typeref (typeref-rid! cx asm ty 0))]
+    [_ (error 'rangi "unsupported event type ~s" t)]))
+
+(define (lower-propevents cx classes)
+  (define-values (pmaps props emaps evs sems _nprop _nevent)
+    (for/fold ([pmaps '()] [props '()] [emaps '()] [evs '()] [sems '()] [nprop 1] [nevent 1])
+              ([cls (in-list classes)])
+      (define class-rid (module-class-rid cx (class-decl-name cls)))
+      (define cprops (class-decl-props cls))
+      (define cevents (class-decl-events cls))
+      ; a PropertySig's index types are lowered in the same scope as method signatures (II.23.2.5)
+      (define prop-rows
+        (for/list ([p (in-list cprops)])
+          (propdef (symbol->string (prop-decl-name p)) 0
+                   (encode-property-sig (lower-type cx '(0 . 0) (prop-decl-type p))
+                                        (lower-args cx '(0 . 0) (prop-decl-params p))
+                                        #:hasthis? (prop-decl-instance? p)))))
+      (define event-rows
+        (for/list ([e (in-list cevents)])
+          (evdef (symbol->string (event-decl-name e)) 0 (lower-event-type cx (event-decl-type e)))))
+      (define prop-sems
+        (for*/list ([(p k) (in-parallel cprops (in-naturals nprop))]
+                    [a (in-list (prop-decl-accessors p))])
+          (methodsem (cdr (assq (car a) semantic-codes)) (accessor-rid cx cls (cdr a))
+                     (cons 'property k))))
+      (define event-sems
+        (for*/list ([(e k) (in-parallel cevents (in-naturals nevent))]
+                    [a (in-list (event-decl-accessors e))])
+          (methodsem (cdr (assq (car a) semantic-codes)) (accessor-rid cx cls (cdr a))
+                     (cons 'event k))))
+      (values (if (null? cprops) pmaps (cons (cons class-rid nprop) pmaps))
+              (append (reverse prop-rows) props)
+              (if (null? cevents) emaps (cons (cons class-rid nevent) emaps))
+              (append (reverse event-rows) evs)
+              (append (reverse (append prop-sems event-sems)) sems)
+              (+ nprop (length cprops))
+              (+ nevent (length cevents)))))
+  (propevents (reverse pmaps) (reverse props) (reverse emaps) (reverse evs) (reverse sems)))
+
+
 (define (lower-module m)
   (define classes (module-model-classes m))
   (for ([cls (in-list classes)] #:unless (null? (class-decl-gparams cls)))
@@ -1207,7 +1297,8 @@
                 (encode-field-sig (lower-type cx '(0 . 0) (field-decl-type fd)))
                 const
                 data)))
-      (define-values (mdefs rows) (encode-methods cx name next-rid (class-decl-methods cls)))
+      (define-values (mdefs rows)
+        (encode-methods cx name next-rid (class-decl-methods cls) #:special (accessor-names cls)))
       (values (cons (tdef (typedef-flags flags (and enclosing #t)) short ns extends mdefs fdefs
                           enclosing-rid)
                     tdefs)
@@ -1226,6 +1317,7 @@
                (lower-implements cx cls class-decls))))
   (define resources (lower-resources (module-model-resources m)))
   (define customattrs (lower-customattrs cx m classes))
+  (define propevents-rows (lower-propevents cx classes))
   (cli-program (for/list ([name (in-list (interner-keys asm-refs))])
                  (define r (findf (λ (r) (equal? (asm-ref-name r) name)) (module-model-asm-refs m)))
                  (list name (asm-ref-version r) (asm-ref-token r)))
@@ -1245,5 +1337,6 @@
                methodimpls
                interfaceimpls
                resources
-               customattrs))
+               customattrs
+               propevents-rows))
 

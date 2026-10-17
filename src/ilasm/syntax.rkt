@@ -12,6 +12,8 @@
          (struct-out override-decl)
          (struct-out custom-decl)
          (struct-out field-decl)
+         (struct-out prop-decl)
+         (struct-out event-decl)
          (struct-out data-decl)
          (struct-out resource-decl)
          (struct-out method-decl)
@@ -38,7 +40,9 @@
 ; the enclosing class, or #f for a top-level class. overrides is a list of override-decl, in source order.
 ; implements is a list of interface names in source order, each as in extends (II.22.23).
 ; customs is the list of custom-decl written in the class body (II.22.10 with a TypeDef parent).
-(struct class-decl (flags name gparams extends methods fields enclosing overrides implements customs))
+; props and events are the prop-decl and event-decl of the class, in source order.
+(struct class-decl (flags name gparams extends methods fields enclosing overrides implements
+                    customs props events))
 ; A .override directive (II.22.27 MethodImpl): owner is the base class as in extends, name, ret and
 ; params are the base method's signature. The body is the method of the same name and signature in
 ; the class that declares the override.
@@ -47,6 +51,15 @@
 ; class of that name, or (asm ty) for one in a referenced assembly. ret is void and params are the
 ; constructor's parameter types. blob is the literal bytes of the value, not typed.
 (struct custom-decl (ctor ret params blob) #:transparent)
+; A property (II.22.34). name is the property's name, type its type form, params the index types
+; (empty for a plain property). instance? is #t for an instance property, which needs HASTHIS in
+; its signature (II.23.2.5). accessors is a list of (kind . method-name) in source order, with kind
+; one of getter, setter or other.
+(struct prop-decl (name type params instance? accessors) #:transparent)
+; An event (II.22.13). name is the event's name and type its class type form, (class ty).
+; accessors is a list of (kind . method-name) in source order, with kind one of add, remove, fire
+; or other.
+(struct event-decl (name type accessors) #:transparent)
 ; A field (II.22.15). flags are FieldAttributes keywords; type is a type form (II.22.15).
 ; init is #f, or (prim . value) for a literal field: an integral primitive and its integer value.
 ; at is #f, or the name of a data-decl whose bytes are the field's initial value (FieldRVA, II.22.18).
@@ -398,6 +411,73 @@
      (field-decl flags type name #f dname)]
     [_ (error 'rangi "malformed .field in ~a: ~s" class-name node)]))
 
+; (.property [instance] type Name (param types) (getter M) (setter M) (other M)). Without
+; instance the property is static (II.22.34). Its accessors name methods of the class, checked in
+; flatten-class.
+(define property-accessor-kinds '(getter setter other))
+(define (parse-property class-name node ncls)
+  (define-values (instance? rest)
+    (match node
+      [(list* '.property 'instance rest) (values #t rest)]
+      [(cons '.property rest) (values #f rest)]
+      [_ (error 'rangi "malformed .property in ~a: ~s" class-name node)]))
+  (match rest
+    [(list type (? symbol? name) (? list? params) accessor-nodes ...)
+     (when (eq? type 'void) (error 'rangi "property ~a.~a cannot be void" class-name name))
+     (check-type name type ncls 0)
+     (for ([p (in-list params)]) (check-type name p ncls 0))
+     (prop-decl name type params instance?
+                (parse-accessors class-name 'property name property-accessor-kinds accessor-nodes))]
+    [_ (error 'rangi "malformed .property in ~a: ~s" class-name node)]))
+
+; (.event type Name (add M) (remove M) (fire M) (other M)). The type is a class, a bare symbol
+; for a class in this module or (asm ty) for an external one (II.22.13). It is stored as (class ty).
+(define event-accessor-kinds '(add remove fire other))
+(define (parse-event class-name node ncls)
+  (match node
+    [(list '.event (and type (or (? symbol?) (list (? symbol?) (? symbol?)))) (? symbol? name)
+           accessor-nodes ...)
+     (check-type name (list 'class type) ncls 0)
+     (event-decl name (list 'class type)
+                 (parse-accessors class-name 'event name event-accessor-kinds accessor-nodes))]
+    [_ (error 'rangi "malformed .event in ~a: ~s" class-name node)]))
+
+(define (parse-accessors class-name what member kinds nodes)
+  (for/list ([node (in-list nodes)])
+    (match node
+      [(list (? symbol? kind) (? symbol? m))
+       (unless (memq kind kinds)
+         (error 'rangi "~a is not a ~a accessor, in ~a.~a" kind what class-name member))
+       (cons kind m)]
+      [_ (error 'rangi "malformed ~a accessor in ~a.~a: ~s" what class-name member node)])))
+
+; Each accessor names exactly one method of the class, and no method serves two accessors.
+; A property's instance flag must match its accessors' (a static property has static accessors).
+(define (check-accessors class-name what member accessors instance? methods)
+  (define kinds (map car accessors))
+  (when (check-duplicates kinds)
+    (error 'rangi "duplicate ~a accessor ~a in ~a.~a" what (check-duplicates kinds) class-name member))
+  (when (check-duplicates (map cdr accessors))
+    (error 'rangi "one method of ~a.~a is used by two accessors" class-name member))
+  (for ([acc (in-list accessors)])
+    (define found
+      (filter (λ (md) (eq? (method-decl-name md) (cdr acc))) methods))
+    (cond
+      [(null? found)
+       (error 'rangi "~a ~a.~a: ~a ~a names no method in ~a"
+              what class-name member (car acc) (cdr acc) class-name)]
+      [(pair? (cdr found))
+       (error 'rangi "~a ~a.~a: ~a ~a is overloaded, so it cannot name an accessor"
+              what class-name member (car acc) (cdr acc))])
+    (when instance?
+      (when (memq 'static (method-decl-flags (car found)))
+        (error 'rangi "instance property ~a.~a has static accessor ~a"
+               class-name member (cdr acc))))
+    (when (and (not instance?) (eq? what 'property)
+               (not (memq 'static (method-decl-flags (car found)))))
+      (error 'rangi "static property ~a.~a has instance accessor ~a; add instance to the property"
+             class-name member (cdr acc)))))
+
 ; A .data byte is hex, as in ilasm. Racket reads 10 as the number ten, so each token is read back
 ; from its printed digits and parsed as hex; 10 gives 16 and 1A stays a symbol.
 (define (parse-data-byte dname x)
@@ -532,16 +612,34 @@
       (parse-implements name node)))
   (when (check-duplicates implements)
     (error 'rangi "duplicate .implements ~a in ~a" (check-duplicates implements) name))
+  (define props
+    (for/list ([node (in-list members)] #:when (and (pair? node) (eq? (car node) '.property)))
+      (parse-property name node ncls)))
+  (define events
+    (for/list ([node (in-list members)] #:when (and (pair? node) (eq? (car node) '.event)))
+      (parse-event name node ncls)))
   (define methods
     (for/list ([node (in-list members)]
-               #:unless (and (pair? node) (memq (car node) '(.field .override .implements .custom))))
+               #:unless (and (pair? node)
+                             (memq (car node) '(.field .override .implements .custom
+                                                .property .event))))
       (parse-method name node ncls)))
   (define customs
     (for/list ([node (in-list members)] #:when (custom-node? node))
       (parse-custom name node)))
   (when (check-duplicates (map field-decl-name fields))
     (error 'rangi "duplicate field ~a in ~a" (check-duplicates (map field-decl-name fields)) name))
-  (cons (class-decl flags name gparams ext methods fields enclosing overrides implements customs)
+  (when (check-duplicates (map prop-decl-name props))
+    (error 'rangi "duplicate property ~a in ~a" (check-duplicates (map prop-decl-name props)) name))
+  (when (check-duplicates (map event-decl-name events))
+    (error 'rangi "duplicate event ~a in ~a" (check-duplicates (map event-decl-name events)) name))
+  (for ([p (in-list props)])
+    (check-accessors name 'property (prop-decl-name p) (prop-decl-accessors p)
+                     (prop-decl-instance? p) methods))
+  (for ([e (in-list events)])
+    (check-accessors name 'event (event-decl-name e) (event-decl-accessors e) #f methods))
+  (cons (class-decl flags name gparams ext methods fields enclosing overrides implements customs
+                    props events)
         (append* (for/list ([node (in-list body)] #:when (nested-class-node? node))
                    (flatten-class (nested-class-raw node) name)))))
 

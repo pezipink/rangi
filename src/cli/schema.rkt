@@ -82,13 +82,13 @@
      '(offset u32) '(field (index field)))
    (def #x11 'standalonesig #f
      '(signature blob))
-   (def #x12 'eventmap #f
+   (def #x12 'eventmap 'parent
      '(parent (index typedef)) '(event-list (index event)))
    (def #x13 'eventptr #f
      '(event (index event)))
    (def #x14 'event #f
      '(event-flags u16) '(name string) '(event-type (coded typedeforref)))
-   (def #x15 'propertymap #f
+   (def #x15 'propertymap 'parent
      '(parent (index typedef)) '(property-list (index property)))
    (def #x16 'propertyptr #f
      '(property (index property)))
