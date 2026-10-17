@@ -47,7 +47,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x20 | Assembly               | partial | partial | Version, flags, public key, and culture are zero         |         |
 | 0x21 | AssemblyProcessor      | partial | n/a     | Count only; should be ignored by readers                 |         |
 | 0x22 | AssemblyOS             | partial | n/a     | Count only                                               |         |
-| 0x23 | AssemblyRef            | partial | partial | Name comes from `.assembly extern`; version and public key token are zero |  |
+| 0x23 | AssemblyRef            | partial | partial | Name, version, and public key token come from `.assembly extern` (II.22.5); Flags and HashValue are zero, and full public keys are not written | asm-refs-versioned |
 | 0x24 | AssemblyRefProcessor   | partial | n/a     | Count only                                               |         |
 | 0x25 | AssemblyRefOS          | partial | n/a     | Count only                                               |         |
 | 0x26 | File                   | none    | none    | Multi-module assemblies                                  |         |
@@ -131,7 +131,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Value types and enums (enum `value__` and literal fields with Constant rows) | done | enum-literals, value-types |
 | Custom attributes                                          | none    |         |
 | P/Invoke                                                   | none    |         |
-| Multiple assembly references with versions and public key tokens | none |       |
+| Multiple assembly references with versions and public key tokens | done | asm-refs-versioned |
 | Entry point token taken from `.entrypoint`                 | done    | nano    |
 | `<Module>` members move to a generated `Program` class (`parse-il`). Helpers must live in a named class, not `<Module>`. Kept for now; future option: resolve `<Module>` references to `Program` (changes snapshots) | done | nano |
 | Static data (`.data`, FieldRVA)                            | none    |         |

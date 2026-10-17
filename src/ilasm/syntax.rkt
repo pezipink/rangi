@@ -7,6 +7,7 @@
 (provide parse-il
          tyvar-ref
          (struct-out module-model)
+         (struct-out asm-ref)
          (struct-out class-decl)
          (struct-out field-decl)
          (struct-out method-decl)
@@ -20,6 +21,9 @@
 ; subsystem is 'console (the default) or 'windows (.subsystem). platform is 'anycpu (the default),
 ; 'x86, or '32bitpreferred (.platform). Both are names here; lower and image map them to flags.
 (struct module-model (asm-refs classes module-name format dll? subsystem platform))
+; An .assembly extern (II.22.5 AssemblyRef). name comes from the referenced file. version is four
+; 16-bit parts, and token is the 8-byte public key token or #"" when none is given.
+(struct asm-ref (name version token) #:transparent)
 ; extends is the base type as written: a bare symbol for a class in this module, (asm ty) for an
 ; external class, or #f for the default System.Object (II.22.37).
 (struct class-decl (flags name gparams extends methods fields))
@@ -234,6 +238,42 @@
        (values tp base)]
       [_ (error 'rangi "unsupported class clause ~s in ~a" c name)])))
 
+; .ver M:m:b:r, four parts that each fit in 16 bits (II.22.5 MajorVersion..RevisionNumber)
+(define (parse-ref-version who v)
+  (define m (and (symbol? v)
+                 (regexp-match #px"^([0-9]+):([0-9]+):([0-9]+):([0-9]+)$" (symbol->string v))))
+  (unless m (error 'rangi "~a: .ver must be M:m:b:r, got ~s" who v))
+  (define parts (map string->number (cdr m)))
+  (for ([p (in-list parts)])
+    (unless (<= p #xFFFF) (error 'rangi "~a: version part ~a exceeds 65535" who p)))
+  parts)
+
+; .publickeytoken = (HEX ...): exactly 8 bytes (II.22.5 PublicKeyOrToken). A token is written as a
+; symbol or number, so each element is read back as text and parsed as hex.
+(define (parse-ref-token who hex)
+  (define bs
+    (for/list ([t (in-list hex)])
+      (define s (format "~a" t))
+      (unless (regexp-match? #px"^[0-9A-Fa-f]{1,2}$" s)
+        (error 'rangi "~a: public key token byte ~a is not a hex byte" who s))
+      (string->number s 16)))
+  (unless (= (length bs) 8)
+    (error 'rangi "~a: public key token must be 8 bytes, got ~a" who (length bs)))
+  (apply bytes bs))
+
+; The body of .assembly extern: any order of .ver and .publickeytoken, each at most once.
+(define (parse-asm-extern-body who body)
+  (let loop ([b body] [ver #f] [tok #f])
+    (match b
+      ['() (values (or ver '(0 0 0 0)) (or tok #""))]
+      [(list* '.ver v rest)
+       (when ver (error 'rangi "duplicate .ver in .assembly extern ~a" who))
+       (loop rest (parse-ref-version who v) tok)]
+      [(list* '.publickeytoken '= (? list? hex) rest)
+       (when tok (error 'rangi "duplicate .publickeytoken in .assembly extern ~a" who))
+       (loop rest ver (parse-ref-token who hex))]
+      [_ (error 'rangi "unsupported .assembly extern clause ~s in ~a" b who)])))
+
 (define (parse-il program)
   (define asm-refs '())
   (define asm-def? #f)
@@ -242,14 +282,20 @@
   (define dll? #f)
   (define subsystem #f)
   (define platform #f)
+  (define (add-asm-extern! filename body)
+    (define name (read-assembly-meta (read-file filename)))
+    (when (findf (λ (r) (equal? (asm-ref-name r) name)) asm-refs)
+      (error 'rangi "duplicate .assembly extern ~a" name))
+    (define-values (version token) (parse-asm-extern-body name body))
+    (set! asm-refs (cons (asm-ref name version token) asm-refs)))
   (define raw-classes
     (for/fold ([acc '()] #:result (reverse acc)) ([node (in-list program)])
       (match node
-        [(list '.assembly 'extern filename _)
-         (define name (read-assembly-meta (read-file filename)))
-         (when (member name asm-refs)
-           (error 'rangi "duplicate .assembly extern ~a" name))
-         (set! asm-refs (cons name asm-refs))
+        [(list '.assembly 'extern filename)
+         (add-asm-extern! filename '())
+         acc]
+        [(list '.assembly 'extern filename body)
+         (add-asm-extern! filename body)
          acc]
         [(list '.assembly _ _)
          (when asm-def? (error 'rangi "only one .assembly directive is allowed"))

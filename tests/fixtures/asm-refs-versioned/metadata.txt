@@ -1,0 +1,20 @@
+Module rows=1
+  Module[1] Name="asm-refs-versioned.exe" Mvid=11735469af52fbc5baf2ce0dce362930
+TypeRef rows=3
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000002 Name="Regex" Namespace="System.Text.RegularExpressions"
+  TypeRef[3] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=2
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+MethodDef rows=1
+  MethodDef[1] Rva=8788 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=7201000070750200000114fe01280100000a72010000707209000070280200000a280300000a2a
+MemberRef rows=3
+  MemberRef[1] Parent=0x01000003 Name="WriteLine" Signature=00010108
+  MemberRef[2] Parent=0x01000002 Name="IsMatch" Signature=0002020e0e
+  MemberRef[3] Parent=0x01000003 Name="WriteLine" Signature=00010102
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=2
+  AssemblyRef[1] Version=4.0.0.0 Flags=0 PublicKeyOrToken=b77a5c561934e089 Name="mscorlib" Culture="" HashValue=
+  AssemblyRef[2] Version=4.0.0.0 Flags=0 PublicKeyOrToken=b77a5c561934e089 Name="System" Culture="" HashValue=

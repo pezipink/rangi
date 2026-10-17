@@ -38,7 +38,8 @@
   (define rid (bitwise-and tok #xFFFFFF))
   (check-equal? (arithmetic-shift tok -24) #x01)
   (define row (list-ref (cli-program-typerefs cp) (sub1 rid)))
-  (check-equal? (list (list-ref (cli-program-asm-refs cp) (sub1 (car row))) (cadr row) (caddr row))
+  (check-equal? (list (car (list-ref (cli-program-asm-refs cp) (sub1 (car row))))
+                      (cadr row) (caddr row))
                 (list "mscorlib" "System" "Int32")))
 
 (test-case "a void element type is rejected"

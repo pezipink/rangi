@@ -21,7 +21,8 @@
          (struct-out mdef))
 
 ; The CLI-level program: flags are bits, signatures and bodies are bytes, and
-; references are rids. asm-refs, typerefs, memberrefs, typespecs, methodspecs,
+; references are rids. asm-refs rows are (name version token), where version is four ints and
+; token is the public key token bytes or #"". typerefs, memberrefs, typespecs, methodspecs,
 ; genericparams, and standalone-sigs are in row order. us-heap holds the string literals
 ; used by ldstr. A memberref parent is a (cons 'typeref|'typespec rid); a methodspec method
 ; is (cons 'methoddef|'memberref rid); a genericparam owner is (cons 'methoddef rid).
@@ -795,7 +796,7 @@
   (for ([cls (in-list classes)] #:unless (null? (class-decl-gparams cls)))
     (error 'rangi "generic class ~a is not lowered yet" (class-decl-name cls)))
   (define asm-refs (make-interner))
-  (for ([n (in-list (module-model-asm-refs m))]) (intern! asm-refs n))
+  (for ([r (in-list (module-model-asm-refs m))]) (intern! asm-refs (asm-ref-name r)))
   (define typerefs (make-interner))
   (define memberrefs (make-interner))
   (define typespecs (make-interner))
@@ -850,7 +851,9 @@
                 [rid (in-naturals 1)]
                 #:when (mdef-entry? md))
       rid))
-  (cli-program (interner-keys asm-refs)
+  (cli-program (for/list ([name (in-list (interner-keys asm-refs))])
+                 (define r (findf (λ (r) (equal? (asm-ref-name r) name)) (module-model-asm-refs m)))
+                 (list name (asm-ref-version r) (asm-ref-token r)))
                (interner-keys typerefs)
                (interner-keys memberrefs)
                (interner-keys typespecs)
