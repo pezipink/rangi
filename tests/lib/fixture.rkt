@@ -3,7 +3,7 @@
 ; program.rktd. Images are assembled into a fresh temp directory, which is removed afterwards.
 (require racket/file racket/port racket/runtime-path racket/string file/sha1
          "../../src/ilasm/syntax.rkt" "../../src/image.rkt")
-(provide fixture-names unverified-fixtures
+(provide fixture-names unverified-fixtures fixtures-dir
          with-built-image library-of sha256-hex run-image normalize-newlines)
 
 ; Fixtures that neither IL verifier can check. il-unverifiable-opcodes is unverifiable on purpose
