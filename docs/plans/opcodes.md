@@ -42,15 +42,15 @@ ms.date: 2026-10-17
 
 ### O2 Operand encoding
 
-Status: encoders in `src/il/encode.rkt` (stream B) cover every operand kind; tests in `tests/il/encode-test.rkt`. Front-end syntax and token resolution are still open.
+Status: encoders in `src/il/encode.rkt` (stream B) cover every operand kind; tests in `tests/il/encode-test.rkt`. The front-end syntax is in place and exercised by fixtures; token resolution goes through the CLI layer.
 
 * [x] One encoder per operand kind, driven by the table, so adding an opcode never needs new assembler code.
-* [ ] Operand syntax in the s-expression front end:
-  * numbers for `I`, `I8`, `R`
-  * symbols or integers for variables (`(ldloc x)`, `(ldarg 0)`)
-  * label symbols for branches and `switch`
-  * method, field, and type references as structured forms that the CLI layer turns into tokens (the existing `(call void (mscorlib System.Console) WriteLine (int32))` style)
-  * strings for `ldstr`, which intern into `#US`
+* [x] Operand syntax in the s-expression front end (covered by fixtures `ops-constants`, `ops-conversions`, `ops-branch`, `switch-dispatch`, `ldstr-hello`):
+  * [x] numbers for `I`, `I8`, `R` (`ldc.i4`, `ldc.i8`, `ldc.r4`, `ldc.r8`)
+  * [x] symbols or integers for variables (`(ldloc x)`, `(ldarg 0)`); bare `ldarg.N` symbols skip the range check and rely on PEVerify
+  * [x] label symbols for branches and `switch`
+  * [x] method, field, and type references as structured forms that the CLI layer turns into tokens
+  * [x] strings for `ldstr`, which intern into `#US`
 
 ### O3 Labels and branch relaxation
 
@@ -59,7 +59,7 @@ Status: label resolution and fixed-point relaxation in `src/il/labels.rkt` (stre
 * [x] Labels are `(label name)` forms or `name:` symbols in the instruction stream.
 * [x] Assemble with all branches short, measure, then iteratively widen any branch whose offset does not fit in int8 until a fixed point. Long forms are never shrunk back, which guarantees termination.
 * [x] Provide macro forms that pick the shortest encoding: `ldc.i4` -> `ldc.i4.m1`, `ldc.i4.0`-`ldc.i4.8`, `ldc.i4.s`, `ldc.i4`; `ldloc`/`stloc`/`ldarg`/`starg`/`ldloca`/`ldarga` -> `.0`-`.3`, `.s`, long. Keep explicit forms available for exact control. (Selectors `encode-ldc-i4` and `encode-var-access` in `src/il/encode.rkt`; not yet exposed as front-end names.)
-* [~] Replace today's `ldc.i` with the `ldc.i4` macro; add `ldc.i8`, `ldc.r4`, `ldc.r8`. The `ldc.i8`, `ldc.r4`, and `ldc.r8` forms are in use (`ops-conversions`). The `ldc.i4` macro is not yet exposed to the front end, so `ldc.i4.s` and the other explicit forms are written by hand.
+* [x] Replace today's `ldc.i` with the `ldc.i4` macro; add `ldc.i8`, `ldc.r4`, `ldc.r8`. The `ldc.i8`, `ldc.r4`, and `ldc.r8` forms are in use (`ops-conversions`). The `ldc.i4` macro is handled by `ldc-i4-item` in `src/cli/lower.rkt` and used in `ops-constants`. The explicit `ldc.i4.s` and other short forms still work when written by hand.
 
 ### O4 Method bodies (II.25.4)
 
