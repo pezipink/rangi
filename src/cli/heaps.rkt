@@ -80,8 +80,10 @@
                 body
                 (bytes (if (ormap special-unit? units) 1 0))))
 
+; Offset 0 holds a lone 0 byte and is never handed out. The CLR rejects a ldstr token
+; whose row is 0 ("No string associated with token"), so "" is stored as an ordinary entry.
 (define (make-us-heap)
-  (make-byte-heap encode-us string->immutable-string ""))
+  (heap encode-us string->immutable-string values (make-hash) (list (bytes 0)) 1))
 
 ; ---------------------------------------------------------------------------
 ; #Blob (II.24.2.4): compressed length, then the bytes.

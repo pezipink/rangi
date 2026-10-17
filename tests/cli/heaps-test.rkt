@@ -16,18 +16,23 @@
 ; ---------------------------------------------------------------------------
 ; empty entries and dedup
 
-(test-case "empty entry is index 0 in every byte heap"
+(test-case "empty entry is index 0 in #Strings and #Blob"
   (check-equal? (heap-serialise (make-strings-heap)) (bytes 0))
-  (check-equal? (heap-serialise (make-us-heap)) (bytes 0))
   (check-equal? (heap-serialise (make-blob-heap)) (bytes 0))
   (check-equal? (heap-serialise (make-guid-heap)) #"")
-  (let ([s (make-strings-heap)] [u (make-us-heap)] [b (make-blob-heap)])
+  (let ([s (make-strings-heap)] [b (make-blob-heap)])
     (check-equal? (heap-add! s "") 0)
-    (check-equal? (heap-add! u "") 0)
     (check-equal? (heap-add! b #"") 0)
     (check-equal? (heap-serialise s) (bytes 0))
-    (check-equal? (heap-serialise u) (bytes 0))
     (check-equal? (heap-serialise b) (bytes 0))))
+
+(test-case "#US offset 0 is never handed out, so \"\" is a real entry"
+  (check-equal? (heap-serialise (make-us-heap)) (bytes 0))
+  (define u (make-us-heap))
+  (check-equal? (heap-add! u "") 1)
+  (check-equal? (heap-add! u "") 1)
+  (check-equal? (heap-add! u "a") 3)
+  (check-equal? (heap-serialise u) (bytes 0 1 0 3 #x61 0 0)))
 
 (test-case "adding an existing value returns its index"
   (define h (make-strings-heap))
