@@ -3,7 +3,7 @@
 ; same rows through System.Reflection.Metadata, and the two outputs must match exactly.
 ; Row decoding lives here rather than in the reader, which only reads table offsets lazily.
 (require racket/string file/sha1 "../../src/cli-reader.rkt")
-(provide metadata-dump)
+(provide metadata-dump layouts coded-specs column-size le)
 
 ; tables dumped, in table-id order
 (define dumped-tables '(module typeref typedef methoddef memberref assembly assemblyref))

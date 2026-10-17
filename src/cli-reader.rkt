@@ -1,13 +1,13 @@
 #lang racket/base
 (require racket/string)
 (require racket/port)
-(require "log.rkt")
 ; read-only accessors for tests that decode table rows. row decoding stays out of the reader,
 ; so the lazy path used by the macro expander is unchanged.
 (provide read-file get-public-typedefs read-assembly-meta
          asm-reader-raw asm-reader-string-index-size asm-reader-blob-index-size
          asm-reader-guid-index-size asm-reader-encoding-sizes asm-reader-table-attributes
-         asm-reader-get-string asm-reader-resolve-rva asm-reader-blob-heap asm-reader-guid-heap
+         asm-reader-get-string asm-reader-resolve-rva asm-reader-string-heap asm-reader-blob-heap
+         asm-reader-guid-heap
          table-data-row-count table-data-row-size table-data-start-offset)
 (define (int->hex n)
   (number->string n 16)) 
@@ -130,8 +130,9 @@
   
   
 
+; only the first 0x40 bytes are needed; e_lfanew at 0x3C points at the PE header
 (define ms-dos-header-spec
-  '((header 128)))
+  '((header 64)))
 
 (define pe-file-header-spec
   '(
@@ -204,6 +205,14 @@
 
     ))
 
+; PE32+ drops BaseOfData and widens ImageBase and the stack and heap sizes to 8 bytes
+(define pe32plus-opt-header-spec
+  (map (λ (x)
+         (case (car x)
+           [(image-base stack-reserve stack-commit heap-reserve heap-commit) (list (car x) 8)]
+           [else x]))
+       (filter (λ (x) (not (eq? (car x) 'base-data))) pe-opt-header-spec)))
+
 (define pe-section-header-spec
   '(
    (name 8)
@@ -271,12 +280,6 @@
    (map (λ (x) (let ([id (car x)]
                      [size (cadr x)])
                  (cons id (read-bytes size port)))) spec)))
-
-(define file-spec
-  `(
-    (ms-dos ,ms-dos-header-spec)
-    (pe ,pe-file-header-spec)
-    (pe-opt ,pe-opt-header-spec)))
 
 (define (parse-cli-stream-header port)
   ; offset to start of stream from metadata root
@@ -366,7 +369,7 @@
     (let-values ([(count tables)
       (for/fold ([count 0]
                  [tables '()])
-                ([i (in-range #x2D)])
+                ([i (in-range #x40)])
         (let* ([target (arithmetic-shift 1 i)]
                [masked (bitwise-and target valid-int)]
                [count1 (+ count 1)])
@@ -407,7 +410,18 @@
                        [(#x2A) 'genericparam]
                        [(#x2B) 'methodspec]
                        [(#x2C) 'genericparamconstraint]
-                       [else (raise (format "unknown cli metadata table 0x~x" i))]
+                       [(#x03) 'fieldptr]
+                       [(#x05) 'methodptr]
+                       [(#x07) 'paramptr]
+                       [(#x13) 'eventptr]
+                       [(#x16) 'propertyptr]
+                       [(#x1E) 'enclog]
+                       [(#x1F) 'encmap]
+                       [(#x21) 'assemblyprocessor]
+                       [(#x22) 'assemblyos]
+                       [(#x24) 'assemblyrefprocessor]
+                       [(#x25) 'assemblyrefos]
+                       [else (error 'read-file "unknown cli metadata table 0x~x" i)]
                        )])
                 (values count1 (cons (table-data type (read-int 4 port) count) tables)))
                     
@@ -463,7 +477,7 @@
    'hascustomattribute
    (if (<= (max-rows-lookup
             '(methoddef field typeref typedef param interfaceimpl memberref module
-              permission property event standalonesig moduleref typespec assembly
+              declsecurity property event standalonesig moduleref typespec assembly
                assemblyref file exportedtype manifestresource genericparam
               genericparamconstraint methodspec))
             #x7FF) 2 4)) ; 5 bits
@@ -481,12 +495,8 @@
      +
      (map (λ (x)
             (if (symbol? x)
-                (if (hash-has-key? encodings x)
-                    (hash-ref encodings x)
-                    (begin
-                      ; this can happen when the table doesn't exist
-                      (log-rangi-warning "type ~a not found" x)
-                      2))
+                ; an absent table has no rows, so a 2 byte simple index is correct for it
+                (hash-ref encodings x 2)
                 x)) items)))
   
   ;todo: not sure to use spec approach yet
@@ -539,7 +549,19 @@
                    ['genericparam (list 2 2 'typeormethoddef ss)]
                    ['methodspec (list 'methoddeforref bs)]
                    ['genericparamconstraint (list 'genericparam 'typedeforref)]
-                   [else (raise (format "unknown type ~a" type))]))]
+                   ['fieldptr (list 'field)]
+                   ['methodptr (list 'methoddef)]
+                   ['paramptr (list 'param)]
+                   ['eventptr (list 'event)]
+                   ['propertyptr (list 'property)]
+                   ['standalonesig (list bs)]
+                   ['enclog (list 4 4)]
+                   ['encmap (list 4)]
+                   ['assemblyprocessor (list 4)]
+                   ['assemblyos (list 4 4 4)]
+                   ['assemblyrefprocessor (list 4 'assemblyref)]
+                   ['assemblyrefos (list 4 4 4 'assemblyref)]
+                   [else (error 'read-file "unknown type ~a" type)]))]
                )
           (set-table-data-start-offset! table address)        
           (set-table-data-row-size! table row-size)
@@ -556,8 +578,8 @@
      (minor ,@minor)
      (heap-sizes ,@heap-sizes)
      (reserved2 ,@reserved2)
-     (vaild ,@valid)
-     (vaild-int ,@valid-int)
+     (valid ,@valid)
+     (valid-int ,@valid-int)
      (sorted ,@sorted)
      (sorted-int ,@(to-int sorted))
      (table-count ,@table-count)
@@ -597,7 +619,7 @@
           ; tables that represent all the types, emitted il, and all other
           ; metadata
           [(equal? "#~" name) (values '~ header)]
-          [else (raise (format "unknown cli metadata stream ~s" name))])
+          [else (error 'read-file "unknown cli metadata stream ~s" name)])
         )))
 
   ;we copy and store the entire heaps as bytestring.  
@@ -685,16 +707,26 @@
   ;(time
    (define rdr (asm-reader))
    (set-asm-reader-filename! rdr filename)
-   (define all-bytes (port->bytes (open-input-file filename)))
+   (define all-bytes (call-with-input-file filename port->bytes))
    (set-asm-reader-raw! rdr all-bytes)
    (define port (open-input-bytes all-bytes)) ;binary default
 
    ;todo; we can skip some of the pe header
-   (define pe-headers
-     (make-hash
-      (map (λ (x) (let ([id (car x)]
-                        [spec (cadr x)])
-                    (cons id (read-spec spec port)))) file-spec)))
+   (define dos-header (read-spec ms-dos-header-spec port))
+   ; e_lfanew is the file offset of the PE signature
+   (define pe-offset (to-int (subbytes (hash-ref dos-header 'header) #x3C #x40)))
+   (file-position port pe-offset)
+   (define pe-headers (make-hash))
+   (hash-set! pe-headers 'ms-dos dos-header)
+   (hash-set! pe-headers 'pe (read-spec pe-file-header-spec port))
+   (define opt-start (file-position port))
+   (define opt-header-size (to-int (hash-ref (hash-ref pe-headers 'pe) 'opt-header-size)))
+   ; the magic tells PE32 and PE32+ apart
+   (define magic (to-int (peek-bytes 2 0 port)))
+   (hash-set! pe-headers 'pe-opt
+              (read-spec (if (= magic #x20B) pe32plus-opt-header-spec pe-opt-header-spec) port))
+   ; section headers follow the optional header, whose real size is recorded in the file header
+   (file-position port (+ opt-start opt-header-size))
    
    ; at this point we have read all the static header data, now there will be a number of section
    ; headers as per pe-num-secs which we will stick in a list
@@ -714,9 +746,11 @@
    ;or, (0x200 + (0x2000 - 0x2008)) = 0x208
    ; of course, we need to search from the lowest address section first.
    (define (calc-file-pos rva)
-     (for/first ([header section-headers]
-                 #:when (< rva (+ (to-int (hash-ref header 'virt-address)) (to-int (hash-ref header 'virt-size)))))
-       (+ (to-int (hash-ref header 'ptr-raw)) (- rva (to-int (hash-ref header 'virt-address))))))
+     (or (for/first ([header section-headers]
+                     #:when (let ([va (to-int (hash-ref header 'virt-address))])
+                              (and (<= va rva) (< rva (+ va (to-int (hash-ref header 'virt-size)))))))
+           (+ (to-int (hash-ref header 'ptr-raw)) (- rva (to-int (hash-ref header 'virt-address)))))
+         (error 'read-file "rva 0x~x is not in any section" rva)))
    (set-asm-reader-resolve-rva! rdr calc-file-pos)
 
 ;;    (for ([k (hash-keys (hash-ref hash 'pe-opt))])
@@ -785,10 +819,11 @@
   (define ss (asm-reader-string-index-size rdr))
   (define sl (asm-reader-get-string rdr))
   (define (aux acc index row-count)
-    (define flag (bytes-ref raw index))
     (cond
       [(equal? row-count rows) acc]
-      [(bits-set? 1 flag)
+      ; visibility is the low 3 bits of the flags. only Public (1) is a top level public type;
+      ; the nested visibilities share bit 0 with it, so the whole field must be compared
+      [(equal? (bitwise-and (bytes-ref raw index) 7) 1)
         (begin
           ; the name string begins 4 bytes later followed by the namespace string
           ; don't resolve them yet to avoid cache misses in the (potentially) big bytestring
@@ -810,12 +845,13 @@
                [ns (cdr x)])
            (cons (sl n) (sl ns)))) types))
 
+; returns #f when the image has no assembly table (e.g. a netmodule)
 (define (read-assembly-meta rdr)
-    (let* ([td (hash-ref (asm-reader-table-attributes rdr) 'assembly)]
-         [offset (table-data-start-offset td)]
-         [port (open-input-bytes (asm-reader-raw rdr))])
-    (file-position port offset)
-    (parse-assembly-row rdr port)))
+  (define td (hash-ref (asm-reader-table-attributes rdr) 'assembly #f))
+  (and td
+       (let ([port (open-input-bytes (asm-reader-raw rdr))])
+         (file-position port (table-data-start-offset td))
+         (parse-assembly-row rdr port))))
 
 ;(define parsed (read-file "c:/temp/nano2.exe"))
 ;parsed

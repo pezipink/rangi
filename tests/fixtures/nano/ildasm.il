@@ -26,7 +26,7 @@
 // ----- COFF Header:
 // Machine:                    0x014c
 // Number of sections:         0x0002
-// Time-date stamp:            0x6844ff0c
+// Time-date stamp:            0x00000000
 // Ptr to symbol table:        0x00000000
 // Number of symbols:          0x00000000
 // Size of optional header:    0x00e0
@@ -38,7 +38,7 @@
 // Size of code:                   0x00000400
 // Size of init.data:              0x00000200
 // Size of uninit.data:            0x00000000
-// Addr. of entry point:           0x0000221e
+// Addr. of entry point:           0x00002228
 // Base of code:                   0x00002000
 // Base of data:                   0x00004000
 // Section alignment:              0x00002000
@@ -61,7 +61,7 @@
 // Loader flags:                   0x00000000
 // Directories:                    0x00000010
 // 0x00000000 [0x00000000] address [size] of Export Directory:          
-// 0x000021c4 [0x00000053] address [size] of Import Directory:          
+// 0x000021dc [0x00000028] address [size] of Import Directory:          
 // 0x00000000 [0x00000000] address [size] of Resource Directory:        
 // 0x00000000 [0x00000000] address [size] of Exception Directory:       
 // 0x00000000 [0x00000000] address [size] of Security Directory:        
@@ -79,7 +79,7 @@
 
 // Image sections:
 //              .text
-//              0x00000230 Virtual Size
+//              0x0000022e Virtual Size
 //              0x00002000 Virtual Address
 //              0x00000400 Size of Raw Data
 //              0x00000200 Pointer to Raw Data
@@ -110,13 +110,13 @@
 //              0x00002000 Page RVA
 //              0x0000000c Block Size
 //              0x00000002 Number of Entries
-//              Entry 1: Type 0x3 Offset 0x00000220
+//              Entry 1: Type 0x3 Offset 0x0000022a
 //              Entry 2: Type 0x0 Offset 0x00000000
 
 // Import Address Table
 //     DLL : mscoree.dll
 //              0x00002000 Import Address Table
-//              0x0000220e Import Name Table
+//              0x0000221a Import Name Table
 //              0          Time Date Stamp
 //              0          Index of First Forwarder Reference
 //
@@ -133,7 +133,7 @@
 // Header size:                        0x00000048
 // Major runtime version:              0x0002
 // Minor runtime version:              0x0000
-// 0x0000205c [0x00000168] address [size] of Metadata Directory:        
+// 0x00002050 [0x00000180] address [size] of Metadata Directory:        
 // Flags:                              0x00000001
 // Entry point token:                  0x06000001
 // 0x00000000 [0x00000000] address [size] of Resources Directory:       
@@ -156,22 +156,22 @@
 //                  0x0005 Number of Streams
 //    Stream 1:
 //              0x0000006c Offset
-//              0x00000094 Size
+//              0x000000a4 Size
 //              '#~' Name
 //    Stream 2:
-//              0x00000100 Offset
-//              0x00000044 Size
+//              0x00000110 Offset
+//              0x00000050 Size
 //              '#Strings' Name
 //    Stream 3:
-//              0x00000144 Offset
-//              0x00000008 Size
+//              0x00000160 Offset
+//              0x00000004 Size
 //              '#US' Name
 //    Stream 4:
-//              0x0000014c Offset
+//              0x00000164 Offset
 //              0x00000010 Size
 //              '#GUID' Name
 //    Stream 5:
-//              0x0000015c Offset
+//              0x00000174 Offset
 //              0x0000000c Size
 //              '#Blob' Name
 
@@ -182,7 +182,7 @@
 //                    0x00 Heaps
 //                    0x01 Rid
 //      0x0000000900000447 MaskValid
-//      0x000016003325fa00 Sorted
+//      0x0000000000000000 Sorted
 
 // Code Manager Table:
 //  default
@@ -193,33 +193,33 @@
 
 // File size            : 2048
 // PE header size       : 512 (456 used)    (25.00%)
-// PE additional info   : 175               ( 8.54%)
+// PE additional info   : 132               ( 6.45%)
 // Num.of PE sections   : 2
 // CLR header size     : 72                 ( 3.52%)
-// CLR meta-data size  : 360                (17.58%)
+// CLR meta-data size  : 384                (18.75%)
 // CLR additional info : 0                  ( 0.00%)
 // CLR method headers  : 1                  ( 0.05%)
 // Managed code         : 11                ( 0.54%)
 // Data                 : 512               (25.00%)
-// Unaccounted          : 405               (19.78%)
+// Unaccounted          : 424               (20.70%)
 
 // Num.of PE sections   : 2
 //   .text    - 1024
 //   .reloc   - 512
 
-// CLR meta-data size  : 360
+// CLR meta-data size  : 384
 //   Module        -    1 (10 bytes)
-//   TypeRef       -    1 (6 bytes)
+//   TypeDef       -    2 (28 bytes)      0 interfaces, 0 explicit layout
+//   TypeRef       -    2 (12 bytes)
 //   MethodDef     -    1 (14 bytes)      0 abstract, 0 native, 1 bodies
 //   MemberRef     -    1 (6 bytes)
 //   Assembly      -    1 (22 bytes)
 //   AssemblyRef   -    1 (20 bytes)
-//   TypeDef       -    1 (14 bytes)
-//   Strings       -    68 bytes
+//   Strings       -    79 bytes
 //   Blobs         -    12 bytes
-//   UserStrings   -     8 bytes
+//   UserStrings   -     4 bytes
 //   Guids         -    16 bytes
-//   Uncategorized -   164 bytes
+//   Uncategorized -   161 bytes
 
 // CLR method headers : 1
 //   Num.of method bodies  - 1
@@ -228,14 +228,18 @@
 
 // Managed code : 11
 //   Ave method size - 11
-// No classes defined in this module
+// Classes defined in this module:
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Class Program                        (auto) (ansi) 
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 
 // Metadata version: v4.0.30319
 .assembly extern /*23000001*/ mscorlib
 {
   .ver 0:0:0:0
 }
-.assembly /*20000001*/ donothing
+.assembly /*20000001*/ image
 {
   .ver 0:0:0:0
 }
@@ -247,19 +251,25 @@
 .corflags 0x00000001    //  ILONLY
 
 
-// ================== GLOBAL METHODS =========================
+// =============== CLASS MEMBERS DECLARATION ===================
 
-.method /*06000001*/ public static void  main() cil managed
-// SIG: 00 00 01
+.class /*02000002*/ private auto ansi Program
+       extends [mscorlib/*23000001*/]System.Object/*01000001*/
 {
-  .entrypoint
-  // Method begins at RVA 0x2050
-  // Code size       11 (0xb)
-  .maxstack  8
-  IL_0000:  /* 20   | 2A000000         */ ldc.i4     0x2a
-  IL_0005:  /* 28   | (0A)000001       */ call       void [mscorlib/*23000001*/]System.Console/*01000001*/::WriteLine(int32) /* 0A000001 */
-  IL_000a:  /* 2A   |                  */ ret
-} // end of global method main
+  .method /*06000001*/ public static void 
+          main() cil managed
+  // SIG: 00 00 01
+  {
+    .entrypoint
+    // Method begins at RVA 0x21d0
+    // Code size       11 (0xb)
+    .maxstack  8
+    IL_0000:  /* 20   | 2A000000         */ ldc.i4     0x2a
+    IL_0005:  /* 28   | (0A)000001       */ call       void [mscorlib/*23000001*/]System.Console/*01000002*/::WriteLine(int32) /* 0A000001 */
+    IL_000a:  /* 2A   |                  */ ret
+  } // end of method Program::main
+
+} // end of class Program
 
 
 // =============================================================

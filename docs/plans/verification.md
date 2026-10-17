@@ -57,17 +57,20 @@ The SHA-256 of the emitted image, approved as `image.sha256`. It catches byte ch
 
 ### L5 Internal invariant checker (`tests/lib/pe-lint.rkt`)
 
-The checker parses the image with `pe/read.rkt` and asserts:
+The checker parses the raw bytes itself, so a reader bug cannot hide a writer bug. Table layouts come from the L3 decoder, and row offsets and sizes come from the reader and are checked against the bytes. `tests/image-lint-test.rkt` runs it on every fixture and on damaged copies of one image. It asserts:
 
-* `e_lfanew`, section alignment, file alignment, `SizeOfHeaders`, `SizeOfImage`, `SizeOfCode`, `SizeOfInitializedData`, `BaseOfCode`, and `AddressOfEntryPoint` are consistent with the section table
-* Sections are sorted, non-overlapping, aligned, and `VirtualSize <= SizeOfRawData` rounded up
-* Every data directory and CLI header RVA falls inside a section
-* The base relocation block covers the entry stub's absolute address
-* Metadata stream offsets and sizes are 4-byte aligned and inside the metadata blob
-* The `Valid` mask matches the tables that have rows; row counts and row sizes match the `#~` length
-* Sorted tables (II.22, "sorted" column) are sorted by their primary key, and `Sorted` bits are set for them
-* Every heap index, simple index, and coded index is in range; list columns (`FieldList`, `MethodList`, `ParamList`) are monotonic
-* Every IL token resolves to an existing row, and every method body's code size matches its header
+* PE: PE32 magic and i386 machine; `e_lfanew` and the PE signature; `FileAlignment` and `SectionAlignment` are powers of two; `ImageBase` is 64K aligned; `SizeOfHeaders` is the header size rounded up; `SizeOfCode`, `SizeOfInitializedData`, `BaseOfCode`, `BaseOfData`, and `SizeOfImage` match the section table; sections are aligned, non-overlapping, in order, and have raw data inside the file; every data directory lies inside a section
+* Entry: `AddressOfEntryPoint` is in a code section, is an `FF 25` jump through the import address table, and a base relocation covers its operand
+* CLI: header size 0x48, ILONLY flag set, metadata inside a section, entry token is a MethodDef row
+* Metadata: `BSJB` root and version 1.1; streams are 4-byte aligned, inside the blob, and unique; `#Strings`, `#Blob`, and `#GUID` sizes equal the reader's heap lengths; heap index widths agree with the `HeapSizes` bits; `Valid` has no bits above II.22; row counts agree with the reader; tables are contiguous; at most 3 bytes of trailing padding
+* Rows: every string, blob, and GUID index is in range; every simple index is at most the target row count plus one (list starts may point past the last row); every coded index has a valid tag and an in-range row
+* Method bodies: tiny or fat headers; code inside the file; instructions decode and end exactly at the code size; each `call` target row exists
+
+Deviations from the original plan:
+
+* The writer emits `Sorted = 0` and rows in insertion order, so the sorted-by-key and list-monotonic checks are not applied. The CLR does not require sorted tables, and PEVerify accepts them.
+* Field and param rows are checked by count only, because the L3 decoder does not decode them.
+* The IL decoder accepts only `ret`, `add`, `ldc.i4`, and `call` (MemberRef or MethodDef). Any other opcode is reported, so a new opcode needs a decoder here before it is emitted.
 
 ### L6 External oracles
 
@@ -80,7 +83,7 @@ Each oracle is a script under `tests/oracles/` and is skipped when the tool is m
 | System.Reflection.Metadata dumper    | Independent table decoder; diff against L3                  | `dotnet run --project tests/oracles/srm-dump/srm-dump.csproj -- <image>` |
 | ILVerify (`Microsoft.ILVerification`) | IL verification that also works for .NET (Core) targets    | `dotnet run --project tests/oracles/ilverify -- <image>`        |
 
-PEVerify already finds one issue in today's baseline (`0x8013129d` on `MethodDef` 1). Triage: `main` sits on the `<Module>` type, and ilasm assembles the same code with no warning when `main` is inside a class. The fix changes emitted bytes, so it is deferred to a separate reviewed snapshot change. The current `pe-verify.txt` records the warning as the approved baseline.
+The baseline PEVerify warning (`0x8013129d` on `MethodDef` 1) is fixed. `main` sat on the `<Module>` type, and ilasm assembles the same code with no warning when `main` is inside a class. The writer now moves `<Module>` methods into a generated `Program` class, and `pe-verify.txt` records a clean run.
 
 ### L7 Execution
 
@@ -98,9 +101,9 @@ For fixtures that have an equivalent `program.il`, assemble it with `ilasm.exe` 
 
 ## Milestones
 
-* [ ] V0 Determinism: ordered collections, timestamp option, content-derived MVID
-* [x] V1 Harness skeleton: `tests/` tree, fixture runner, L4 hash and L7 execution for the current `42` program (`experiments/nano.rkt`, SHA-256 `D0CB3275...`)
-* [x] V2 External oracles: PEVerify and ildasm scripts; `0x8013129d` triaged, fix deferred (see L6)
+* [x] V0 Determinism: tables and heaps keep insertion order, the MVID is a content hash, and the COFF timestamp is 0. Deviation: there is no timestamp option. Checked by building the same program under two directories and comparing SHA-256; the L4 snapshot enforces it afterwards.
+* [x] V1 Harness skeleton: `tests/` tree, fixture runner, L4 hash and L7 execution for the current `42` program (`experiments/nano.rkt`; hash in `tests/fixtures/nano/image.sha256`)
+* [x] V2 External oracles: PEVerify and ildasm scripts; `0x8013129d` triaged and fixed (see L6)
 * [x] V3 SRM dumper (small .NET console project) and L3 dump from Rangi's reader, diffed against each other
 
 Deviations recorded for P1:
@@ -109,7 +112,7 @@ Deviations recorded for P1:
 * The diff is a `check-equal?` failure rather than a unified diff printer.
 * The row decoder lives in `tests/lib/metadata-dump.rkt` until P2 moves it into `cli/schema`.
 * `src/cli-reader.rkt` gains read-only accessors and stores the encoding sizes it already computes. It does not change the lazy lookup path.
-* [ ] V4 L5 invariant checker
+* [x] V4 L5 invariant checker (`tests/lib/pe-lint.rkt`, `tests/image-lint-test.rkt`); deviations listed under L5
 * [ ] V5 L2 layout map (lands with restructure R3, when the layout engine exists)
 * [ ] V6 L8 ilasm differential fixtures for every feature in [cli-coverage.md](cli-coverage.md)
 * [ ] V7 Reader corpus test: run the L3 dump against every assembly in the .NET Framework 4.7.1 reference set and `System.Private.CoreLib`, diffed against SRM

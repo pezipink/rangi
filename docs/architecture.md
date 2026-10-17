@@ -6,17 +6,18 @@ ms.date: 2026-10-17
 
 ## Current state (October 2026)
 
-All code lives in `src/`, with the experiments in `experiments/`. The root `info.rkt` declares the `rangi` package. The working tree has no uncommitted code. The WIP typed-expression experiment and its writer edits are in `stash@{0}` ("typed-expr experiment and debug edits").
+All code lives in `src/`, with the experiments in `experiments/` and the test harness in `tests/`. The root `info.rkt` declares the `rangi` package. The WIP typed-expression experiment and its writer edits are in `stash@{0}` ("typed-expr experiment and debug edits").
 
 | File                           | Role today                                                                                                   |
 |--------------------------------|--------------------------------------------------------------------------------------------------------------|
-| `src/cli-reader.rkt`           | Lazy PE + CLI metadata reader. Exports `read-file`, `get-public-typedefs`, `read-assembly-meta`.             |
-| `src/cli-writer.rkt`           | s-expression ilasm front end (`parse-il`) and a monolithic `assemble`. Takes an optional output path (default a temp file). |
-| `src/log.rkt`                  | The `rangi` logger used by the reader and writer for debug and warning output.                               |
+| `src/cli-reader.rkt`           | Lazy PE + CLI metadata reader. Exports `read-file`, `get-public-typedefs`, `read-assembly-meta`, and read-only accessors used by tests. |
+| `src/cli-writer.rkt`           | s-expression ilasm front end (`parse-il`) and `assemble`, which writes a deterministic PE image. Takes an optional output path (default a temp file). |
+| `src/log.rkt`                  | The `rangi` logger used by the writer for debug and warning output.                                          |
+| `tests/lib/pe-lint.rkt`        | Structural checker (`lint-image`) for PE, CLI, metadata, and IL invariants. Used by `tests/image-lint-test.rkt`. |
 | `experiments/nano.rkt`         | Assembles `nano` and `nano2` into the temp dir and runs them. Prints `42` and `84`.                          |
 | `experiments/phase1-load.rkt`  | Experiment that loads `mscorlib.dll` at phase 1 with `add-ref`.                                              |
 
-Baseline behaviour: `racket experiments/nano.rkt` writes a 2048-byte image that runs and prints `42`. The image's SHA-256 is `D0CB3275AD6F50F372DE5CB1B8B49D52A94B3E544645C5948903FD847F9C95D2`. `PEVerify /md /il` reports one metadata warning: `Internal error: 0x8013129d [token:0x06000001]`.
+Baseline behaviour: `racket experiments/nano.rkt` writes a 2048-byte image that runs and prints `42`. The image's SHA-256 is recorded in `tests/fixtures/nano/image.sha256`. `PEVerify /md /il` reports no warnings for it.
 
 ### Reader
 
@@ -24,35 +25,25 @@ Baseline behaviour: `racket experiments/nano.rkt` writes a 2048-byte image that 
 
 Known defects:
 
-* Only PE32 is parsed. PE32+ (`magic = 0x20B`, used by x64 and many modern assemblies) misreads every field after `base-code`.
-* The table-id switch omits `FieldPtr` (0x03), `MethodPtr` (0x05), `ParamPtr` (0x07), `EventPtr` (0x13), `PropertyPtr` (0x16), `ENCLog` (0x1E), `ENCMap` (0x1F), `AssemblyProcessor` (0x21), `AssemblyOS` (0x22), `AssemblyRefProcessor` (0x24), and `AssemblyRefOS` (0x25). Any assembly containing them raises an error.
-* The row-size `case` has no `standalonesig` (0x11) entry, so any assembly with local variables raises `unknown type standalonesig`.
-* The `#-` (uncompressed) stream name is rejected, and the `HeapSizes` 0x20/0x40 bits (extra data) are ignored.
-* `HasCustomAttribute` lists `permission` instead of `declsecurity`.
-* `get-public-typedefs` tests `(bits-set? 1 flag)`. Visibility is a 3-bit field (`flags & 0x7`), so this also matches `NestedFamily` (3), `NestedFamANDAssem` (5), and `NestedPublic` (7).
-* `read-file` never closes its input port.
+* The `#-` (uncompressed) stream name is rejected with `unknown cli metadata stream`.
+* The `HeapSizes` 0x20/0x40 bits (extra data) are ignored.
 * Row layouts are written by hand and duplicated in the writer.
+
+Fixed and covered by tests: PE32+ parsing, the table-id switch for the pointer, ENC, and Assembly processor/OS tables (previously an error), `standalonesig`, `HasCustomAttribute` (`declsecurity`), public type visibility (`flags & 0x7`), the port leak, and the missing-Assembly case (`read-assembly-meta` returns `#f`). `read-file` reads the file once and does not cache, so each call costs one read.
 
 ### Writer
 
-`parse-il` walks the s-expression program and collects strings, type references, and member references into mutable hashes. `assemble` then builds heaps, assembles IL, and writes the whole PE file in one function of about 700 lines.
+`parse-il` walks the s-expression program and collects strings, type references, and member references into mutable hashes. `assemble` builds the heaps, assembles IL, and writes the PE file.
 
-Hardcoded or broken behaviour, all of which must go:
+The output is deterministic. Tables and heaps keep insertion order, the MVID is a content hash, and the COFF timestamp is 0. `<Module>` methods move into a generated `Program` class, which clears the PEVerify `0x8013129d` warning. Method bodies use a tiny header when the code is under 64 bytes and `.maxstack` is at most 8, and a fat header otherwise.
 
-* Output path `c:\temp\rangi.exe`; stray `writeln` debug output.
-* The DOS stub, COFF header, NT fields, and section headers are literal byte vectors. Timestamp `0x6844FF0C`, `SizeOfCode = 0x400`, `.reloc` at RVA `0x4000`, and an error when `.text` reaches `0x400` bytes.
-* The `#~` header writes a fixed `Valid` mask (`0x0900000447`), a fixed `Sorted` mask, and seven row counts of `1`. Stream size is `tables + 24 + 28 + 4`, metadata size uses a literal `0x6C`, and six "mysterious padding bytes" follow the tables.
-* Metadata version string, stream header block (`0x4C`), import table, hint/name table, entry stub `FF 25`, and the relocation target (`0x402000`) are fixed.
-* The entry point token is fixed at `0x06000001`; the module MVID GUID is a constant.
-* `TypeRef.ResolutionScope`, `MemberRef.Class`, `TypeDef.Extends`, `FieldList`, `MethodList`, `ParamList`, and all flag columns are literals.
-* Row order and heap order come from iterating mutable hashes, so output is not deterministic once there is more than one item.
-* `write-br` checks `ss` (string width) instead of `bs` (blob width).
-* `max-asm-ref-index` calls `max` on a list, and `ref-assembly` stores `max-index` instead of `index`.
-* The `#US` heap is seeded with an unexplained `00 03 32 00 00` entry.
-* `calc-size` has no `standalonesig` entry.
-* Method bodies are always tiny headers (no locals, maxstack 8, code under 64 bytes).
-* Only `ret`, `add`, `ldc.i` (always `ldc.i4`), and `call` of a `MemberRef` are assembled; anything else is silently skipped.
+Known limits (planned gaps, not defects in code that is present):
+
+* Only `ret`, `add`, `ldc.i4`, and `call` (to a MemberRef or MethodDef) are assembled. Any other instruction raises an error. The lint decodes the same four opcodes.
 * Signatures support only `void`, `int32`, and `object`.
+* Method bodies have no locals and no exception handling.
+* Assembly and AssemblyRef versions are 0, and the `.assembly` name is ignored. The assembly name is the output basename.
+* Field and param rows are written, but the lint checks only their counts.
 
 ## Target layering
 
