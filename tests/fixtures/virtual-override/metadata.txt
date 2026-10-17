@@ -1,0 +1,28 @@
+Module rows=1
+  Module[1] Name="virtual-override.exe" Mvid=57793f947911f1a53d3d531cbd7d71ed
+TypeRef rows=2
+  TypeRef[1] ResolutionScope=0x23000001 Name="Object" Namespace="System"
+  TypeRef[2] ResolutionScope=0x23000001 Name="Console" Namespace="System"
+TypeDef rows=4
+  TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
+  TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
+  TypeDef[3] Flags=1 Name="Base" Namespace="" Extends=0x01000001 Fields=[] Methods=[2..4]
+  TypeDef[4] Flags=1 Name="Derived" Namespace="" Extends=0x02000003 Fields=[] Methods=[5..6]
+MethodDef rows=6
+  MethodDef[1] Rva=8836 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=73050000060a73020000060b066f03000006280100000a066f04000006280100000a076f03000006280100000a2a
+  MethodDef[2] Rva=8896 ImplFlags=0 Flags=6150 Name=".ctor" Signature=200001 Params=[] Il=02280200000a2a
+  MethodDef[3] Rva=8904 ImplFlags=0 Flags=326 Name="Get" Signature=200008 Params=[] Il=172a
+  MethodDef[4] Rva=8908 ImplFlags=0 Flags=326 Name="Describe" Signature=200008 Params=[] Il=1f0a2a
+  MethodDef[5] Rva=8912 ImplFlags=0 Flags=6150 Name=".ctor" Signature=200001 Params=[] Il=0228020000062a
+  MethodDef[6] Rva=8920 ImplFlags=0 Flags=70 Name="Get" Signature=200008 Params=[] Il=182a
+MemberRef rows=2
+  MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
+  MemberRef[2] Parent=0x01000001 Name=".ctor" Signature=200001
+StandAloneSig rows=1
+  StandAloneSig[1] Signature=0702120c120c
+MethodImpl rows=1
+  MethodImpl[1] Class=4 Body=0x06000006 Declaration=0x06000003
+Assembly rows=1
+  Assembly[1] HashAlgorithm=0 Version=0.0.0.0 Flags=0 PublicKey= Name="image" Culture=""
+AssemblyRef rows=1
+  AssemblyRef[1] Version=0.0.0.0 Flags=0 PublicKeyOrToken= Name="mscorlib" Culture="" HashValue=

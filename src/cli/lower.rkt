@@ -18,7 +18,8 @@
          (struct-out cli-program)
          (struct-out tdef)
          (struct-out fdef)
-         (struct-out mdef))
+         (struct-out mdef)
+         (struct-out methodimpl))
 
 ; The CLI-level program: flags are bits, signatures and bodies are bytes, and
 ; references are rids. asm-refs rows are (name version token), where version is four ints and
@@ -27,9 +28,13 @@
 ; used by ldstr. A memberref parent is a (cons 'typeref|'typespec rid); a methodspec method
 ; is (cons 'methoddef|'memberref rid); a genericparam owner is (cons 'methoddef rid).
 ; subsystem and platform are the module model's names ('console|'windows, 'anycpu|'x86|'32bitpreferred).
+; methodimpls are the MethodImpl rows for .override, in source order.
 (struct cli-program (asm-refs typerefs memberrefs typespecs methodspecs genericparams
                      typedefs module-name entry-rid format standalone-sigs us-heap
-                     subsystem platform))
+                     subsystem platform methodimpls))
+; A MethodImpl row (II.22.27): class is the TypeDef rid, body is (cons 'methoddef rid) of an
+; override in that class, and decl is (cons 'methoddef|'memberref rid) of the base method.
+(struct methodimpl (class body decl))
 ; fields are the TypeDef's Field rows, in row order (II.22.15). extends is (typedef . rid),
 ; (typeref . rid), or #f for an interface or <Module> (II.22.37). enclosing is the TypeDef rid of
 ; the enclosing class for a nested type, or #f (II.22.32).
@@ -764,6 +769,7 @@
   (define flags (if (cctor? name)
                     (cctor-flags (method-decl-flags m))
                     (method-flags (method-decl-flags m))))
+  (check-virtual-attributes! class-name name (method-decl-flags m))
   (define params (method-decl-params m))
   (define ld (method-decl-locals m))
   (define local-types (if ld (map local-var-type (locals-decl-vars ld)) '()))
@@ -774,26 +780,30 @@
   (define sig (method-sig cx scope (method-decl-ret m) params #:hasthis? instance? #:arity nmth))
   ; arg 0 is this in an instance method, so ldarg indices and the depth analysis count it
   (define nargs (+ (length params) (if instance? 1 0)))
-  (define-values (asm computed)
-    (encode-il cx scope (method-decl-code m) nargs (length local-types)
-               (eq? (method-decl-ret m) 'void) clauses))
-  (define code (assembly-code asm))
-  (define maxstack (effective-maxstack (method-decl-maxstack m) computed))
-  ; StandAloneSig table tag 0x11, II.22.36
-  (define locals-tok
-    (if (null? local-types)
-        0
-        (bitwise-ior #x11000000
-                     (intern! (ctx-standalone-sigs cx)
-                              (encode-localvar-sig
-                               (for/list ([t (in-list local-types)])
-                                 (lower-type cx scope t)))))))
+  ; A body-less method is abstract (II.22.26): its RVA is 0 and it has no body.
+  (define body
+    (and (method-decl-code m)
+         (let-values ([(asm computed)
+                       (encode-il cx scope (method-decl-code m) nargs (length local-types)
+                                  (eq? (method-decl-ret m) 'void) clauses)])
+           (define code (assembly-code asm))
+           (define maxstack (effective-maxstack (method-decl-maxstack m) computed))
+           ; StandAloneSig table tag 0x11, II.22.36
+           (define locals-tok
+             (if (null? local-types)
+                 0
+                 (bitwise-ior #x11000000
+                              (intern! (ctx-standalone-sigs cx)
+                                       (encode-localvar-sig
+                                        (for/list ([t (in-list local-types)])
+                                          (lower-type cx scope t)))))))
+           (method-body code maxstack locals-tok init?
+                        (and (pair? clauses) (eh-section cx asm clauses))))))
   (values
    (mdef (symbol->string name)
          flags
          sig
-         (method-body code maxstack locals-tok init?
-                      (and (pair? clauses) (eh-section cx asm clauses)))
+         body
          (method-decl-entry? m))
    (for/list ([g (in-list gparams)] [i (in-naturals)])
      (list i (symbol->string (generic-param-name g)) (cons 'methoddef rid)))))
@@ -855,6 +865,90 @@
      (unless d (error 'rangi "field ~a uses undefined data ~a" (field-decl-name fd) dname))
      (data-decl-bytes d)]))
 
+; II.10.3, II.22.26: a virtual method is a dispatch slot, so it cannot be static or a constructor.
+; abstract needs virtual, and newslot and final only mean something on a virtual method.
+(define (check-virtual-attributes! class-name name kws)
+  (define virtual? (and (memq 'virtual kws) #t))
+  (when (and (memq 'abstract kws) (not virtual?))
+    (error 'rangi "abstract method ~a.~a must be virtual" class-name name))
+  (when (and virtual? (or (memq 'static kws) (memq name '(.ctor .cctor))))
+    (error 'rangi "~a.~a cannot be virtual: it is static or a constructor" class-name name))
+  (when (and (not virtual?) (or (memq 'newslot kws) (memq 'final kws)))
+    (error 'rangi "newslot and final on ~a.~a need virtual" class-name name)))
+
+; Only abstract classes and interfaces may declare abstract methods.
+(define (check-abstract-members! cls)
+  (unless (or (memq 'abstract (class-decl-flags cls)) (memq 'interface (class-decl-flags cls)))
+    (for ([md (in-list (class-decl-methods cls))] #:when (memq 'abstract (method-decl-flags md)))
+      (error 'rangi "abstract method ~a in non-abstract class ~a"
+             (method-decl-name md) (class-decl-name cls)))))
+
+; The base types of cls, nearest first: same-module classes as symbols, then the first external
+; base as (asm ty). A class without .extends derives from System.Object (see lower-extends).
+(define (ancestor-owners cls decls)
+  (let loop ([base (class-decl-extends cls)] [acc '()])
+    (cond
+      [(not base) (reverse (cons '(mscorlib System.Object) acc))]
+      [(symbol? base) (loop (class-decl-extends (hash-ref decls base)) (cons base acc))]
+      [else (reverse (cons base acc))])))
+
+(define (find-method-decl cls mname ret params)
+  (findf (λ (md) (and (eq? (method-decl-name md) mname)
+                      (equal? (method-decl-ret md) ret)
+                      (equal? (method-decl-params md) params)))
+         (class-decl-methods cls)))
+
+; The MethodDeclaration of an .override (II.22.27): the base's MethodDef for a base in this
+; module, or a MemberRef on an external base. An external method's virtual flag is not checked.
+(define (override-declaration cx owner decls mname ret params)
+  (cond
+    [(symbol? owner)
+     (define bm (find-method-decl (hash-ref decls owner) mname ret params))
+     (unless bm
+       (error 'rangi "no method ~a with this signature in base class ~a" mname owner))
+     (define bflags (method-decl-flags bm))
+     (unless (and (memq 'virtual bflags) (not (memq 'static bflags)))
+       (error 'rangi "~a.~a is not a virtual instance method" owner mname))
+     (cons 'methoddef (vector-ref (hash-ref (ctx-method-rids cx) (list owner mname ret params)) 0))]
+    [else
+     (define-values (asm ty) (asm-type-parts owner))
+     (define sig (method-sig cx '(0 . 0) ret params #:hasthis? #t))
+     (cons 'memberref (member-ref! cx (owner-parent! cx asm ty '() '(0 . 0)) mname sig))]))
+
+; MethodImpl rows (II.22.27) for the .override directives of cls. The body is a virtual instance
+; method of cls with the same name, return type, and parameters. A callvirt through a base type
+; then runs the body (II.10.3, virtual dispatch).
+(define (lower-overrides cx cls decls)
+  (define name (class-decl-name cls))
+  (define overrides (class-decl-overrides cls))
+  (when (and (pair? overrides) (memq 'interface (class-decl-flags cls)))
+    (error 'rangi "interface ~a cannot have .override" name))
+  (define class-rid (module-class-rid cx name))
+  (define bases (ancestor-owners cls decls))
+  (define seen (make-hash))
+  (for/list ([o (in-list overrides)])
+    (define owner (override-decl-owner o))
+    (define mname (override-decl-name o))
+    (define ret (override-decl-ret o))
+    (define params (override-decl-params o))
+    (define key (list owner mname ret params))
+    (when (hash-ref seen key #f)
+      (error 'rangi "duplicate .override ~a::~a in ~a" owner mname name))
+    (hash-set! seen key #t)
+    (define body (find-method-decl cls mname ret params))
+    (unless body
+      (error 'rangi "~a has no method ~a to override ~a::~a" name mname owner mname))
+    (define bflags (method-decl-flags body))
+    (unless (and (memq 'virtual bflags) (not (memq 'static bflags)))
+      (error 'rangi "the .override body ~a.~a must be a virtual instance method" name mname))
+    (unless (member owner bases)
+      (error 'rangi "~a is not a base class of ~a" owner name))
+    (define body-rid (vector-ref (hash-ref (ctx-method-rids cx) (list name mname ret params)) 0))
+    (methodimpl class-rid
+                (cons 'methoddef body-rid)
+                (override-declaration cx owner decls mname ret params))))
+
+
 (define (lower-module m)
   (define classes (module-model-classes m))
   (for ([cls (in-list classes)] #:unless (null? (class-decl-gparams cls)))
@@ -890,6 +984,7 @@
                   class-rids method-rids field-rids))
   (define class-decls (for/hasheq ([cls (in-list classes)]) (values (class-decl-name cls) cls)))
   (define data-decls (for/hasheq ([d (in-list (module-model-data m))]) (values (data-decl-name d) d)))
+  (for ([cls (in-list classes)]) (check-abstract-members! cls))
   (define-values (tdefs gps)
     (for/fold ([tdefs '()] [gps '()] [next-rid 1]
                #:result (values (reverse tdefs) (append* (reverse gps))))
@@ -931,6 +1026,9 @@
                 [rid (in-naturals 1)]
                 #:when (mdef-entry? md))
       rid))
+  (define methodimpls
+    (append* (for/list ([cls (in-list classes)] #:unless (null? (class-decl-overrides cls)))
+               (lower-overrides cx cls class-decls))))
   (cli-program (for/list ([name (in-list (interner-keys asm-refs))])
                  (define r (findf (λ (r) (equal? (asm-ref-name r) name)) (module-model-asm-refs m)))
                  (list name (asm-ref-version r) (asm-ref-token r)))
@@ -946,5 +1044,6 @@
                (interner-keys standalone-sigs)
                us-heap
                (module-model-subsystem m)
-               (module-model-platform m)))
+               (module-model-platform m)
+               methodimpls))
 

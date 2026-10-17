@@ -37,7 +37,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x16 | PropertyPtr            | partial | n/a     | Count only                                               |         |
 | 0x17 | Property               | none    | none    |                                                          |         |
 | 0x18 | MethodSemantics        | none    | none    | Sorted                                                   |         |
-| 0x19 | MethodImpl             | none    | none    | Sorted; explicit interface implementation                |         |
+| 0x19 | MethodImpl             | partial | partial | Sorted; `.override` rows (same-module and external base); interface implementation not | virtual-override |
 | 0x1A | ModuleRef              | none    | none    | Needed for P/Invoke                                      |         |
 | 0x1B | TypeSpec               | partial | partial | Row helper and `read-row`; blob via `sigs.rkt` and reader; generic instance types | generic-calls |
 | 0x1C | ImplMap                | none    | none    | Sorted; P/Invoke                                         |         |
@@ -98,7 +98,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | Feature                                         | Write status | Fixture |
 |-------------------------------------------------|--------------|---------|
 | TypeAttributes (visibility, layout, semantics)  | partial (from keywords) |         |
-| MethodAttributes and MethodImplAttributes       | partial (from keywords) |         |
+| MethodAttributes and MethodImplAttributes       | partial (from keywords; `virtual`, `newslot`, `final`, `abstract` done, see `virtual-override`) | virtual-override |
 | FieldAttributes                                 | constants only (`flags.rkt`), not wired to ilasm | |
 | ParamAttributes                                 | constants only (`flags.rkt`), not wired to ilasm | |
 | AssemblyFlags and AssemblyHashAlgorithm         | none         |         |
@@ -123,7 +123,9 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 | Instance fields (same module: `ldfld`, `stfld`, `ldflda`), `.ctor` | done | instance-methods, il-all-opcodes |
 | Instance fields on external types (`ldfld`, `stfld`, `ldflda` on a MemberRef FieldSig) | done | external-instance-field |
 | `.cctor` type initializer (static, specialname, rtspecialname; no beforefieldinit unless requested) | done | cctor-init |
-| Instance methods, `newobj`, virtual dispatch, `.override`  | partial (instance methods, `newobj`, `callvirt` done; `.override` and virtual dispatch not) | instance-methods |
+| Instance methods, `newobj`, `callvirt`                     | done    | instance-methods |
+| Virtual methods (`virtual`, `newslot`, `final`, `abstract`; body-less abstract methods) and virtual dispatch through `callvirt` on a base-typed reference (II.10.3) | done | virtual-override |
+| `.override Base::M` (same-module base or external base MemberRef), MethodImpl row (II.22.27) | done (base must be an ancestor; external base's virtual flag not checked) | virtual-override |
 | Interfaces and implementation                              | none    |         |
 | Nested types (`nested public\|private\|assembly\|family\|famandassem\|famorassem` inside a class body; NestedClass rows; no namespace on the TypeDef) | done | nested-types |
 | Properties and events                                      | none    |         |
@@ -159,7 +161,7 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 
 ## Suggested order
 
-1. Static fields are done (`static-fields`). Instance methods, `.ctor`, `newobj`, and same-module instance fields are done (`instance-methods`, `il-all-opcodes`). External instance calls use the `instance` keyword, as in ilasm: `(call instance int32 (mscorlib System.String) get_Length ())`. The keyword sets HASTHIS in the MemberRef signature. Without it, a non-virtual call to an external instance method is still lowered as static, so the runtime call fails; a same-module `instance` on a static method is rejected (`instance-external-call`). `.cctor` is done (`cctor-init`), and external instance fields are done (`external-instance-field`). Locals, fat bodies, branching, catch, finally, fault, and filter EH are done. The `ldstr` hello world and `switch` fixtures are done.
+1. Static fields are done (`static-fields`). Instance methods, `.ctor`, `newobj`, and same-module instance fields are done (`instance-methods`, `il-all-opcodes`). External instance calls use the `instance` keyword, as in ilasm: `(call instance int32 (mscorlib System.String) get_Length ())`. The keyword sets HASTHIS in the MemberRef signature. Without it, a non-virtual call to an external instance method is still lowered as static, so the runtime call fails; a same-module `instance` on a static method is rejected (`instance-external-call`). `.cctor` is done (`cctor-init`), and external instance fields are done (`external-instance-field`). Locals, fat bodies, branching, catch, finally, fault, and filter EH are done. The `ldstr` hello world and `switch` fixtures are done. Virtual methods, body-less abstract methods, and `.override` (MethodImpl) are done (`virtual-override`).
 3. Multiple types with namespaces, extends, interfaces, nested types.
 4. Value types, enums, static data. Single-dimension arrays are done (`arrays-sum`); multi-dimensional arrays are not. Static data is done (`static-data`). Syntax: a static field takes its initial bytes from a top-level `.data` block, `(.data D_Table = (bytearray (01 00 00 00)))` with hex bytes, and the field names it with `at`, `(.field (public static) int32 Table at D_Table)`. This is the ilasm spelling, so the `bytes` keyword is rejected. The length must equal the primitive's size, and each block belongs to one field. The field gets HasFieldRVA and a FieldRVA row (II.22.18) whose RVA points into the `.sdata` section (II.16). A literal field cannot have data.
 5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam are done. GenericParamConstraint and generic types are not.
