@@ -96,6 +96,18 @@
     (bitwise-ior acc (cond [(assq k member-flags) => cdr]
                            [else (error 'rangi "unsupported method flag ~a" k)]))))
 
+; The type initializer .cctor is always static, specialname and rtspecialname (II.10.5.3.1).
+; Its access defaults to private when the source gives none, as compilers emit it.
+(define (cctor-flags kws)
+  (define f (method-flags kws))
+  (bitwise-ior (if (zero? (bitwise-and f #x7)) #x1 f) #x10 #x800 #x1000))
+
+(define (cctor? name) (eq? name '.cctor))
+
+; A .cctor is static whatever its keywords say, so only other methods can be instance methods.
+(define (method-instance? m)
+  (and (not (cctor? (method-decl-name m))) (instance-kws? (method-decl-flags m))))
+
 ; Source type to sigs.rkt descriptor, lowered in scope (cons class-arity method-arity).
 ; !N and !!N are class and method type variables (II.23.2.12), range-checked against the
 ; scope. A module class is (class (typedef . rid)). An external class is (class (typeref . rid)),
@@ -707,11 +719,19 @@
              class-name name)))
   (when (and (pair? gparams) (method-decl-entry? m))
     (error 'rangi "the entry point ~a.~a cannot be generic" class-name name))
-  (define instance? (instance-kws? (method-decl-flags m)))
+  (define instance? (method-instance? m))
   (when (and instance? (method-decl-entry? m))
     (error 'rangi "the entry point ~a.~a must be static" class-name name))
+  (when (cctor? name)
+    (unless (and (eq? (method-decl-ret m) 'void) (null? (method-decl-params m)) (null? gparams))
+      (error 'rangi "the type initializer ~a.~a must return void and take no parameters"
+             class-name name))
+    (when (method-decl-entry? m)
+      (error 'rangi "the type initializer ~a.~a cannot be the entry point" class-name name)))
   (define scope (cons 0 nmth))
-  (define flags (method-flags (method-decl-flags m)))
+  (define flags (if (cctor? name)
+                    (cctor-flags (method-decl-flags m))
+                    (method-flags (method-decl-flags m))))
   (define params (method-decl-params m))
   (define ld (method-decl-locals m))
   (define local-types (if ld (map local-var-type (locals-decl-vars ld)) '()))
@@ -811,7 +831,7 @@
       (when (hash-ref method-rids key #f)
         (error 'rangi "duplicate method ~a in ~a" (method-decl-name md) (class-decl-name cls)))
       (hash-set! method-rids key (vector next (length (method-decl-gparams md))
-                                         (instance-kws? (method-decl-flags md))))
+                                         (method-instance? md)))
       (add1 next)))
   (define field-rids (make-hash))
   (for/fold ([next 1]) ([cls (in-list classes)])
