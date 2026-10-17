@@ -29,7 +29,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x0E | DeclSecurity           | none    | none    | Sorted                                                   |         |
 | 0x0F | ClassLayout            | none    | none    | Sorted; needed for explicit and sequential structs       |         |
 | 0x10 | FieldLayout            | none    | none    | Sorted                                                   |         |
-| 0x11 | StandAloneSig          | partial | none    | Reader parses it; needed for locals and `calli`          |         |
+| 0x11 | StandAloneSig          | partial | partial | Reader parses it; row helper added; LocalVarSig blobs in `sigs.rkt`; `calli` pending |         |
 | 0x12 | EventMap               | none    | none    |                                                          |         |
 | 0x13 | EventPtr               | partial | n/a     | Count only                                               |         |
 | 0x14 | Event                  | none    | none    |                                                          |         |
@@ -39,7 +39,7 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x18 | MethodSemantics        | none    | none    | Sorted                                                   |         |
 | 0x19 | MethodImpl             | none    | none    | Sorted; explicit interface implementation                |         |
 | 0x1A | ModuleRef              | none    | none    | Needed for P/Invoke                                      |         |
-| 0x1B | TypeSpec               | none    | none    | Needed for generics and arrays                           |         |
+| 0x1B | TypeSpec               | partial | partial | Row helper and `read-row`; blob via `sigs.rkt` and reader; arrays pending |         |
 | 0x1C | ImplMap                | none    | none    | Sorted; P/Invoke                                         |         |
 | 0x1D | FieldRVA               | none    | none    | Sorted; static data, needs a `.sdata` or `.text` chunk   |         |
 | 0x1E | ENCLog                 | partial | n/a     | Count only                                               |         |
@@ -54,9 +54,9 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x27 | ExportedType           | none    | none    | Type forwarders                                          |         |
 | 0x28 | ManifestResource       | none    | none    | Embedded resources                                       |         |
 | 0x29 | NestedClass            | none    | none    | Sorted                                                   |         |
-| 0x2A | GenericParam           | none    | none    | Sorted                                                   |         |
-| 0x2B | MethodSpec             | none    | none    | Generic method instantiation. Test helper decodes rows; matches SRM on mscorlib (656) |         |
-| 0x2C | GenericParamConstraint | none    | none    | Sorted                                                   |         |
+| 0x2A | GenericParam           | partial | partial | Sorted; row helper and read; secondary sort key unverified |         |
+| 0x2B | MethodSpec             | partial | partial | Generic method instantiation. Rows read; `metadata-dump` prints the instantiation blob as hex; rows match SRM on mscorlib (656) |         |
+| 0x2C | GenericParamConstraint | partial | partial | Sorted; row helper and read                              |         |
 
 ## Heaps and streams (II.24)
 
@@ -76,20 +76,20 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 
 | Feature                                                          | Read | Write   | Fixture |
 |------------------------------------------------------------------|------|---------|---------|
-| MethodDefSig and MethodRefSig (default, `HASTHIS`, `EXPLICITTHIS`) | none | partial |         |
+| MethodDefSig and MethodRefSig (default, `HASTHIS`, `EXPLICITTHIS`) (II.23.2.1) | partial | partial |         |
 | `VARARG` call convention and sentinel                            | none | none    |         |
-| Generic method sig (`GENERIC`, `GenParamCount`)                  | none | none    |         |
+| Generic method sig (`GENERIC`, `GenParamCount`) (II.23.2.1)      | partial | partial |         |
 | FieldSig (0x06)                                                  | none | none    |         |
 | PropertySig (0x08)                                               | none | none    |         |
-| LocalVarSig (0x07), including `PINNED` and `BYREF`               | none | none    |         |
+| LocalVarSig (0x07), including `PINNED` and `BYREF` (II.23.2.6)   | partial | partial |         |
 | StandAloneMethodSig for `calli`                                  | none | none    |         |
-| Primitive element types (`BOOLEAN` through `U`, `STRING`, `OBJECT`) | none | partial (`void`, `int32`, `object`) | |
-| `CLASS` and `VALUETYPE` with TypeDefOrRefOrSpec encoded tokens   | none | none    |         |
-| `SZARRAY`, `ARRAY` (rank, sizes, lower bounds)                   | none | none    |         |
-| `PTR`, `BYREF`, `FNPTR`, `TYPEDBYREF`                            | none | none    |         |
-| `GENERICINST`, `VAR`, `MVAR`                                     | none | none    |         |
+| Primitive element types (`BOOLEAN` through `U`, `STRING`, `OBJECT`) | partial | partial | |
+| `CLASS` and `VALUETYPE` with TypeDefOrRefOrSpec encoded tokens   | partial | partial |         |
+| `SZARRAY` (`ARRAY` rank, sizes, lower bounds not yet)            | partial | partial |         |
+| `PTR`, `BYREF` (`FNPTR`, `TYPEDBYREF` not yet)                   | partial | partial |         |
+| `GENERICINST`, `VAR`, `MVAR`                                     | partial | partial |         |
 | `CMOD_REQD`, `CMOD_OPT`                                          | none | none    |         |
-| TypeSpec and MethodSpec blobs                                    | none | none    |         |
+| TypeSpec and MethodSpec blobs (II.23.2.14, II.23.2.15)           | partial | partial |         |
 | Custom attribute value blobs (II.23.3)                           | none | none    |         |
 | Marshalling descriptors (II.23.4)                                | none | none    |         |
 
