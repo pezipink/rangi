@@ -13,6 +13,7 @@
          (struct-out field-decl)
          (struct-out data-decl)
          (struct-out method-decl)
+         (struct-out pinvoke-decl)
          (struct-out generic-param)
          (struct-out locals-decl)
          (struct-out local-var)
@@ -44,7 +45,13 @@
 ; A data block (II.16): name is the symbol a field's `at` refers to, bytes its initial value.
 (struct data-decl (name bytes) #:transparent)
 ; handlers: list of eh-clause in source order. maxstack is #f when there is no .maxstack.
-(struct method-decl (flags ret name gparams params code maxstack entry? locals handlers))
+; pinvoke is #f, or the pinvoke-decl of a pinvokeimpl method (II.15.5).
+(struct method-decl (flags ret name gparams params code maxstack entry? locals handlers pinvoke))
+; A P/Invoke declaration (II.22.22 ImplMap): dll is the module name string, conv is a calling
+; convention keyword (winapi, cdecl, stdcall, thiscall or fastcall), charset is 'ansi, 'unicode,
+; 'auto or #f, lasterr? is the SupportsLastError flag, and entry is the entry-point symbol or #f
+; for the method's own name.
+(struct pinvoke-decl (dll conv charset lasterr? entry) #:transparent)
 ; exception clause (II.25.4.6): kind is catch, finally, fault or filter. class is (asm ty) for a
 ; catch, the filter block's label name for a filter, and #f otherwise; the four labels are names
 ; without the colon.
@@ -198,7 +205,8 @@
 
 ; The 7-element form has no generic parameters. The 8-element form has a (.typarams ...)
 ; list before the parameter list. The 5-element form has no body and no implementation flags:
-; only an abstract method may omit its body (II.22.26 MethodAttributes Abstract).
+; only an abstract method may omit its body (II.22.26 MethodAttributes Abstract). The 6-element
+; form is a P/Invoke method, which has no body and carries its (pinvokeimpl ...) declaration.
 (define (parse-method class-name node ncls)
   (define-values (tp prefix ret name params suffix il bodiless?)
     (match node
@@ -208,10 +216,25 @@
        (values tp prefix ret name params suffix il #f)]
       [(list '.method prefix ret name params)
        (values #f prefix ret name params #f #f #t)]
+      [(list '.method prefix ret name params (? pinvoke-form?))
+       (values #f prefix ret name params #f #f #t)]
       [_ (error 'rangi "malformed .method in ~a: ~s" class-name node)]))
   (define abstract? (and (memq 'abstract prefix) #t))
+  (define pinvoke? (and (memq 'pinvokeimpl prefix) #t))
+  (define pinvoke
+    (and (= (length node) 6) (parse-pinvoke name class-name (list-ref node 5))))
   (cond
-    [(and bodiless? (not abstract?))
+    [(and pinvoke? (not bodiless?))
+     (error 'rangi "pinvokeimpl method ~a in ~a cannot have a body" name class-name)]
+    [(and pinvoke? abstract?)
+     (error 'rangi "pinvokeimpl method ~a in ~a cannot be abstract" name class-name)]
+    [(and pinvoke? (not pinvoke))
+     (error 'rangi "pinvokeimpl method ~a in ~a needs a (pinvokeimpl \"dll\" ...) declaration"
+            name class-name)]
+    [(and pinvoke (not pinvoke?))
+     (error 'rangi "method ~a in ~a has a pinvokeimpl declaration but no pinvokeimpl keyword"
+            name class-name)]
+    [(and bodiless? (not abstract?) (not pinvoke?))
      (error 'rangi "method ~a in ~a has no body; only abstract methods may omit it" name class-name)]
     [(and abstract? (not bodiless?))
      (error 'rangi "abstract method ~a in ~a cannot have a body" name class-name)])
@@ -228,7 +251,47 @@
   (check-type name ret ncls nmth)
   (for ([p (in-list params)]) (check-type name p ncls nmth))
   (method-decl prefix ret name gparams params code maxstack entry?
-               (parse-locals name raw-locals ncls nmth) handlers))
+               (parse-locals name raw-locals ncls nmth) handlers pinvoke))
+
+(define (pinvoke-form? x)
+  (and (pair? x) (eq? (car x) 'pinvokeimpl)))
+
+; (pinvokeimpl "dll" [cdecl|stdcall|winapi|thiscall|fastcall] [ansi|unicode|auto] [lasterr]
+;   [(as EntryName)]). The DLL name is required. Defaults are winapi, NotSpecified charset,
+; no SupportsLastError, and the method's own name as the entry point (II.22.22).
+(define (parse-pinvoke name class-name spec)
+  (define (bad fmt . args)
+    (error 'rangi "pinvokeimpl on ~a.~a: ~a" class-name name (apply format fmt args)))
+  (unless (and (pinvoke-form? spec) (pair? (cdr spec)) (string? (cadr spec)))
+    (bad "needs a DLL name string first, as (pinvokeimpl \"dll\" ...), got ~s" spec))
+  (define dll (cadr spec))
+  (when (string=? dll "")
+    (bad "the DLL name is empty"))
+  (define conv #f)
+  (define charset #f)
+  (define lasterr? #f)
+  (define entry #f)
+  (let loop ([opts (cddr spec)])
+    (match opts
+      ['() (void)]
+      [(cons (and k (or 'cdecl 'stdcall 'winapi 'thiscall 'fastcall)) rest)
+       (when conv (bad "more than one calling convention"))
+       (set! conv k)
+       (loop rest)]
+      [(cons (and k (or 'ansi 'unicode 'auto)) rest)
+       (when charset (bad "more than one charset"))
+       (set! charset k)
+       (loop rest)]
+      [(cons 'lasterr rest)
+       (set! lasterr? #t)
+       (loop rest)]
+      [(cons (list 'as (? symbol? e)) rest)
+       (when entry (bad "more than one entry point name"))
+       (set! entry e)
+       (loop rest)]
+      [(cons other _) (bad "unsupported option ~s" other)]))
+  (pinvoke-decl dll (or conv 'winapi) charset lasterr? entry))
+
 
 ; .override Owner::M ret params, or .override (asm ty) M ret params for a base in another assembly.
 (define (parse-override class-name node ncls)
