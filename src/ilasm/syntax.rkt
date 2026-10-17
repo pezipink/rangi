@@ -12,31 +12,39 @@
 ; heap indexes, or flag bits. cli/lower.rkt resolves those.
 (struct module-model (asm-refs classes module-name format))
 (struct class-decl (flags name methods))
-(struct method-decl (flags ret name params code maxstack entry?))
+; locals: list of local type names (empty when there is no .locals); init?: .locals init
+(struct method-decl (flags ret name params code maxstack entry? locals init?))
 
 (define (class-named? sym)
   (lambda (c) (eq? (cadr c) sym)))
 
-; .entrypoint and .maxstack are directives inside a body, so they are lifted out of the code
+; .entrypoint, .maxstack, and .locals are directives inside a body, so they are lifted out of the code
 (define (split-directives il)
-  (for/fold ([code '()] [maxstack 8] [entry? #f]
-             #:result (values (reverse code) maxstack entry?))
+  (for/fold ([code '()] [maxstack 8] [entry? #f] [locals #f] [init? #f]
+             #:result (values (reverse code) maxstack entry? (or locals '()) init?))
             ([node (in-list il)])
     (match node
-      [(list '.entrypoint) (values code maxstack #t)]
+      [(list '.entrypoint) (values code maxstack #t locals init?)]
       [(list '.maxstack n)
        (unless (and (exact-nonnegative-integer? n) (< n #x10000))
          (error 'rangi "invalid .maxstack ~s" n))
-       (values code n entry?)]
-      [_ (values (cons node code) maxstack entry?)])))
+       (values code n entry? locals init?)]
+      [(list '.locals (list types ...))
+       (when locals (error 'rangi "only one .locals directive is allowed per method"))
+       (values code maxstack entry? types #f)]
+      [(list '.locals 'init (list types ...))
+       (when locals (error 'rangi "only one .locals directive is allowed per method"))
+       (values code maxstack entry? types #t)]
+      [(list '.locals _ ...) (error 'rangi "malformed .locals ~s" node)]
+      [_ (values (cons node code) maxstack entry? locals init?)])))
 
 (define (parse-method class-name node)
   (match node
     [(list '.method prefix ret name params suffix il)
      (unless (and (list? suffix) (= (length suffix) 2) (memq 'cil suffix) (memq 'managed suffix))
        (error 'rangi "unsupported implementation flags ~s on ~a" suffix name))
-     (define-values (code maxstack entry?) (split-directives il))
-     (method-decl prefix ret name params code maxstack entry?)]
+     (define-values (code maxstack entry? locals init?) (split-directives il))
+     (method-decl prefix ret name params code maxstack entry? locals init?)]
     [_ (error 'rangi "malformed .method in ~a: ~s" class-name node)]))
 
 (define (parse-il program)

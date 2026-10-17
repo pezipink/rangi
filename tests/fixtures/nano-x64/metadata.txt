@@ -7,7 +7,7 @@ TypeDef rows=2
   TypeDef[1] Flags=0 Name="<Module>" Namespace="" Extends=0x00000000 Fields=[] Methods=[]
   TypeDef[2] Flags=0 Name="Program" Namespace="" Extends=0x01000001 Fields=[] Methods=[1..1]
 MethodDef rows=1
-  MethodDef[1] Rva=8664 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=202a000000280100000a2a
+  MethodDef[1] Rva=8664 ImplFlags=0 Flags=22 Name="main" Signature=000001 Params=[] Il=1f2a280100000a2a
 MemberRef rows=1
   MemberRef[1] Parent=0x01000002 Name="WriteLine" Signature=00010108
 Assembly rows=1

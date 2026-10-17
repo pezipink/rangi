@@ -4,7 +4,9 @@
 ; layouts come from the L3 dump, and row offsets and sizes come from the reader, whose
 ; table header is checked against the bytes.
 (require racket/list racket/port racket/string
-         "../../src/cli-reader.rkt" "metadata-dump.rkt")
+         "../../src/cli-reader.rkt" "metadata-dump.rkt"
+         (only-in "../../src/il/opcodes.rkt" opcode-table opcode-size opcode-value opcode-operand)
+         (only-in "../../src/il/encode.rkt" operand-width))
 (provide lint-image)
 
 (struct section (name va vsize raw-size raw-ptr chars))
@@ -427,32 +429,66 @@
        [(> (+ start size) (bytes-length raw)) (fail! "method body at ~x runs past the file" rva)]
        [else (check-il raw start (+ start size) rva count-of fail!)])]))
 
-; the writer emits only these opcodes; any other byte is reported rather than guessed at
+; Instruction sizes and operand kinds come from the shared opcode table (src/il/opcodes.rkt), the
+; same data the writer encodes with. The lint checks structure only: every opcode is known, every
+; instruction fits in its body, and every token names an existing row of a table the operand allows.
+; Any other byte is reported rather than guessed at.
+(define opcodes-by-value
+  (for/hasheqv ([op (in-list opcode-table)]) (values (opcode-value op) op)))
+
+(define (token-tables operand)
+  (case operand
+    [(InlineMethod) '(#x06 #x0A #x2B)]
+    [(InlineField) '(#x04 #x0A)]
+    [(InlineType) '(#x01 #x02 #x1B)]
+    [(InlineTok) '(#x01 #x02 #x04 #x06 #x0A #x1B #x2B)]
+    [(InlineSig) '(#x11)]
+    [else #f]))
+
+(define table-names
+  (hasheqv #x01 'typeref #x02 'typedef #x04 'field #x06 'methoddef #x0A 'memberref
+           #x11 'standalonesig #x1B 'typespec #x2B 'methodspec))
+
 (define (check-il raw p end rva count-of fail!)
   (let loop ([p p])
     (cond
       [(= p end) (void)]
       [(> p end) (fail! "method body at ~x has an instruction past its code size" rva)]
       [else
-       (case (bytes-ref raw p)
-         [(#x2A #x58) (loop (+ p 1))]
-         [(#x20) (loop (+ p 5))]
-         [(#x28)
-          (check-token raw (+ p 1) rva count-of fail!)
-          (loop (+ p 5))]
+       (define b0 (bytes-ref raw p))
+       (define code (if (= b0 #xFE) (+ #xFE00 (bytes-ref raw (min (+ p 1) (- end 1)))) b0))
+       (define op (hash-ref opcodes-by-value code #f))
+       (cond
+         [(not op)
+          (fail! "method body at ~x uses opcode ~x, which the lint does not decode" rva code)
+          (void)]
          [else
-          (fail! "method body at ~x uses opcode ~x, which the lint does not decode"
-                 rva (bytes-ref raw p))
-          (void)])])))
+          (define operand-at (+ p (opcode-size op)))
+          (define len
+            (cond
+              [(eq? (opcode-operand op) 'InlineSwitch)
+               (define n (if (<= (+ operand-at 4) end) (le raw operand-at 4) 0))
+               (+ (opcode-size op) 4 (* 4 n))]
+              [else (+ (opcode-size op) (operand-width op))]))
+          (cond
+            [(> (+ p len) end)
+             (fail! "method body at ~x has an instruction past its code size" rva)]
+            [else
+             (define tables (token-tables (opcode-operand op)))
+             (when tables
+               (check-token raw operand-at tables rva count-of fail!))
+             (loop (+ p len))])])])))
 
-(define (check-token raw pos rva count-of fail!)
+(define (check-token raw pos tables rva count-of fail!)
   (define tok (le raw pos 4))
   (define table (arithmetic-shift tok -24))
   (define rid (bitwise-and tok #xFFFFFF))
-  (define name (case table [(#x0A) 'memberref] [(#x06) 'methoddef] [else #f]))
+  (define name (hash-ref table-names table #f))
   (cond
     [(not name)
      (fail! "method body at ~x references token table ~x, which the lint does not decode" rva table)]
+    [(not (memv table tables))
+     (fail! "method body at ~x references table ~a, which this instruction does not allow" rva name)]
     [else
      (expect fail! (<= 1 rid (count-of name))
              "method body at ~x references missing ~a row ~a" rva name rid)]))

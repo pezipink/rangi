@@ -199,9 +199,9 @@
 // CLR meta-data size  : 384                (18.75%)
 // CLR additional info : 0                  ( 0.00%)
 // CLR method headers  : 1                  ( 0.05%)
-// Managed code         : 11                ( 0.54%)
+// Managed code         : 8                 ( 0.39%)
 // Data                 : 512               (25.00%)
-// Unaccounted          : 424               (20.70%)
+// Unaccounted          : 427               (20.85%)
 
 // Num.of PE sections   : 2
 //   .text    - 1024
@@ -226,8 +226,8 @@
 //   Num.of fat headers    - 0
 //   Num.of tiny headers   - 1
 
-// Managed code : 11
-//   Ave method size - 11
+// Managed code : 8
+//   Ave method size - 8
 // Classes defined in this module:
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Class Program                        (auto) (ansi) 
@@ -262,11 +262,11 @@
   {
     .entrypoint
     // Method begins at RVA 0x21d0
-    // Code size       11 (0xb)
+    // Code size       8 (0x8)
     .maxstack  8
-    IL_0000:  /* 20   | 2A000000         */ ldc.i4     0x2a
-    IL_0005:  /* 28   | (0A)000001       */ call       void [mscorlib/*23000001*/]System.Console/*01000002*/::WriteLine(int32) /* 0A000001 */
-    IL_000a:  /* 2A   |                  */ ret
+    IL_0000:  /* 1F   | 2A               */ ldc.i4.s   42
+    IL_0002:  /* 28   | (0A)000001       */ call       void [mscorlib/*23000001*/]System.Console/*01000002*/::WriteLine(int32) /* 0A000001 */
+    IL_0007:  /* 2A   |                  */ ret
   } // end of method Program::main
 
 } // end of class Program
