@@ -103,7 +103,7 @@
     ; P/Invoke methods are preservesig (MethodImplAttributes 0x0080, II.23.1.11), so the native
     ; return value is not read as an HRESULT
     (add-row! tb 'methoddef (if (mdef-body m) (rva-ref (method-sym i)) 0)
-              (if (mdef-pinvoke m) #x80 0) (mdef-flags m)
+              (bitwise-ior (if (mdef-pinvoke m) #x80 0) (mdef-impl m)) (mdef-flags m)
               (s (mdef-name m)) (b (mdef-sig m)) 1))
   ; P/Invoke: one ModuleRef per DLL, numbered in first-use order (II.22.31), and one ImplMap
   ; row per P/Invoke MethodDef (II.22.22). The rid is the MethodDef's 1-based rid.

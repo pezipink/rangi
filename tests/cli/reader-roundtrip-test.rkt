@@ -62,7 +62,7 @@
                '()
                '()
                '()
-               (list (tdef 1 "C" "N" #f (list (mdef "M" 1 method-sig #f #f #f)) '() #f))
+               (list (tdef 1 "C" "N" #f (list (mdef "M" 1 method-sig #f #f #f 0)) '() #f))
                "rangi.dll"
                0
                #f

@@ -56,12 +56,13 @@
 ; A property (II.22.34). name is the property's name, type its type form, params the index types
 ; (empty for a plain property). instance? is #t for an instance property, which needs HASTHIS in
 ; its signature (II.23.2.5). accessors is a list of (kind . method-name) in source order, with kind
-; one of getter, setter or other.
-(struct prop-decl (name type params instance? accessors) #:transparent)
+; one of getter, setter or other. flags is a list of the PropertyAttributes keywords written in
+; the source: specialname and rtspecialname (empty by default).
+(struct prop-decl (name type params instance? accessors flags) #:transparent)
 ; An event (II.22.13). name is the event's name and type its class type form, (class ty).
 ; accessors is a list of (kind . method-name) in source order, with kind one of add, remove, fire
-; or other.
-(struct event-decl (name type accessors) #:transparent)
+; or other. flags is a list of the EventAttributes keywords: specialname and rtspecialname.
+(struct event-decl (name type accessors flags) #:transparent)
 ; A field (II.22.15). flags are FieldAttributes keywords; type is a type form (II.22.15).
 ; init is #f, or (prim . value) for a literal field: an integral primitive and its integer value.
 ; at is #f, or the name of a data-decl whose bytes are the field's initial value (FieldRVA, II.22.18).
@@ -76,8 +77,11 @@
 (struct win32-resource-decl (type name lang bytes) #:transparent)
 ; handlers: list of eh-clause in source order. maxstack is #f when there is no .maxstack.
 ; pinvoke is #f, or the pinvoke-decl of a pinvokeimpl method (II.15.5). customs is the list of
-; custom-decl written in the method body (II.22.10 with a MethodDef parent).
-(struct method-decl (flags ret name gparams params code maxstack entry? locals handlers pinvoke customs))
+; custom-decl written in the method body (II.22.10 with a MethodDef parent). runtime? is #t for a
+; method whose body the runtime provides, written (runtime managed). It has no body and is only
+; allowed in a delegate class (II.14.6).
+(struct method-decl (flags ret name gparams params code maxstack entry? locals handlers pinvoke customs
+                     runtime?))
 ; A P/Invoke declaration (II.22.22 ImplMap): dll is the module name string, conv is a calling
 ; convention keyword (winapi, cdecl, stdcall, thiscall or fastcall), charset is 'ansi, 'unicode,
 ; 'auto or #f, lasterr? is the SupportsLastError flag, and entry is the entry-point symbol or #f
@@ -238,6 +242,8 @@
 ; list before the parameter list. The 5-element form has no body and no implementation flags:
 ; only an abstract method may omit its body (II.22.26 MethodAttributes Abstract). The 6-element
 ; form is a P/Invoke method, which has no body and carries its (pinvokeimpl ...) declaration.
+; The 6-element form (runtime managed) is a method whose body the runtime provides, as a
+; delegate's constructor and Invoke are (II.14.6).
 (define (parse-method class-name node ncls)
   (define-values (tp prefix ret name params suffix il bodiless?)
     (match node
@@ -249,11 +255,15 @@
        (values #f prefix ret name params #f #f #t)]
       [(list '.method prefix ret name params (? pinvoke-form?))
        (values #f prefix ret name params #f #f #t)]
+      [(list '.method prefix ret name params (list 'runtime 'managed))
+       (values #f prefix ret name params #f #f #t)]
       [_ (error 'rangi "malformed .method in ~a: ~s" class-name node)]))
   (define abstract? (and (memq 'abstract prefix) #t))
   (define pinvoke? (and (memq 'pinvokeimpl prefix) #t))
+  (define runtime? (and (= (length node) 6) (equal? (list-ref node 5) '(runtime managed))))
   (define pinvoke
-    (and (= (length node) 6) (parse-pinvoke name class-name (list-ref node 5))))
+    (and (= (length node) 6) (not runtime?)
+         (parse-pinvoke name class-name (list-ref node 5))))
   (cond
     [(and pinvoke? (not bodiless?))
      (error 'rangi "pinvokeimpl method ~a in ~a cannot have a body" name class-name)]
@@ -265,7 +275,9 @@
     [(and pinvoke (not pinvoke?))
      (error 'rangi "method ~a in ~a has a pinvokeimpl declaration but no pinvokeimpl keyword"
             name class-name)]
-    [(and bodiless? (not abstract?) (not pinvoke?))
+    [(and runtime? (or abstract? pinvoke?))
+     (error 'rangi "runtime method ~a in ~a cannot be abstract or pinvokeimpl" name class-name)]
+    [(and bodiless? (not abstract?) (not pinvoke?) (not runtime?))
      (error 'rangi "method ~a in ~a has no body; only abstract methods may omit it" name class-name)]
     [(and abstract? (not bodiless?))
      (error 'rangi "abstract method ~a in ~a cannot have a body" name class-name)])
@@ -285,7 +297,7 @@
   (for ([p (in-list params)]) (check-type name p ncls nmth))
   (method-decl prefix ret name gparams params code maxstack entry?
                (parse-locals name raw-locals ncls nmth) handlers pinvoke
-               (map (λ (n) (parse-custom name n)) body-customs)))
+               (map (λ (n) (parse-custom name n)) body-customs) runtime?))
 
 (define (pinvoke-form? x)
   (and (pair? x) (eq? (car x) 'pinvokeimpl)))
@@ -416,35 +428,59 @@
      (field-decl flags type name #f dname)]
     [_ (error 'rangi "malformed .field in ~a: ~s" class-name node)]))
 
-; (.property [instance] type Name (param types) (getter M) (setter M) (other M)). Without
-; instance the property is static (II.22.34). Its accessors name methods of the class, checked in
-; flatten-class.
+; (.property [instance] [specialname] [rtspecialname] type Name (param types) (getter M) (setter M)
+; (other M)). Without instance the property is static (II.22.34). Its accessors name methods of the
+; class, checked in flatten-class. hasdefault is rejected: its Constant row (II.22.9) is not yet
+; written for properties.
 (define property-accessor-kinds '(getter setter other))
+(define property-keywords '(instance specialname rtspecialname hasdefault))
 (define (parse-property class-name node ncls)
-  (define-values (instance? rest)
+  (define-values (kws rest)
     (match node
-      [(list* '.property 'instance rest) (values #t rest)]
-      [(cons '.property rest) (values #f rest)]
+      [(cons '.property rest) (leading-keywords class-name 'property node rest property-keywords)]
       [_ (error 'rangi "malformed .property in ~a: ~s" class-name node)]))
+  (when (memq 'hasdefault kws)
+    (error 'rangi "property in ~a: hasdefault is not supported, it needs a Constant row" class-name))
+  (define instance? (and (memq 'instance kws) #t))
+  (define flags (filter (λ (k) (memq k '(specialname rtspecialname))) kws))
   (match rest
     [(list type (? symbol? name) (? list? params) accessor-nodes ...)
      (when (eq? type 'void) (error 'rangi "property ~a.~a cannot be void" class-name name))
      (check-type name type ncls 0)
      (for ([p (in-list params)]) (check-type name p ncls 0))
      (prop-decl name type params instance?
-                (parse-accessors class-name 'property name property-accessor-kinds accessor-nodes))]
+                (parse-accessors class-name 'property name property-accessor-kinds accessor-nodes)
+                flags)]
     [_ (error 'rangi "malformed .property in ~a: ~s" class-name node)]))
 
-; (.event type Name (add M) (remove M) (fire M) (other M)). The type is a class, a bare symbol
-; for a class in this module or (asm ty) for an external one (II.22.13). It is stored as (class ty).
+; The leading keywords of a .property or .event node, in source order. Each keyword in allowed
+; appears at most once. The rest of the node is returned.
+(define (leading-keywords class-name what node rest allowed)
+  (let loop ([r rest] [kws '()])
+    (match r
+      [(cons (? symbol? k) r2) #:when (memq k allowed)
+       (when (memq k kws)
+         (error 'rangi "duplicate ~a in .~a in ~a: ~s" k what class-name node))
+       (loop r2 (cons k kws))]
+      [_ (values (reverse kws) r)])))
+
+; (.event [specialname] [rtspecialname] type Name (add M) (remove M) (fire M) (other M)). The type
+; is a class, a bare symbol for a class in this module or (asm ty) for an external one (II.22.13).
+; It is stored as (class ty).
 (define event-accessor-kinds '(add remove fire other))
+(define event-keywords '(specialname rtspecialname))
 (define (parse-event class-name node ncls)
-  (match node
-    [(list '.event (and type (or (? symbol?) (list (? symbol?) (? symbol?)))) (? symbol? name)
-           accessor-nodes ...)
+  (define-values (kws rest)
+    (match node
+      [(cons '.event rest) (leading-keywords class-name 'event node rest event-keywords)]
+      [_ (error 'rangi "malformed .event in ~a: ~s" class-name node)]))
+  (match rest
+    [(list* (and type (or (? symbol?) (list (? symbol?) (? symbol?)))) (? symbol? name)
+            accessor-nodes)
      (check-type name (list 'class type) ncls 0)
      (event-decl name (list 'class type)
-                 (parse-accessors class-name 'event name event-accessor-kinds accessor-nodes))]
+                 (parse-accessors class-name 'event name event-accessor-kinds accessor-nodes)
+                 kws)]
     [_ (error 'rangi "malformed .event in ~a: ~s" class-name node)]))
 
 (define (parse-accessors class-name what member kinds nodes)
@@ -623,6 +659,22 @@
 
 ; A class followed by its nested classes in source order (II.10.3). enclosing is the full name
 ; of the enclosing class, or #f. A nested class's full name is Outer/Inner.
+; A delegate (II.14.6) is a sealed class deriving from System.MulticastDelegate. Its .ctor and Invoke
+; are runtime-provided, and no other method is runtime.
+(define (check-delegate name flags methods)
+  (unless (memq 'sealed flags)
+    (error 'rangi "delegate ~a must be sealed" name))
+  (define (runtime-method? md-name)
+    (findf (λ (md) (and (eq? (method-decl-name md) md-name) (method-decl-runtime? md))) methods))
+  (unless (runtime-method? '.ctor)
+    (error 'rangi "delegate ~a needs a runtime .ctor" name))
+  (unless (runtime-method? 'Invoke)
+    (error 'rangi "delegate ~a needs a runtime Invoke" name))
+  (for ([md (in-list methods)] #:when (method-decl-runtime? md))
+    (unless (memq (method-decl-name md) '(.ctor Invoke))
+      (error 'rangi "delegate ~a: runtime method ~a must be .ctor or Invoke"
+             name (method-decl-name md)))))
+
 (define (flatten-class raw enclosing)
   (match-define (list flags simple tp ext body) raw)
   (define name (if enclosing (string->symbol (format "~a/~a" enclosing simple)) simple))
@@ -666,6 +718,12 @@
                      (prop-decl-instance? p) methods))
   (for ([e (in-list events)])
     (check-accessors name 'event (event-decl-name e) (event-decl-accessors e) #f methods))
+  (define delegate? (equal? ext '(mscorlib System.MulticastDelegate)))
+  (for ([m (in-list methods)] #:when (method-decl-runtime? m))
+    (unless delegate?
+      (error 'rangi "runtime method ~a in ~a: only a delegate class may have one"
+             (method-decl-name m) name)))
+  (when delegate? (check-delegate name flags methods))
   (cons (class-decl flags name gparams ext methods fields enclosing overrides implements customs
                     props events)
         (append* (for/list ([node (in-list body)] #:when (nested-class-node? node))

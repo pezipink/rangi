@@ -78,7 +78,7 @@
 ; (typeref . rid), or #f for an interface or <Module> (II.22.37). enclosing is the TypeDef rid of
 ; the enclosing class for a nested type, or #f (II.22.32).
 (struct tdef (flags name ns extends methods fields enclosing))
-(struct mdef (name flags sig body entry? pinvoke))
+(struct mdef (name flags sig body entry? pinvoke impl))
 ; A P/Invoke method's ImplMap data (II.22.22): dll is the ModuleRef name, import-name is the
 ; entry point, and flags are the PInvokeAttributes MappingFlags (II.23.1.8).
 (struct pinvokeinfo (dll import-name flags))
@@ -974,7 +974,8 @@
          sig
          body
          (method-decl-entry? m)
-         pinvoke)
+         pinvoke
+         (if (method-decl-runtime? m) runtime-impl-flags 0))
    (gparam-rows cx scope (cons 'methoddef rid) gparams)))
 
 ; first-rid is the MethodDef rid of the first method of this class. Methods named in special are
@@ -1260,6 +1261,17 @@
                         (list (class-decl-name cls) mname (method-decl-ret md) (method-decl-params md)))
               0))
 
+; PropertyAttributes and EventAttributes bits (II.22.34, II.22.13) for the keywords a .property or
+; .event may name. Keywords without a bit here are not reachable from the parser.
+(define property-attribute-bits '((specialname . #x0200) (rtspecialname . #x0400)))
+(define event-attribute-bits '((specialname . #x0200) (rtspecialname . #x0400)))
+(define (keyword-flags kws bits)
+  (for/fold ([acc 0]) ([k (in-list kws)])
+    (bitwise-ior acc (cdr (assq k bits)))))
+
+; MethodImplAttributes Runtime, the code type bits of a method the runtime provides (II.22.26).
+(define runtime-impl-flags #x0003)
+
 ; An event type is a class: a module class is a TypeDef, and an external one is a TypeRef.
 (define (lower-event-type cx t)
   (match t
@@ -1279,13 +1291,16 @@
       ; a PropertySig's index types are lowered in the same scope as method signatures (II.23.2.5)
       (define prop-rows
         (for/list ([p (in-list cprops)])
-          (propdef (symbol->string (prop-decl-name p)) 0
+          (propdef (symbol->string (prop-decl-name p))
+                   (keyword-flags (prop-decl-flags p) property-attribute-bits)
                    (encode-property-sig (lower-type cx '(0 . 0) (prop-decl-type p))
                                         (lower-args cx '(0 . 0) (prop-decl-params p))
                                         #:hasthis? (prop-decl-instance? p)))))
       (define event-rows
         (for/list ([e (in-list cevents)])
-          (evdef (symbol->string (event-decl-name e)) 0 (lower-event-type cx (event-decl-type e)))))
+          (evdef (symbol->string (event-decl-name e))
+                 (keyword-flags (event-decl-flags e) event-attribute-bits)
+                 (lower-event-type cx (event-decl-type e)))))
       (define prop-sems
         (for*/list ([(p k) (in-parallel cprops (in-naturals nprop))]
                     [a (in-list (prop-decl-accessors p))])
