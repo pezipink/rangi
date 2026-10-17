@@ -58,6 +58,23 @@
   (check-equal? (resolve-type-name e (ident "Point") #:policy (prefer-local-policy "A"))
                 (type-ref "A" "N" "Point" 0 'valuetype '())))
 
+(test-case "first-match picks the first candidate, and local wins over it"
+  (define pa (make-declaration-provider "A"))
+  (define pb (make-declaration-provider "B"))
+  (define pc (make-declaration-provider "C"))
+  (declare-type! pa (point-desc "A"))
+  (declare-type! pb (point-desc "B"))
+  (declare-type! pc (point-desc "C"))
+  (define e (make-env #:providers (list pa pb pc) #:opens '("N")))
+  (check-equal? (resolve-type-name e (ident "Point") #:policy first-match-policy)
+                (type-ref "A" "N" "Point" 0 'valuetype '()))
+  (check-equal? (resolve-type-name e (ident "Point")
+                                  #:policy (prefer-local-policy "C" first-match-policy))
+                (type-ref "C" "N" "Point" 0 'valuetype '()))
+  (check-equal? (resolve-type-name e (ident "Point")
+                                  #:policy (prefer-local-policy "Z" first-match-policy))
+                (type-ref "A" "N" "Point" 0 'valuetype '())))
+
 (test-case "declared types are found and redeclaring replaces them, without caching"
   (define dp (make-declaration-provider "Geo"))
   (define r (type-ref "Geo" "" "Shape" 0 'class '()))

@@ -16,6 +16,7 @@
          (struct-out type-binding)
          resolve-type-name
          error-on-ambiguity
+         first-match-policy
          prefer-local-policy
          find-methods
          make-declaration-provider
@@ -132,13 +133,19 @@
                                  (join-strings (map type->string refs) ", "))
                       id))
 
-; Prefers the single match from the given assembly (local types shadow imported ones).
-(define (prefer-local-policy asm)
+; Takes the first candidate. Candidates come in provider and open-namespace order, so the choice
+; is deterministic.
+(define (first-match-policy id refs)
+  (car refs))
+
+; Prefers the single match from the given assembly (local types shadow imported ones). When the
+; local rule does not apply, the fallback policy decides.
+(define (prefer-local-policy asm [fallback error-on-ambiguity])
   (λ (id refs)
     (define locals (filter (λ (r) (equal? (type-ref-asm r) asm)) refs))
     (if (and (pair? locals) (null? (cdr locals)))
         (car locals)
-        (error-on-ambiguity id refs))))
+        (fallback id refs))))
 
 ; The methods named name, declared by r or any base, most derived first. A base that cannot be
 ; found ends the walk silently. Override and hiding are not handled.
