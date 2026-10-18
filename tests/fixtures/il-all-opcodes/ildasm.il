@@ -66,7 +66,7 @@
 // 0x00000000 [0x00000000] address [size] of Exception Directory:       
 // 0x00000000 [0x00000000] address [size] of Security Directory:        
 // 0x00004000 [0x0000000c] address [size] of Base Relocation Table:     
-// 0x00000000 [0x00000000] address [size] of Debug Directory:           
+// 0x0000249c [0x00000054] address [size] of Debug Directory:           
 // 0x00000000 [0x00000000] address [size] of Architecture Specific:     
 // 0x00000000 [0x00000000] address [size] of Global Pointer:            
 // 0x00000000 [0x00000000] address [size] of TLS Directory:             
@@ -79,7 +79,7 @@
 
 // Image sections:
 //              .text
-//              0x0000049a Virtual Size
+//              0x0000053b Virtual Size
 //              0x00002000 Virtual Address
 //              0x00000600 Size of Raw Data
 //              0x00000200 Pointer to Raw Data
@@ -193,7 +193,7 @@
 
 // File size            : 2560
 // PE header size       : 512 (456 used)    (20.00%)
-// PE additional info   : 132               ( 5.16%)
+// PE additional info   : 216               ( 8.44%)
 // Num.of PE sections   : 2
 // CLR header size     : 72                 ( 2.81%)
 // CLR meta-data size  : 728                (28.44%)
@@ -201,7 +201,7 @@
 // CLR method headers  : 40                 ( 1.56%)
 // Managed code         : 232               ( 9.06%)
 // Data                 : 512               (20.00%)
-// Unaccounted          : 332               (12.97%)
+// Unaccounted          : 248               ( 9.69%)
 
 // Num.of PE sections   : 2
 //   .text    - 1536

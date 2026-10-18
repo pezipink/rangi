@@ -35,7 +35,7 @@
 // Magic:                          0x010b
 // Major linker version:           0x06
 // Minor linker version:           0x05
-// Size of code:                   0x00000600
+// Size of code:                   0x00000800
 // Size of init.data:              0x00000200
 // Size of uninit.data:            0x00000000
 // Addr. of entry point:           0x0000255c
@@ -66,7 +66,7 @@
 // 0x00000000 [0x00000000] address [size] of Exception Directory:       
 // 0x00000000 [0x00000000] address [size] of Security Directory:        
 // 0x00004000 [0x0000000c] address [size] of Base Relocation Table:     
-// 0x00000000 [0x00000000] address [size] of Debug Directory:           
+// 0x00002564 [0x00000054] address [size] of Debug Directory:           
 // 0x00000000 [0x00000000] address [size] of Architecture Specific:     
 // 0x00000000 [0x00000000] address [size] of Global Pointer:            
 // 0x00000000 [0x00000000] address [size] of TLS Directory:             
@@ -79,9 +79,9 @@
 
 // Image sections:
 //              .text
-//              0x00000562 Virtual Size
+//              0x00000603 Virtual Size
 //              0x00002000 Virtual Address
-//              0x00000600 Size of Raw Data
+//              0x00000800 Size of Raw Data
 //              0x00000200 Pointer to Raw Data
 //              0x00000000 Pointer to Relocations
 //              0x00000000 Pointer to Linenumbers
@@ -96,7 +96,7 @@
 //              0x0000000c Virtual Size
 //              0x00004000 Virtual Address
 //              0x00000200 Size of Raw Data
-//              0x00000800 Pointer to Raw Data
+//              0x00000a00 Pointer to Raw Data
 //              0x00000000 Pointer to Relocations
 //              0x00000000 Pointer to Linenumbers
 //                  0x0000 Number of Relocations
@@ -191,20 +191,20 @@
 // Export Address Table Jumps:
 // No data.
 
-// File size            : 2560
-// PE header size       : 512 (456 used)    (20.00%)
-// PE additional info   : 132               ( 5.16%)
+// File size            : 3072
+// PE header size       : 512 (456 used)    (16.67%)
+// PE additional info   : 216               ( 7.03%)
 // Num.of PE sections   : 2
-// CLR header size     : 72                 ( 2.81%)
-// CLR meta-data size  : 404                (15.78%)
+// CLR header size     : 72                 ( 2.34%)
+// CLR meta-data size  : 404                (13.15%)
 // CLR additional info : 0                  ( 0.00%)
-// CLR method headers  : 12                 ( 0.47%)
-// Managed code         : 797               (31.13%)
-// Data                 : 512               (20.00%)
-// Unaccounted          : 119               ( 4.65%)
+// CLR method headers  : 12                 ( 0.39%)
+// Managed code         : 797               (25.94%)
+// Data                 : 512               (16.67%)
+// Unaccounted          : 547               (17.81%)
 
 // Num.of PE sections   : 2
-//   .text    - 1536
+//   .text    - 2048
 //   .reloc   - 512
 
 // CLR meta-data size  : 404
