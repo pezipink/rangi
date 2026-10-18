@@ -12,14 +12,16 @@ All code lives in `src/`, with the experiments in `experiments/` and the test ha
 |--------------------------------|--------------------------------------------------------------------------------------------------------------|
 | `src/cli/reader.rkt`           | Lazy PE + CLI metadata reader. Exports `read-file`, `get-public-typedefs`, `read-assembly-meta`, and read-only accessors used by tests. `src/cli-reader.rkt` is a re-export shim. |
 | `src/ilasm/syntax.rkt`         | s-expression ilasm front end (`parse-il`). Returns a plain `module-model` of classes and methods, with no heap or table knowledge. |
-| `src/cli/lower.rkt`            | Lowers the model to a `cli-program`: type and member refs, typedefs, flags, signatures, IL bytes, locals, EH clauses, and interning. |
+| `src/cli/lower.rkt`            | Lowers the model to a `cli-program`: type and member refs, typedefs, flags, signatures, IL bytes, locals, EH clauses, `.line` sequence points, and interning. |
+| `src/pdb/model.rkt`            | `methoddebug` and `seqpt` structs: the per-method debug data that lowering produces. |
+| `src/pdb/pdb.rkt`              | Builds the portable PDB (`build-pdb`, `pdb-image`): the `#Pdb` stream and tables 0x30 to 0x35, deterministic and without the clock. See [pdb.md](plans/pdb.md). |
 | `src/cli/sigs.rkt`             | II.23.2 signature blob encoders: method, field, LocalVarSig, SZARRAY, GENERIC, GENERICINST, TypeSpec, and MethodSpec blobs. |
 | `src/il/opcodes.rkt`           | Partition III opcode table (data). The single source of truth for opcode bytes, operand kinds, and stack behaviour. |
 | `src/il/encode.rkt`            | Operand encoders driven by the opcode table. Used by the writer. |
 | `src/il/labels.rkt`            | Label resolution and fixed-point branch relaxation. Used by the writer. |
 | `src/il/stack.rkt`             | Computes `maxstack` over the control-flow graph, including handler entry depths. |
 | `src/cli/build.rkt`            | Builds the metadata chunk (`build-metadata`) from a `cli-program`, using the schema, heaps, tables, and metadata modules. |
-| `src/image.rkt`                | `write-image`, `assemble`, and `image-layout-report`. Plans the PE layout and writes a deterministic image. Takes an optional output path (default a temp file). |
+| `src/image.rkt`                | `write-image`, `assemble`, and `image-layout-report`. Plans the PE layout and writes a deterministic image. Takes an optional output path (default a temp file). With `#:debug? #t` (the default) it adds the debug directory and writes the PDB beside the image. |
 | `src/log.rkt`                  | The `rangi` logger used by the writer for debug and warning output.                                          |
 | `tests/lib/pe-lint.rkt`        | Structural checker (`lint-image`) for PE, CLI, metadata, and IL invariants. Used by `tests/image-lint-test.rkt`. |
 | `experiments/nano.rkt`         | Assembles `nano` and `nano2` into the temp dir and runs them. Prints `42` and `84`.                          |

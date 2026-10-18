@@ -123,7 +123,7 @@ Decided by the user (October 2026). Plans must follow these unless the user chan
 
 * **Target runtime: .NET Framework only.** Entry is `_CorExeMain` through mscoree, and fixtures run on the Framework 4.x reference assemblies. .NET (Core) targets, `runtimeconfig.json`, and apphost are out of scope for now.
 * **Syntax: stay close to textual ilasm.** Keep `.method`, `.class`, and keyword lists such as `(public static)`. Do not move to a Racket-native structure.
-* **No portable PDB yet.** The debug directory and PDB are out of scope until the user asks for them.
+* **Portable PDB is in scope.** The writer emits a sidecar PDB and a debug directory by default (`#:debug? #f` turns both off). See [pdb.md](pdb.md). Reading PDBs is still out of scope.
 * **No strong naming.** The strong-name signature and `STRONGNAMESIGNED` flag stay out of scope.
 * **Assembly name is the output file's basename.**
 * **`main` moves off `<Module>`.** Methods declared on `<Module>` go into a generated `Program` class, because the CLR rejects entry points on `<Module>` (PEVerify `0x8013129d`).

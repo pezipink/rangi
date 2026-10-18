@@ -19,9 +19,11 @@
 
 ; counts: table name -> row count. rows: table name -> rows, newest first.
 ; sorted?: #t once sort-tables! has run since the last add-row!.
-(struct tables (counts rows [sorted? #:mutable]))
+; schema: the tables this object may hold, schema-tables for the CLI or schema-pdb-tables.
+(struct tables (counts rows [sorted? #:mutable] schema))
 
-(define (make-tables) (tables (make-hasheq) (make-hasheq) #f))
+(define (make-tables #:schema [schema schema-tables])
+  (tables (make-hasheq) (make-hasheq) #f schema))
 
 (define (table-row-count b name) (hash-ref (tables-counts b) name 0))
 
@@ -41,7 +43,8 @@
 
 ; Adds one row and returns its rid. Values are in the column order of the table.
 (define (add-row! b name . values)
-  (define t (or (table-by-name name) (error 'add-row! "unknown table ~a" name)))
+  (define t (or (for/first ([t (in-list (tables-schema b))] #:when (eq? (table-name t) name)) t)
+                (error 'add-row! "unknown table ~a" name)))
   (define cols (table-columns t))
   (unless (= (length values) (length cols))
     (error 'add-row! "~a takes ~a columns, got ~a" name (length cols) (length values)))
@@ -89,7 +92,7 @@
       [else v]))
 
   (define (present-sorted-tables)
-    (for/list ([t (in-list schema-tables)]
+    (for/list ([t (in-list (tables-schema b))]
                #:when (and (table-sorted t) (positive? (table-row-count b (table-name t)))))
       t))
 
@@ -131,7 +134,7 @@
       (loop later)))
 
   ; every row now holds new rids, so rewrite every table in one pass
-  (for ([t (in-list schema-tables)] #:when (positive? (table-row-count b (table-name t))))
+  (for ([t (in-list (tables-schema b))] #:when (positive? (table-row-count b (table-name t))))
     (define name (table-name t))
     (define cols (table-columns t))
     (define rows (hash-ref ordered name (λ () (table-rows b name))))
@@ -146,16 +149,22 @@
 ; #~ stream
 
 ; The stream header (II.24.2.6) is reserved, version 2.0, HeapSizes, reserved, Valid, Sorted.
-; Heap index widths come from the caller, who knows the heap sizes.
+; Heap index widths come from the caller, who knows the heap sizes. external-rows gives the
+; row count of a table this object does not hold, such as the CLI MethodDef count for a PDB
+; index (II.24.2.6: the widths follow the counts of the type-system tables).
 ; Returns the stream bytes and the RVA fixups as (offset . target), relative to the stream.
-(define (tables-stream b #:string-wide? sw #:blob-wide? bw #:guid-wide? gw)
+(define (tables-stream b #:string-wide? sw #:blob-wide? bw #:guid-wide? gw
+                       #:external-rows [external-rows (λ (name) 0)])
   (define present
-    (for/list ([t (in-list (sort schema-tables < #:key table-id))]
+    (for/list ([t (in-list (sort (tables-schema b) < #:key table-id))]
                #:when (positive? (table-row-count b (table-name t))))
       t))
   (when (and (not (tables-sorted? b)) (ormap table-sorted present))
     (error 'tables-stream "sorted tables need sort-tables! before serialising"))
-  (define (rows-of name) (table-row-count b name))
+  (define (rows-of name)
+    (if (for/or ([t (in-list (tables-schema b))]) (eq? (table-name t) name))
+        (table-row-count b name)
+        (external-rows name)))
   (define (width kind)
     (column-width kind (if sw 4 2) (if bw 4 2) (if gw 4 2) rows-of))
 

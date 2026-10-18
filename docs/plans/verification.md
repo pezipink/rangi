@@ -160,5 +160,14 @@ Local corpus scan (roadmap item 1):
 * 6 failed with unknown stream `#!`. They are NGEN native images: `mscorlib.ni.dll`, `system.ni.dll`, and `system.core.ni.dll` under `NativeImages`, in both `Framework` and `Framework64`.
 * So the local machine has no sample of `#-` or of the 0x40 flag. Test those with a patched image or a sample from another source.
 
+Portable PDB and debug directory facts (PDB research, `pdb.md`):
+
+* SRM `DebugDirectoryEntryType` (read from `System.Reflection.Metadata.dll` 10.0.13): `CodeView = 2`, `Reproducible = 16`, `EmbeddedPortablePdb = 17`, `PdbChecksum = 19`.
+* SRM read a real CoreLib debug directory. The portable CodeView entry has `MajorVersion = 0x0100` and `MinorVersion = 0x504D` (20557, the `PM` marker). Its data is `RSDS`, a 16-byte GUID, a uint32 age (1), and a NUL-terminated UTF-8 path.
+* `PdbChecksum` data is 39 bytes: the 7-byte name `SHA256\0` followed by the 32-byte hash. SRM reported `dataSize=39` for this entry.
+* Deterministic images carry a `Reproducible` entry (type 16) with size 0.
+* The Portable PDB spec (`PortablePdb-Metadata.md` in dotnet/runtime) gives the `#Pdb` header: 20-byte PDB id, 4-byte entry point, 8-byte referenced-table bit vector, then row counts. The Document (0x30), MethodDebugInformation (0x31), LocalScope (0x32), and LocalVariable (0x33) column lists and the sequence-point blob encoding come from the same file.
+* Verified: the PDB id is the 16-byte CodeView GUID followed by the 4-byte stamp, and the debug directory `TimeDateStamp` is that stamp. SRM `TryOpenAssociatedPortablePdb` associates the sidecar with the image (`tests/oracles/pdb-srm-test.rkt` checks `associated true`). The id is our own deterministic value, not Roslyn's, so the PDB and image still match each other.
+
 Patched-image check (roadmap item 1): `tests/lib/patch-image.rkt` turns the nano `#~` image into a `#-` image with HeapSizes 0x40 and the 4 extra bytes. It fixes up the stream offsets, the MethodDef and FieldRVA RVAs, the entry point, the import directory, and the base relocations, then removes the same number of zero padding bytes from `.text`, so the file size is unchanged. `tests/stream-variants-test.rkt` checks three things. The patched image runs and prints 42. Its dump matches the `#~` dump apart from `Rva=` values. A copy with the `#US` stream renamed to `#!` gives the same dump. SRM agrees with the reader on both patched images. The CLR loads and runs the patched `#-` image, but this is one small program, so it does not show that every `#-` image in the wild has the same layout.
 Tooling: `search_code` on dotnet/runtime finds the SRM paths. Read a file from `raw.githubusercontent.com/dotnet/runtime/main/<path>` to get its full text.

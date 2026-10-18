@@ -17,6 +17,7 @@
          (struct-out column)
          (struct-out coded-kind)
          schema-tables
+         schema-pdb-tables
          schema-coded-kinds
          table-by-id
          table-by-name
@@ -165,11 +166,32 @@
    (coded 'resolutionscope 2 'module 'moduleref 'assemblyref 'typeref)
    (coded 'typeormethoddef 1 'typedef 'methoddef)))
 
+; Portable PDB tables (PortablePdb-Metadata.md, II.22 layout rules). They live in their own
+; #~ stream with ids 0x30-0x35, so they are kept apart from the CLI tables: the CLI reader
+; must keep rejecting these ids. A tables object is built over one of the two lists.
+(define schema-pdb-tables
+  (list
+   (def #x30 'document #f
+     '(name blob) '(hash-algorithm guid) '(hash blob) '(language guid))
+   (def #x31 'methoddebuginformation #f
+     '(document (index document)) '(sequence-points blob))
+   (def #x32 'localscope 'method
+     '(method (index methoddef)) '(import-scope (index importscope))
+     '(variable-list (index localvariable)) '(constant-list (index localconstant))
+     '(start-offset u32) '(length u32))
+   (def #x33 'localvariable #f
+     '(attributes u16) '(index u16) '(name string))
+   (def #x34 'localconstant #f
+     '(name string) '(signature blob))
+   (def #x35 'importscope #f
+     '(parent (index importscope)) '(imports blob))))
+
 (define (table-by-id id)
   (for/first ([t (in-list schema-tables)] #:when (= (table-id t) id)) t))
 
 (define (table-by-name name)
-  (for/first ([t (in-list schema-tables)] #:when (eq? (table-name t) name)) t))
+  (or (for/first ([t (in-list schema-tables)] #:when (eq? (table-name t) name)) t)
+      (for/first ([t (in-list schema-pdb-tables)] #:when (eq? (table-name t) name)) t)))
 
 (define (coded-kind-by-name name)
   (or (for/first ([k (in-list schema-coded-kinds)] #:when (eq? (coded-kind-name k) name)) k)
@@ -177,10 +199,10 @@
 
 ; every table and coded kind named by a column must exist, or the widths would
 ; silently come out as zero rows
-(let ([names (map table-name schema-tables)])
+(let ([names (map table-name (append schema-tables schema-pdb-tables))])
   (define (check-table name)
     (unless (memq name names) (error 'schema "unknown table ~a" name)))
-  (for* ([t (in-list schema-tables)] [c (in-list (table-columns t))])
+  (for* ([t (in-list (append schema-tables schema-pdb-tables))] [c (in-list (table-columns t))])
     (define kind (column-kind c))
     (cond
       [(not (pair? kind)) (void)]

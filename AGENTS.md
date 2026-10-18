@@ -25,6 +25,7 @@ Work is driven by the plans in [docs/plans/](docs/plans/). Start with [roadmap.m
 | [cli-coverage.md](docs/plans/cli-coverage.md)             | Spec coverage tracker: tables, signatures, bodies, PE features |
 | [types.md](docs/plans/types.md)                           | Shared type library: canonical type references, lazy descriptors, reference and declaration providers |
 | [workflow.md](docs/plans/workflow.md)                     | Lanes, worktrees, test tiers, hot spots, timings (read before parallel work) |
+| [pdb.md](docs/plans/pdb.md)                               | Portable PDB, `.line` sequence points, the sidecar and debug directory (`#:debug?`) |
 
 ## Ground rules
 

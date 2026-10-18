@@ -60,6 +60,7 @@
 (define dir-import-table 1)
 (define dir-resource-table 2)
 (define dir-base-relocation-table 5)
+(define dir-debug 6)
 (define dir-iat 12)
 (define dir-clr-runtime-header 14)
 

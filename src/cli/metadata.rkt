@@ -3,17 +3,15 @@
 ; supplied by the caller. The MVID is a digest of the other streams (see digest in pe/model.rkt).
 (require "../pe/model.rkt"
          "../private/binary.rkt")
-(provide metadata-chunk)
+(provide metadata-chunk
+         metadata-bytes)
 
 (define runtime-version "v4.0.30319")
 
-; streams: list of (cons name bytes), in the order their headers are written.
-; table-fixups: (offset . target) pairs, with the offset relative to the start of "#~".
-; mvid-index: 1-based index of the Module.Mvid entry in #GUID. The MVID is 16 bytes there.
-(define (metadata-chunk streams
-                        #:table-fixups [table-fixups '()]
-                        #:mvid-index mvid-index)
-  (define version (pad-to (bytes-append (string->bytes/utf-8 runtime-version) #"\0") 4))
+; The root, stream headers and stream data for streams (list of (cons name bytes), in header order),
+; with the given version string. Returns the bytes and the offset of each stream's data.
+(define (metadata-bytes streams #:version version-string)
+  (define version (pad-to (bytes-append (string->bytes/utf-8 version-string) #"\0") 4))
   (define (stream-header name off size)
     (bytes-append (le off 4) (le size 4)
                   (pad-to (bytes-append (string->bytes/utf-8 name) #"\0") 4)))
@@ -32,6 +30,16 @@
     (apply bytes-append
            (for/list ([st (in-list streams)] [off (in-list offsets)])
              (stream-header (car st) off (bytes-length (cdr st))))))
+  (values (bytes-append root headers (apply bytes-append (map cdr streams)))
+          offsets))
+
+; streams: list of (cons name bytes), in the order their headers are written.
+; table-fixups: (offset . target) pairs, with the offset relative to the start of "#~".
+; mvid-index: 1-based index of the Module.Mvid entry in #GUID. The MVID is 16 bytes there.
+(define (metadata-chunk streams
+                        #:table-fixups [table-fixups '()]
+                        #:mvid-index mvid-index)
+  (define-values (bs offsets) (metadata-bytes streams #:version runtime-version))
   (define (offset-of name)
     (for/first ([st (in-list streams)] [off (in-list offsets)] #:when (equal? (car st) name))
       off))
@@ -41,8 +49,9 @@
     (for/list ([st (in-list streams)] [off (in-list offsets)] #:unless (equal? (car st) "#GUID"))
       (cons off (+ off (bytes-length (cdr st))))))
   (chunk 'metadata 4
-         (bytes-append root headers (apply bytes-append (map cdr streams)))
+         bs
          (append
           (for/list ([f (in-list table-fixups)])
             (fixup (+ tilde-off (car f)) 'rva32 (cdr f)))
           (list (digest (+ guid-off (* 16 (sub1 mvid-index))) digest-spans)))))
+

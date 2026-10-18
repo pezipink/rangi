@@ -16,12 +16,15 @@
          (only-in "../il/stack.rkt" compute-max-stack effect label-at
                   opcode-pop-count opcode-push-count opcode-flow-kind)
          (only-in "../il/labels.rkt" assemble-items assembly-code assembly-label-offset
-                  label-symbol? label-name-of))
+                  label-symbol? label-name-of)
+         "../pdb/model.rkt")
 (provide lower-module
          (struct-out cli-program)
          (struct-out tdef)
          (struct-out fdef)
          (struct-out mdef)
+         (struct-out methoddebug)
+         (struct-out seqpt)
          (struct-out pinvokeinfo)
          (struct-out methodimpl)
          (struct-out interfaceimpl)
@@ -87,8 +90,8 @@
 ; .pack or .size is written as 0.
 (struct classlayout (pack size))
 ; params are the Param rows of this method, in sequence order (II.22.33). Only named parameters
-; have one.
-(struct mdef (name flags sig body entry? pinvoke impl params))
+; have one. debug is #f for a body-less method, or the methoddebug of its body.
+(struct mdef (name flags sig body entry? pinvoke impl params debug))
 ; A Param row (II.22.33): sequence is the 1-based parameter number, flags are the ParameterAttributes
 ; bits, and name is the string. const is #f, or (element-code . value-bytes) for a default, which
 ; is the Constant row of this parameter (II.22.9).
@@ -887,17 +890,19 @@
              filter-label handler-label))))
 
 ; Lowers the instruction list to labels.rkt items and assembles them. Returns the assembly
-; (code bytes and label offsets) and the maximum stack depth computed from the control-flow
-; graph. Each catch handler starts with one item, the exception object. A filter block starts
-; with the same item, and so does the handler that follows it (II.25.4.6).
+; (code bytes and label offsets), the maximum stack depth computed from the control-flow
+; graph, and the sequence points from the .line directives. Each catch handler starts with one
+; item, the exception object. A filter block starts with the same item, and so does the handler
+; that follows it (II.25.4.6).
 (define (encode-il cx scope code0 nparams nlocals ret-void? handlers)
-  (define code (map canonical-node code0))
-  (check-prefixes code)
-  (check-filter-blocks code handlers)
+  (define-values (code marks) (split-line-marks code0))
+  (define canonical (map canonical-node code))
+  (check-prefixes canonical)
+  (check-filter-blocks canonical handlers)
   (define items
-    (for/list ([node (in-list code)]) (lower-instruction cx scope node nparams nlocals)))
+    (for/list ([node (in-list canonical)]) (lower-instruction cx scope node nparams nlocals)))
   (define effects
-    (for/list ([node (in-list code)] [item (in-list items)])
+    (for/list ([node (in-list canonical)] [item (in-list items)])
       (node-effect node item ret-void? (call-has-this? cx node))))
   (define handler-entries
     (append*
@@ -907,8 +912,62 @@
        (if (eq? (eh-clause-kind h) 'filter)
            (list (cons (eh-clause-class h) depth) handler)
            (list handler)))))
-  (values (assemble-items items)
-          (compute-max-stack effects #:handlers handler-entries)))
+  (define asm (assemble-items items))
+  (values asm
+          (compute-max-stack effects #:handlers handler-entries)
+          (line-seqpts asm marks (bytes-length (assembly-code asm)))))
+
+; A .line directive (ilasm syntax): (.line start-line start-col end-line end-col "file"). It marks
+; the instruction that follows it as a sequence point (II.24, SequencePoints blob). Lines are
+; 1 to #x1FFFFFFF, excluding the hidden line #xFEEFEE. Columns are 0 to #xFFFF.
+(define hidden-line #xFEEFEE)
+(define max-line #x1FFFFFFF)
+(define max-column #xFFFF)
+
+; Returns the directive's fields as (list start-line start-col end-line end-col file).
+(define (check-line-directive node)
+  (match node
+    [(list '.line (? exact-integer? l1) (? exact-integer? c1) (? exact-integer? l2) (? exact-integer? c2)
+           (? string? file))
+     (for ([l (in-list (list l1 l2))])
+       (unless (and (<= 1 l max-line) (not (= l hidden-line)))
+         (error 'rangi "~s: line ~a is outside 1..#x1FFFFFFF or is the hidden line" node l)))
+     (for ([c (in-list (list c1 c2))])
+       (unless (<= 0 c max-column)
+         (error 'rangi "~s: column ~a is outside 0..#xFFFF" node c)))
+     (when (< l2 l1)
+       (error 'rangi "~s: the end line is before the start line" node))
+     (when (and (= l1 l2) (<= c2 c1))
+       (error 'rangi "~s: the end column must be after the start column on one line" node))
+     (when (or (string=? file "") (regexp-match? #rx"\0" file))
+       (error 'rangi "~s: the file name must be a non-empty string without NUL" node))
+     (list l1 c1 l2 c2 file)]
+    [_ (error 'rangi "malformed .line ~s (expected (.line start-line start-col end-line end-col \"file\"))"
+              node)]))
+
+; Each .line is replaced by a label of its own, placed where the directive was. The label is
+; zero bytes, so it is found again after assembly, when branch relaxation has fixed the offsets.
+; Returns the new code and the (label . fields) marks in source order.
+(define (split-line-marks code0)
+  (for/fold ([code '()] [marks '()] #:result (values (reverse code) (reverse marks)))
+            ([node (in-list code0)] [i (in-naturals)])
+    (match node
+      [(cons '.line _)
+       (define name (format "rangi.line.~a" i))
+       (values (cons (string->symbol (string-append name ":")) code)
+               (cons (cons (string->symbol name) (check-line-directive node)) marks))]
+      [_ (values (cons node code) marks)])))
+
+; A .line with no instruction after it lies at the end of the code and is dropped. When several
+; .line directives share an offset, the last one wins, as in ilasm. The result is in offset order.
+(define (line-seqpts asm marks code-length)
+  (define at-offset
+    (for/fold ([h (hash)]) ([m (in-list marks)])
+      (define off (assembly-label-offset asm (car m)))
+      (if (< off code-length) (hash-set h off (cdr m)) h)))
+  (for/list ([off (in-list (sort (hash-keys at-offset) <))])
+    (apply seqpt off (hash-ref at-offset off))))
+
 
 ; .maxstack given: it is an explicit override and must be at least the computed depth.
 ; Otherwise the default of 8 is kept unless the code needs more.
@@ -1058,24 +1117,30 @@
   ; arg 0 is this in an instance method, so ldarg indices and the depth analysis count it
   (define nargs (+ (arg-count params) (if instance? 1 0)))
   ; A body-less method is abstract (II.22.26): its RVA is 0 and it has no body.
-  (define body
-    (and (method-decl-code m)
-         (let-values ([(asm computed)
-                       (encode-il cx scope (method-decl-code m) nargs (length local-types)
-                                  (eq? (method-decl-ret m) 'void) clauses)])
-           (define code (assembly-code asm))
-           (define maxstack (effective-maxstack (method-decl-maxstack m) computed))
-           ; StandAloneSig table tag 0x11, II.22.36
-           (define locals-tok
-             (if (null? local-types)
-                 0
-                 (bitwise-ior #x11000000
-                              (intern! (ctx-standalone-sigs cx)
-                                       (encode-localvar-sig
-                                        (for/list ([t (in-list local-types)])
-                                          (lower-type cx scope t)))))))
-           (method-body code maxstack locals-tok init?
-                        (and (pair? clauses) (eh-section cx asm clauses))))))
+  (define-values (body debug)
+    (cond
+      [(method-decl-code m)
+       (define-values (asm computed seqpts)
+         (encode-il cx scope (method-decl-code m) nargs (length local-types)
+                    (eq? (method-decl-ret m) 'void) clauses))
+       (define code (assembly-code asm))
+       (define maxstack (effective-maxstack (method-decl-maxstack m) computed))
+       ; StandAloneSig table tag 0x11, II.22.36
+       (define locals-rid
+         (if (null? local-types)
+             0
+             (intern! (ctx-standalone-sigs cx)
+                      (encode-localvar-sig
+                       (for/list ([t (in-list local-types)])
+                         (lower-type cx scope t))))))
+       (define local-names
+         (for/list ([v (in-list (if ld (locals-decl-vars ld) '()))] [slot (in-naturals)]
+                    #:when (local-var-name v))
+           (cons slot (symbol->string (local-var-name v)))))
+       (values (method-body code maxstack (if (zero? locals-rid) 0 (bitwise-ior #x11000000 locals-rid))
+                            init? (and (pair? clauses) (eh-section cx asm clauses)))
+               (methoddebug (bytes-length code) locals-rid local-names seqpts))]
+      [else (values #f #f)]))
   (define pinv (method-decl-pinvoke m))
   (when (and pinv instance?)
     (error 'rangi "the P/Invoke method ~a.~a must be static" class-name name))
@@ -1094,7 +1159,8 @@
          (method-decl-entry? m)
          pinvoke
          (if (method-decl-runtime? m) runtime-impl-flags 0)
-         paramdefs)
+         paramdefs
+         debug)
    (gparam-rows cx scope (cons 'methoddef rid) gparams)))
 
 ; first-rid is the MethodDef rid of the first method of this class. Methods named in special are
