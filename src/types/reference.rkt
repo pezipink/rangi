@@ -180,10 +180,8 @@
              (delay (and ext (tok->type c ext 'class)))
              (delay (for/list ([i (in-list (interface-impls rdr rid))])
                       (tok->type c (row-column rdr 'interfaceimpl i 'interface) 'class)))
-             (delay (let-values ([(start end) (typedef-methods rdr rid)])
-                      (for/list ([m (in-range start end)]) (method-desc-of c r m))))
-             (delay (let-values ([(start end) (typedef-fields rdr rid)])
-                      (for/list ([f (in-range start end)]) (field-desc-of c r f))))))
+             (delay (for/list ([m (typedef-methods rdr rid)]) (method-desc-of c r m)))
+             (delay (for/list ([f (typedef-fields rdr rid)]) (field-desc-of c r f)))))
 
 ; The assembly name of a file without metadata, e.g. "C:/x/Foo.dll" -> "Foo".
 (define (module-name path)

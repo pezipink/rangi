@@ -47,8 +47,7 @@
      (time-runs (λ () (for ([_ (in-range 1000)]) (find-typedef rdr "System" "String")))))
    (define member-times
      (time-runs (λ ()
-                  (define-values (s e) (typedef-methods rdr string-rid))
-                  (for ([m (in-range s e)]) (row-column rdr 'methoddef m 'name)))))
+                  (for ([m (typedef-methods rdr string-rid)]) (row-column rdr 'methoddef m 'name)))))
    (define iface-times
      (time-runs (λ () (for ([_ (in-range 1000)]) (interface-impls rdr string-rid)))))
    (printf "read-bench: mscorlib.dll (~a public types)\n" (length public-types))

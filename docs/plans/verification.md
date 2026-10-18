@@ -103,10 +103,11 @@ Deviations from the original plan, which said IL bytes should match:
 
 Pending differential fixtures (they have no `program.il` yet, or their features are not covered by the normaliser):
 
-* `arrays-sum`, `calls-multi`, `extends-base`, `instance-external-call`, `generic-calls`, `il-*`, `ops-*`, `text-over-*`, and `nano*` have no textual source. `generic-calls` also needs MethodSpec normalisation, which is not written yet.
-* Value types and enums are on `main` (`value-types`, `enum-literals`) but have no differential fixture yet. Interfaces, attributes, and DLLs are not on `main` (P5 open items). They are added with those features.
+* `arrays-sum` has a `program.rktd` but no `program.il`. Its typed `ldelem int32` and `stelem int32` make Rangi emit a `TypeRef` to `System.Int32`, while ilasm emits a `TypeSpec` for the same operand. Both encodings are valid (III.4.1.1), and the normaliser does not reconcile them. Switching the fixture to `ldelem.i4` would change its verified image snapshot, so it is left out for now.
+* `generic-calls` needs MethodSpec normalisation, which is not written yet. `il-*`, `ops-*`, `text-over-*`, and `nano*` have no textual source.
+* Fixtures for interfaces, custom attributes, events, generics, and DLL output (for example `interfaces`, `custom-attrs`, `events-delegate`, `dll-output`) have no `program.il`. Each needs a textual source before it can be differentially tested.
 
-Differentially tested so far: `ldstr-hello`, `switch-dispatch`, `multi-types`, `static-fields`.
+Differentially tested: `asm-refs-retargetable`, `asm-refs-versioned`, `calls-multi`, `class-layout`, `enum-literals`, `extends-base`, `instance-external-call`, `ldstr-hello`, `param-constants`, `static-data`, `static-fields`, `switch-dispatch`, `multi-types`, `value-types`.
 
 ## Snapshot workflow
 
@@ -133,7 +134,7 @@ Deviations recorded for P1:
 * [x] V4 L5 invariant checker (`tests/lib/pe-lint.rkt`, `tests/image-lint-test.rkt`); deviations listed under L5
   * Threshold fixtures `text-over-400` and `text-over-2000` push `.text` past 0x400 and 0x2000. `tests/fixtures-test.rkt` asserts each limit. The O4 short-form `ldc.i4` change had shrunk their code, so they were grown back: `text-over-400` gained a class with eight small methods (`.text` VirtualSize 0x476), and `text-over-2000` gained a class with a method that holds about 2,800 characters of `ldstr` padding (0x2346). Their layout maps are checked by V5.
 * [x] V5 L2 layout map: `layout-report` in `pe/layout.rkt`, snapshotted as `layout.txt` beside each fixture and checked in `tests/fixtures-test.rkt`. Lists headers, section RVAs, and each chunk's RVA, file offset, size, and alignment.
-* [ ] V6 L8 ilasm differential fixtures for every feature in [cli-coverage.md](cli-coverage.md). Partly done: four fixtures are differentially tested (`ldstr-hello`, `switch-dispatch`, `multi-types`, `static-fields`); see L8 for the rest.
+* [ ] V6 L8 ilasm differential fixtures for every feature in [cli-coverage.md](cli-coverage.md). Partly done: fourteen fixtures are differentially tested; see L8 for the list and for the ones still pending.
 * [x] V7 Reader corpus test: run the L3 dump against every assembly in the .NET Framework 4.7.1 reference set and `System.Private.CoreLib`, diffed against SRM. `tests/oracles/reader-corpus-test.rkt` checks 133 of 133 assemblies, including CoreLib, in about 25 s.
 
 ## Spec sources and discovery

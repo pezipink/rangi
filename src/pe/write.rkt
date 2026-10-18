@@ -5,14 +5,20 @@
          "layout.rkt")
 (provide write-pe-image)
 
+; The 16-bit program at dos-header-size. It prints dos-message, which follows it directly.
+(define dos-stub-code
+  (bytes #x0E #x1F #xBA #x0E #x00 #xB4 #x09 #xCD #x21 #xB8 #x01 #x4C #xCD #x21))
+(define dos-message-offset (+ dos-header-size (bytes-length dos-stub-code)))
+(define dos-message (string->bytes/utf-8 "This program cannot be run in DOS mode.\r\r\n$"))
+
 ; DOS stub with the standard e_lfanew and the "This program cannot be run" message.
 (define dos-header
   (let ([b (make-bytes dos-and-signature-size 0)])
     (bytes-copy! b 0 (bytes #x4D #x5A #x90 #x00 #x03 #x00 #x00 #x00 #x04 #x00 #x00 #x00
                             #xFF #xFF #x00 #x00 #xB8 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x40))
     (bytes-copy! b e-lfanew-offset (le pe-header-offset e-lfanew-size))
-    (bytes-copy! b dos-header-size (bytes #x0E #x1F #xBA #x0E #x00 #xB4 #x09 #xCD #x21 #xB8 #x01 #x4C #xCD #x21))
-    (bytes-copy! b #x4E (string->bytes/utf-8 "This program cannot be run in DOS mode.\r\r\n$"))
+    (bytes-copy! b dos-header-size dos-stub-code)
+    (bytes-copy! b dos-message-offset dos-message)
     (bytes-copy! b pe-header-offset pe-signature-bytes)
     b))
 

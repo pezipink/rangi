@@ -124,7 +124,7 @@ The `env` is the only thing a checker calls. Tui and any later language use the 
   The `define-syntax` binding is what step 1 of name resolution finds. The provider entry is what `env-type` finds by reference. `"Geo"` is the module's name, which is the assembly identity for its own types.
 * The `define-syntax` binding stores only the type reference, which is prefab and so survives compilation. The descriptor stays in memory with the provider. Open question 3 covers a declaration provider that another module needs.
 * Forms declare types through the provider's `declare-type!` and `declare-member!`. Declarations are recorded in declaration order, so the output is deterministic.
-* Not implemented yet: the `'declared` state, which would let a checker tell a half-built declaration from a complete one, and `declare-member!`. Add them when a language needs forward references. Methods and fields are declared inside the `type-desc` for now.
+* A declared type is in state `'declared` until `complete-type!` runs. `declaration-state` reports `'declared`, `'complete`, or `#f` for an unknown type. `declare-member!` appends a method or field in declaration order and fails on a complete type or on a member whose owner is a different type, so the member lists come out in the same order every time.
 * Information from `%module-begin` reaches the checker through the phase-1 state of the expansion (a value stored in the provider, found by `syntax-local` lookup from the module context), not through syntax properties. Syntax properties are still used for source locations and for marking which forms declared what.
 
 ## Reference provider
@@ -145,7 +145,16 @@ Phase 1 runs on every keystroke in DrRacket, so the library must meet these budg
 
 Any change that misses a budget needs a benchmark row in the same commit, and the change is explained in the commit message.
 
-Measured with `experiments/generic-list.rkt` on this machine: opening mscorlib 5.5 ms, first resolve of `System.Collections.Generic.List` 2.1 ms, closed descriptor for `List<int>` 0.011 ms, member lists 0.27 ms. The open figure is above the 2 ms budget and is not investigated yet. The warm-lookup and 50-member budgets are not measured yet.
+Measured with `experiments/types-bench.rkt` (mscorlib 4.7.1 reference assembly, 20 runs each, medians):
+
+| Measure                                              | Median        | Range (min to max)   | Budget        |
+|------------------------------------------------------|---------------|----------------------|---------------|
+| Open a reference provider                            | 1.3 to 2.2 ms | 1.1 to 8.9 ms        | about 2 ms    |
+| Open plus first lookup of `System.String` (cold)     | 3.9 to 4.3 ms | 3.1 to 5.5 ms        | about 2 ms    |
+| Warm lookup of a cached reference, per call          | 0.26 to 0.43 µs | 0.23 to 0.47 µs    | well under 1 µs |
+| Decode all 168 methods and fields of `System.String` | 0.35 to 0.47 ms | 0.33 to 1.0 ms     | under 100 µs for 50 members |
+
+The numbers vary between runs on this machine, so the ranges matter. Open is at the budget edge, and cold open plus the first lookup is over it, so the open-time overrun stays open. The 50-member row is not measured on a 50-member type. Scaling `System.String` (168 members) gives about 0.14 ms for 50 members, which is over the budget, so it is also open. The 5.5 ms open figure from `experiments/generic-list.rkt` was a single cold run and is not comparable to these medians.
 
 ## Module layout
 
@@ -165,14 +174,14 @@ Tests are in `tests/types/` (30 tests across the four files). The `List<int>` de
 * [x] Primitive table and canonical identity strings for assemblies
 * [x] Forwarders dropped from this plan: they are not followed (open question 9)
 * [x] Lazy `type-desc`: base, interfaces, methods, and fields are promises
-* [ ] Read-count test on `System.String`, showing nothing is decoded that a checker did not ask for
+* [x] Read-count test on `System.String`, showing nothing is decoded that a checker did not ask for
 * [x] Reference provider over the Rangi reader, cached in the env for cacheable providers
 * [x] Declaration provider: `make-declaration-provider` and `declare-type!`
-* [ ] Declaration provider: `'declared` state, `declare-member!`, and insertion-ordered member output
+* [x] Declaration provider: `'declared` state, `declare-member!`, and insertion-ordered member output
 * [x] `env` search: providers in order, with the ambiguity policy and `lookup-type`
 * [x] Name resolution: lexical binding first, then qualified names, then opened namespaces, with the ambiguity policy passed as a parameter of `resolve-type-name`
-* [ ] Equivalence test: the same type from the reference and the declaration providers gives equal descriptors where the members match
-* [ ] Performance budgets above checked in a bench file, with numbers recorded here (open is over budget; warm lookup and 50-member budgets not measured)
+* [x] Equivalence test: the same type from the reference and the declaration providers gives equal descriptors where the members match
+* [x] Performance budgets above checked in `experiments/types-bench.rkt`, with numbers recorded here (cold open plus first lookup and the 50-member extrapolation are over budget and stay open)
 * [x] Tui's `private/clr.rkt` moved onto `env`, with both examples and all Tui tests passing
 * [x] `raco test tests/` green in rangi and tui
 
@@ -185,7 +194,7 @@ These are decisions to make before the matching checklist item, not blockers for
 3. **Declaration-provider lifetime.** Is per-expansion correct, or should a language keep a declaration provider per module across expansions, invalidated on save? The first is simpler and matches the build-on-save idea; the second is faster for DrRacket but needs an invalidation rule.
 4. **Where the declaration provider lives.** This plan puts it in Rangi as a generic container and leaves each language to fill it. Should the container also own the declaration syntax conventions, or stay purely data?
 5. **Forwarders into the module.** If a reference forwards to a type in the module being compiled, which provider wins? The plan says ambiguity is an error; confirm that is what we want.
-6. **Pointer tables.** Member ranges for `#-` streams (MethodPtr, FieldPtr, and so on) are not handled by R7. The reference provider inherits that gap until restructure.md's pointer-table item is done.
+6. **Pointer tables.** Closed. Member ranges map through the `#-` pointer tables (R7 in restructure.md), and the reference provider reads through them.
 7. **Serialisable descriptors.** Answered: the binding holds only the prefab `type-ref`, and `env-type` resolves the descriptor through the provider.
 8. **Ambiguity policy.** Answered: the library default is `error-on-ambiguity`, so a language must choose a policy. Tui chooses `prefer-local-policy(asm, first-match-policy)`: a local type wins, and otherwise the first candidate is taken, as the old Tui code did. `first-match-policy` is available to any language that wants that rule.
 9. **Forwarders.** Not followed. Core facades are answered by the mscorlib provider (`core-facades`). Any other forwarded type is missing unless its defining assembly is in the env. Following forwarders, with a cycle guard, is the fix when a language needs types that live in other assemblies.

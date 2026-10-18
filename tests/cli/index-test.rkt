@@ -11,8 +11,8 @@
          (let ([p (build-path dir "mscorlib.dll")])
            (and (file-exists? p) (path->string p))))))
 
-(define (names rdr table start end)
-  (for/list ([rid (in-range start end)]) (row-column rdr table rid 'name)))
+(define (names rdr table rids)
+  (for/list ([rid rids]) (row-column rdr table rid 'name)))
 
 ; rows of table whose decoded column equals key, by brute force
 (define (scan rdr table column key)
@@ -42,28 +42,25 @@
       (check-true (and found (<= found rid)))))
 
   (test-case "method and field ranges, and their owners"
-    (define-values (ms me) (typedef-methods rdr string-rid))
-    (define methods (names rdr 'methoddef ms me))
+    (define methods-of-string (typedef-methods rdr string-rid))
+    (define methods (names rdr 'methoddef methods-of-string))
     (check-not-false (member "Concat" methods))
     (check-not-false (member "get_Length" methods))
-    (for ([m (in-range ms me)]) (check-equal? (method-owner rdr m) string-rid))
-    (define-values (fs fe) (typedef-fields rdr string-rid))
-    (check-not-false (member "Empty" (names rdr 'field fs fe)))
-    (for ([f (in-range fs fe)]) (check-equal? (field-owner rdr f) string-rid))
-    ; every method's owner holds it in its range
+    (for ([m methods-of-string]) (check-equal? (method-owner rdr m) string-rid))
+    (define fields-of-string (typedef-fields rdr string-rid))
+    (check-not-false (member "Empty" (names rdr 'field fields-of-string)))
+    (for ([f fields-of-string]) (check-equal? (field-owner rdr f) string-rid))
+    ; every method's owner lists it
     (for ([m (in-range 1 (add1 (table-row-count rdr 'methoddef)) 97)])
-      (define-values (s e) (typedef-methods rdr (method-owner rdr m)))
-      (check-true (and (<= s m) (< m e)))))
+      (check-not-false (memv m (for/list ([x (typedef-methods rdr (method-owner rdr m))]) x)))))
 
   (test-case "method params"
-    (define-values (ms me) (typedef-methods rdr string-rid))
     (define compare
-      (for/first ([m (in-range ms me)]
+      (for/first ([m (typedef-methods rdr string-rid)]
                   #:when (and (equal? (row-column rdr 'methoddef m 'name) "Compare")
-                              (let-values ([(s e) (method-params rdr m)]) (= (- e s) 2))))
+                              (= (length (for/list ([p (method-params rdr m)]) p)) 2)))
         m))
-    (define-values (ps pe) (method-params rdr compare))
-    (check-equal? (names rdr 'param ps pe) '("strA" "strB")))
+    (check-equal? (names rdr 'param (method-params rdr compare)) '("strA" "strB")))
 
   (test-case "nested types"
     (define env (find-typedef rdr "System" "Environment"))
@@ -84,16 +81,15 @@
     (check-equal? (for/list ([r (generic-params rdr (cons 'typedef list-rid))])
                     (row-column rdr 'genericparam r 'name))
                   '("T"))
-    (define-values (ps pe) (typedef-properties rdr string-rid))
     (define length-prop
-      (for/first ([p (in-range ps pe)] #:when (equal? (row-column rdr 'property p 'name) "Length"))
+      (for/first ([p (typedef-properties rdr string-rid)] #:when (equal? (row-column rdr 'property p 'name) "Length"))
         p))
     (check-true (exact-positive-integer? length-prop))
     (check-equal? (for/list ([r (method-semantics rdr (cons 'property length-prop))])
                     (row-column rdr 'methoddef (row-column rdr 'methodsemantics r 'method) 'name))
                   '("get_Length"))
-    (define-values (es ee) (typedef-events rdr (find-typedef rdr "System" "AppDomain")))
-    (check-not-false (member "UnhandledException" (names rdr 'event es ee))))
+    (check-not-false (member "UnhandledException"
+                             (names rdr 'event (typedef-events rdr (find-typedef rdr "System" "AppDomain"))))))
 
   (test-case "sorted-table lookups agree with a linear scan"
     (for ([spec (in-list '((interfaceimpl class) (genericparam owner) (nestedclass nested-class)

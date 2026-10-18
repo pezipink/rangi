@@ -26,7 +26,7 @@ P4 and P5 can interleave once P3 lands. P6 can start any time after P2, because 
 
 ## Status
 
-P5 is done (final lanes merged at `41c9c30`, tracker at `670239a`). `RANGI_REQUIRE_ORACLES=1 raco test -j 4 tests/` passes (1611 tests, about 1 min 45 s on this machine). The remaining `partial` rows in [cli-coverage.md](cli-coverage.md) are accepted limitations, not gaps. The pointer, ENC, and obsolete count-only tables are out of scope. Earlier history is in the checkpoints. Start here, then read [AGENTS.md](../../AGENTS.md), [architecture.md](../architecture.md), and [workflow.md](workflow.md) before you run lanes.
+P5 is done (final lanes merged at `41c9c30`, tracker at `670239a`). `RANGI_REQUIRE_ORACLES=1 raco test -j 4 tests/` passes (1611 tests, about 1 min 45 s on this machine). The remaining `partial` rows in [cli-coverage.md](cli-coverage.md) are accepted limitations, not gaps. Pointer tables are read but never written, and the ENC and obsolete count-only tables are out of scope. Earlier history is in the checkpoints. Start here, then read [AGENTS.md](../../AGENTS.md), [architecture.md](../architecture.md), and [workflow.md](workflow.md) before you run lanes.
 
 Done:
 
@@ -34,6 +34,7 @@ Done:
 * V0 determinism: insertion-ordered rows and heaps, content-hash MVID, COFF timestamp 0.
 * V4 L5 structural lint (`tests/lib/pe-lint.rkt`, tested by `tests/image-lint-test.rkt`).
 * Writer rewrite: `<Module>` methods move to a generated `Program` class; `.entrypoint` sets the entry token; unknown IL raises.
+* Pointer-table member ranges (read side). `#-` streams map through MethodPtr, FieldPtr, ParamPtr, EventPtr, and PropertyPtr.
 * Reader defects R1 to R10 fixed. PE32 and PE32+ nano dumps match System.Reflection.Metadata. The mscorlib public type count matches the SRM oracle (1520; the earlier 1521 figure was wrong, see `tests/read-bench-test.rkt`). Stream D baseline: lazy open median about 6.5 ms, enumerate public types median about 0.5 ms (20 runs, 4.7.1 mscorlib). After the exact-size read the open median is about 3.4 ms (the run-to-run figure varies by about 1 ms).
 * P3 bigger fixtures: `tests/fixtures/text-over-400` (`.text` VirtualSize 0x476) and `tests/fixtures/text-over-2000` (0x2346). Both pass PEVerify, ildasm, SRM, and the lint. `fixtures-test.rkt` asserts the 0x400 and 0x2000 limits. The O4 short-form `ldc.i4` change had shrunk them, so they were grown back. The layout map (V5) is in place.
 * O4 method bodies merged: `.locals`, computed maxstack, catch, finally, fault, and `filter` EH, plus prefix validation, and the `ops-*` opcode batch fixtures (PEVerify and ILVerify clean).
@@ -52,7 +53,7 @@ Open items, in order:
 3. Done: V7 reader corpus test over the .NET 4.7.1 reference assemblies and `System.Private.CoreLib`, diffed against SRM. 133 of 133 assemblies match.
 4. Done: P2 R1 and R2 (A1 and A2 merged). `src/private/binary.rkt` holds the little-endian, compressed-integer, alignment, and pad-to helpers. `src/cli/schema.rkt` is the single source of table and coded-index layouts, and the reader and writer both use it. Signed compressed integers are still open; nothing calls them. `src/cli/heaps.rkt` is merged (C), and the writer uses it.
 5. Done: V5 L2 layout map, landed with R3.
-6. Partly done: V6 ilasm differential fixtures. `ldstr-hello`, `switch-dispatch`, `multi-types`, and `static-fields` are in `tests/oracles/ilasm-diff-test.rkt`. The rest wait for P5 features, or have no textual source yet (see [verification.md](verification.md#l8-differential-comparison-with-ilasm)).
+6. Partly done: V6 ilasm differential fixtures. 14 fixtures have a `program.il` and are diffed in `tests/oracles/ilasm-diff-test.rkt`. The rest have no textual source yet, and `arrays-sum` cannot be diffed (see [verification.md](verification.md#l8-differential-comparison-with-ilasm)).
 7. Writer gaps: follow the "Suggested order" in [cli-coverage.md](cli-coverage.md).
 8. Done: the ILVerify oracle (L6) is in `tests/oracles/ilverify`, checked by `tests/oracles/ilverify-test.rkt`.
 
@@ -63,10 +64,10 @@ Open items, in order:
 | P0 | Done | None |
 | P1 | Done | None |
 | P2 | Done | R1 and R2 merged. Signed compressed integers are deferred until a caller needs them |
-| P3 | Done | R3, V5, R4, and R5 are done. The threshold fixtures pass the 0x400 and 0x2000 limits (0x476 and 0x2346), and a person reviewed the layout snapshots. PE constants are named. Still open: the DOS stub blob and the CLI-side literals in `encode-il`. |
+| P3 | Done | R3, V5, R4, and R5 are done. The threshold fixtures pass the 0x400 and 0x2000 limits (0x476 and 0x2346), and a person reviewed the layout snapshots. PE constants are named. The DOS stub and the CLI-side format literals are named constants. |
 | P4 | Done | O1 to O5 are merged, including `filter` EH, prefix validation, and the `il-all-opcodes` fixture. Its stdout is checked, and PEVerify and ILVerify pass. Unverifiable opcodes are in `il-unverifiable-opcodes`, and TypedReference and calli are in `il-runtime-only-opcodes`. |
 | P5 | Done | Done (final lanes `p5b/sigs` and `p5b/flags-pe`): FNPTR, VARARG, CMOD_REQD/CMOD_OPT, TYPEDBYREF params, `calli` with fnptr args, retargetable AssemblyRef flags, FieldRVA read, and multi-section read. Earlier: generic methods and types (signatures, TypeSpec, MethodSpec, GenericParam), same-module calls, same-module static fields, instance methods, `.ctor`, `newobj`, single-dimension arrays, catch, finally, and fault EH. External instance calls via the `instance` keyword are done (`instance-external-call`). Multiple types with namespaces and class-typed members are done (`multi-types`), and so is `extends` to a same-module or external base (`extends-base`), and enums with literal constants (`enum-literals`). Also done: `.cctor` (`cctor-init`), instance fields on external types (`external-instance-field`), versioned assembly refs (`asm-refs-versioned`), and the `.subsystem` and `.platform` header options (`subsystem-gui`, `platform-x86`). Also done: nested types (`nested-types`), virtual methods with `callvirt` dispatch and `.override` MethodImpl rows (`virtual-override`), static data via FieldRVA (`static-data`), interfaces and `.implements` (`interfaces`), and rank-N multi-dimensional arrays (`multidim-arrays`). Also done in wave 6: custom attributes (`customattrs`), P/Invoke (`pinvoke`), embedded managed resources (`managed-resources`), Win32 resources (`win32-resources`), base relocations (`base-relocs`), generic types with constraints (`generic-types`), and properties and events (`props-events`, partial: events are metadata-only). Open items were closed in wave 7: bounded arrays (`bounded-arrays`), generic field access from outside the class (`generic-field-access`), and method-level constraints (`method-constraints`). The remaining spec-value checks are listed in [cli-coverage.md](cli-coverage.md). |
-| P6 | Mostly done | V7 corpus diff matches SRM on 133 of 133 assemblies. The R6 benchmark is recorded, and the memory-mapping item is decided (exact-size whole-file read; see [restructure.md](restructure.md)). R7 is done: scanned indexes are cached on the reader (`src/cli/index.rkt`), with fast raw row access. Open: pointer-table images in the member ranges. |
+| P6 | Mostly done | V7 corpus diff matches SRM on 133 of 133 assemblies. The R6 benchmark is recorded, and the memory-mapping item is decided (exact-size whole-file read; see [restructure.md](restructure.md)). R7 is done: scanned indexes are cached on the reader (`src/cli/index.rkt`), with fast raw row access. Pointer-table member ranges are done (`tests/cli/pointer-tables-test.rkt`, `tests/oracles/pointer-tables-srm-test.rkt`). |
 
 ## Next steps
 
@@ -98,9 +99,9 @@ Each stream owns files that no other stream touches, so the streams can run in s
 Not parallel:
 
 * Lanes that touch `cli/lower.rkt` still conflict with one another. The generic-calls lane needed a manual merge of 10 hunks. Keep one lane per file at a time.
-* V6 ilasm differential fixtures for unsupported features. They can't pass until those features exist. Start them alongside P5, not before.
+* V6 ilasm differential fixtures for unsupported features. They can't pass until those features exist. P5 is done, so add each one as its textual source is written.
 
-Expected gain: the next gains are the P4 open items, then P5 instance members and types.
+What remains is the open items above and the writer gaps in [cli-coverage.md](cli-coverage.md).
 
 
 ## Handoff

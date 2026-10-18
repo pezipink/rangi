@@ -9,11 +9,11 @@
 ;    place and need no index. A hash is built only for lookups the sort order does not serve, or
 ;    when an image does not mark the table sorted.
 ;  * Hot loops read integers straight from the raw bytes and do not allocate.
-;  * Ranges are returned as two values, start and end (exclusive), for use with in-range.
+;  * Member lists are sequences of rids, for use with for.
 ;
 ; Lists come back in row order. The hashes are only looked up, never iterated for output.
-; Images with the pointer tables (MethodPtr and friends, II.24.2.6 #- streams) are not handled:
-; ranges index the member tables directly.
+; Pointer tables (MethodPtr and friends, II.24.2.6 #- streams) are followed when an image has
+; rows in them; otherwise lists index the member tables directly.
 (require "reader.rkt" "schema.rkt")
 (provide find-typedef find-exported-type
          typedef-methods typedef-fields method-params method-owner field-owner
@@ -77,36 +77,78 @@
 ;; ---------------------------------------------------------------------------------------------
 ;; Member lists (II.22.37 FieldList and MethodList, II.22.26 ParamList). A row's list runs to the
 ; next row's list start, or to the end of the target table for the last row.
+;
+; Pointer tables (II.22.37 MethodPtr and friends) appear only in #- streams with rows in them. Then
+; a list holds positions in the pointer table, and the pointer table holds the member rids.
+
+(define pointer-columns
+  (hasheq 'methoddef '(methodptr . method)
+          'field '(fieldptr . field)
+          'param '(paramptr . param)
+          'event '(eventptr . event)
+          'property '(propertyptr . property)))
+
+; (table . column) of the pointer table that lists of target go through, or #f
+(define (pointer-table rdr target)
+  (define pc (hash-ref pointer-columns target #f))
+  (and pc (positive? (table-row-count rdr (car pc))) pc))
+
+; The rids of the members at list positions start to end - 1, in list order.
+(define (list-members rdr target start end)
+  (define pc (pointer-table rdr target))
+  (if pc
+      (for/list ([pos (in-range start end)])
+        (row-column-raw rdr (car pc) pos (cdr pc)))
+      (in-range start end)))
 
 (define (list-range rdr table rid column target)
   (define l (table-layout rdr table))
   (unless (<= 1 rid (layout-count l)) (error 'list-range "row ~a out of range for ~a" rid table))
   (define i (layout-column-index l column))
   (define start (layout-raw rdr l rid i))
+  (define pc (pointer-table rdr target))
   (define end (if (< rid (layout-count l))
                   (layout-raw rdr l (add1 rid) i)
-                  (add1 (table-row-count rdr target))))
-  (values start (max start end)))
+                  (add1 (table-row-count rdr (if pc (car pc) target)))))
+  (list-members rdr target start (max start end)))
 
 (define (typedef-methods rdr rid) (list-range rdr 'typedef rid 'method-list 'methoddef))
 (define (typedef-fields rdr rid) (list-range rdr 'typedef rid 'field-list 'field))
 (define (method-params rdr rid) (list-range rdr 'methoddef rid 'param-list 'param))
 
-; The owner of a member is the last TypeDef whose list starts at or before it. Types with empty
-; lists share a start with the next type, so the last such row is the one that owns it.
-(define (list-owner rdr column member)
-  (define l (table-layout rdr 'typedef))
-  (define i (layout-column-index l column))
-  (let loop ([lo 1] [hi (layout-count l)] [best #f])
-    (if (> lo hi)
-        best
-        (let ([mid (quotient (+ lo hi) 2)])
-          (if (<= (layout-raw rdr l mid i) member)
-              (loop (add1 mid) hi mid)
-              (loop lo (sub1 mid) best))))))
+; The position of a member in its list: its rid, or its row in the pointer table.
+(define (member-position rdr target rid)
+  (define pc (pointer-table rdr target))
+  (if pc
+      (hash-ref (pointer-positions rdr pc) rid #f)
+      rid))
 
-(define (method-owner rdr method-rid) (list-owner rdr 'method-list method-rid))
-(define (field-owner rdr field-rid) (list-owner rdr 'field-list field-rid))
+(define (pointer-positions rdr pc)
+  (cached rdr (string->symbol (format "pointer-positions:~a" (car pc)))
+          (λ ()
+            (define h (make-hasheqv))
+            (for ([pos (in-range 1 (add1 (table-row-count rdr (car pc))))])
+              (hash-set! h (row-column-raw rdr (car pc) pos (cdr pc)) pos))
+            h)))
+
+; The owner of a member is the last TypeDef whose list starts at or before the member's position.
+; Types with empty lists share a start with the next type, so the last such row is the one that
+; owns it.
+(define (list-owner rdr column target member)
+  (define pos (member-position rdr target member))
+  (and pos
+       (let ([l (table-layout rdr 'typedef)])
+         (define i (layout-column-index l column))
+         (let loop ([lo 1] [hi (layout-count l)] [best #f])
+           (if (> lo hi)
+               best
+               (let ([mid (quotient (+ lo hi) 2)])
+                 (if (<= (layout-raw rdr l mid i) pos)
+                     (loop (add1 mid) hi mid)
+                     (loop lo (sub1 mid) best))))))))
+
+(define (method-owner rdr method-rid) (list-owner rdr 'method-list 'methoddef method-rid))
+(define (field-owner rdr field-rid) (list-owner rdr 'field-list 'field field-rid))
 
 ;; ---------------------------------------------------------------------------------------------
 ;; Rows by key column
@@ -184,7 +226,7 @@
 (define (map-range rdr map-table list-column target typedef-rid)
   (define rows (rows-with-key rdr map-table 'parent typedef-rid))
   (if (null? rows)
-      (values 1 1)
+      '()
       (list-range rdr map-table (car rows) list-column target)))
 
 (define (typedef-properties rdr rid) (map-range rdr 'propertymap 'property-list 'property rid))

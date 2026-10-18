@@ -98,6 +98,30 @@
              (λ () (declare-type! (provider "X" (λ (ns n a) #f) (λ (r) #f) #t #f)
                                   (point-desc "X")))))
 
+(test-case "declare-member! appends members in order, and a complete type takes no more"
+  (define dp (make-declaration-provider "Geo"))
+  (define r (type-ref "Geo" "" "Shape" 0 'class '()))
+  (define other (type-ref "Geo" "" "Other" 0 'class '()))
+  (define e (make-env #:providers (list dp)))
+  (define area (method-desc r "Area" #t #f #t #f #f 0 '() (source-primitive "int")))
+  (define count (field-desc r "Count" #t #f (source-primitive "int")))
+  (define scale (method-desc r "Scale" #t #f #t #f #f 0 (list (source-primitive "int")) 'void))
+  (declare-type! dp (type-desc r 'class #f #f (delay #f) (delay '()) (delay '()) (delay '())))
+  (declare-type! dp (type-desc other 'class #f #f (delay #f) (delay '()) (delay '()) (delay '())))
+  (check-equal? (declaration-state dp r) 'declared)
+  (declare-member! dp r area)
+  (declare-member! dp r count)
+  (declare-member! dp r scale)
+  (define d (env-type e r))
+  (check-equal? (map method-desc-name (force (type-desc-methods d))) '("Area" "Scale"))
+  (check-equal? (map field-desc-name (force (type-desc-fields d))) '("Count"))
+  (complete-type! dp r)
+  (check-equal? (declaration-state dp r) 'complete)
+  (check-exn exn:fail? (λ () (declare-member! dp r area)))
+  (check-exn exn:fail? (λ () (complete-type! dp (type-ref "Geo" "" "Nope" 0 'class '()))))
+  (check-exn exn:fail? (λ () (declare-member! dp other area)))
+  (check-false (declaration-state dp (type-ref "Geo" "" "Nope" 0 'class '()))))
+
 (test-case "constructed kinds and unknown assemblies have no descriptor"
   (define dp (make-declaration-provider "Geo"))
   (define e (make-env #:providers (list dp)))
@@ -137,6 +161,12 @@
     (define ms (find-methods core-env list-int "ToString"))
     (check-true (pair? ms))
     (check-equal? (type-ref-name (method-desc-owner (car ms))) "Object"))
+
+  (test-case "find-methods drops a base method hidden by an override"
+    (define ms (find-methods core-env (lookup-type core-env "System" "String" 0) "ToString"))
+    (define no-arg (filter (λ (m) (null? (method-desc-params m))) ms))
+    (check-equal? (length no-arg) 1)
+    (check-equal? (type-ref-name (method-desc-owner (car no-arg))) "String"))
 
   (test-case "a type found in more than one provider is listed once"
     (check-equal? (length (find-everywhere core-env "System" "Int32" 0)) 1)))

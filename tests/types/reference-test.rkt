@@ -80,10 +80,29 @@
     (check-false (lookup-type e "System.Collections.Generic" "List" 0))
     (check-false (lookup-type e "System" "NoSuchType" 0)))
 
-  (test-case "descriptors are read lazily: members are decoded only when forced"
+  (test-case "descriptors are read lazily: members are decoded only when forced, once each"
     (define fresh (make-env #:providers (list (open-reference-provider mscorlib-path))))
     (reset-reference-decode-count!)
     (define s (get fresh "System" "String" 0))
     (check-equal? (reference-decode-count) 0)
+    (define methods (force (type-desc-methods s)))
+    (check-equal? (reference-decode-count) (length methods))
     (force (type-desc-methods s))
-    (check-true (> (reference-decode-count) 0))))
+    (check-equal? (reference-decode-count) (length methods))
+    (define fields (force (type-desc-fields s)))
+    (check-equal? (reference-decode-count) (+ (length methods) (length fields))))
+
+  (test-case "a declaration with the same members as a reference type gives the same members"
+    (define ref-d (get e "System" "Int32" 0))
+    (define r (type-desc-ref ref-d))
+    (define dp (make-declaration-provider (type-ref-asm r)))
+    (declare-type! dp (type-desc r (type-desc-shape ref-d) (type-desc-abstract? ref-d)
+                                 (type-desc-sealed? ref-d) (type-desc-base ref-d)
+                                 (type-desc-interfaces ref-d) (delay '()) (delay '())))
+    (for ([m (in-list (force (type-desc-methods ref-d)))]) (declare-member! dp r m))
+    (for ([f (in-list (force (type-desc-fields ref-d)))]) (declare-member! dp r f))
+    (complete-type! dp r)
+    (define decl-d (env-type (make-env #:providers (list dp)) r))
+    (check-equal? (force (type-desc-methods decl-d)) (force (type-desc-methods ref-d)))
+    (check-equal? (force (type-desc-fields decl-d)) (force (type-desc-fields ref-d)))))
+

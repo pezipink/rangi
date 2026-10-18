@@ -31,12 +31,11 @@ Baseline behaviour: `racket experiments/nano.rkt` writes a 2048-byte image that 
 
 `read-file` reads the whole file into a byte string, then parses the DOS header, COFF header, PE32 optional header, section headers, CLI header, metadata root, and stream headers. It copies each heap, computes heap index widths, simple and coded index widths, then the row size and file offset of every table. Rows are decoded only on demand.
 
-The reader keeps the raw bytes, and caches every scanned index on itself (`asm-reader-cache`), so the cache lives exactly as long as the reader. Column layouts are computed once per table, and `row-column` and `row-column-raw` read single columns straight from the raw bytes. `src/cli/index.rkt` builds lookups on top of this. `find-typedef` and `find-exported-type` use a name hash built on first use. Member, param, property and event ranges follow II.22.37, II.22.26, II.22.35 and II.22.12, and `method-owner` and `field-owner` binary search TypeDef. `rows-with-key` binary searches the tables the spec keeps sorted (falling back to a cached hash when the Sorted bit is clear), and it backs nested types, interfaces, generic parameters, method semantics and custom attributes. Pointer tables (`#-` streams) are not mapped by the ranges yet.
+The reader keeps the raw bytes, and caches every scanned index on itself (`asm-reader-cache`), so the cache lives exactly as long as the reader. Column layouts are computed once per table, and `row-column` and `row-column-raw` read single columns straight from the raw bytes. `src/cli/index.rkt` builds lookups on top of this. `find-typedef` and `find-exported-type` use a name hash built on first use. Member, param, property and event ranges follow II.22.37, II.22.26, II.22.35 and II.22.12, and `method-owner` and `field-owner` binary search TypeDef. `rows-with-key` binary searches the tables the spec keeps sorted (falling back to a cached hash when the Sorted bit is clear), and it backs nested types, interfaces, generic parameters, method semantics and custom attributes. Pointer tables (`#-` streams) are mapped: when MethodPtr, FieldPtr, ParamPtr, EventPtr, or PropertyPtr is present, the member ranges go through it.
 
 Known defects:
 
 * The `HeapSizes` bit 0x20 is not defined by the spec or by SRM, and the reader does not handle it.
-* Row layouts are written by hand and duplicated in the writer.
 
 Fixed and covered by tests: the `#-` (uncompressed) stream name, which SRM reads as a table stream with the same row layout (it accepts pointer tables there); unknown streams such as `#!` (in NGEN native images), which are skipped as SRM does (`default: continue`); the HeapSizes extra-data bit 0x40, where the 4 bytes after the row counts are read and discarded as SRM does (`tests/stream-variants-test.rkt`). PE32+ parsing, the table-id switch for the pointer, ENC, and Assembly processor/OS tables (previously an error), `standalonesig`, `HasCustomAttribute` (`declsecurity`), public type visibility (`flags & 0x7`), the port leak, and the missing-Assembly case (`read-assembly-meta` returns `#f`). `read-file` reads the file once and does not cache across calls: each call costs one read and returns a fresh reader with empty indexes.
 
@@ -49,12 +48,12 @@ The output is deterministic. Tables and heaps keep insertion order, the MVID is 
 Known limits (planned gaps, not defects in code that is present):
 
 * Instructions come from the shared opcode table. The lint decodes every opcode in that table. Unknown names raise an error.
-* `call` targets a MemberRef, a same-module static MethodDef (`(call ret (Class) name (params))`), or a MethodSpec for a generic method. `callvirt` on a same-module method and instance methods are rejected.
-* Signatures cover primitives, class and value type references, `SZARRAY`, generic instances, `VAR` and `MVAR`, and LocalVarSig. Not yet: multi-dimensional arrays, `calli`, field and property signatures, and custom modifiers.
-* Exception handling supports `catch`, `finally`, and `fault`. `filter` is not supported. Clause nesting and order are not validated.
-* Instruction prefixes (`unaligned.`, `volatile.`, `tail.`, and the rest) are not validated.
-* Fixtures run only some of the opcodes. The `ops-*` fixtures cover arithmetic, branches, constants, conversions, locals and args, and EH. `ldstr` and `switch` lower and encode, but no fixture runs them yet.
-* Assembly and AssemblyRef versions are 0, and the `.assembly` name is ignored. The assembly name is the output basename.
+* `call` targets a MemberRef, a same-module static MethodDef (`(call ret (Class) name (params))`), or a MethodSpec for a generic method. `callvirt` on a static same-module method is rejected. Instance methods work.
+* Signatures cover primitives, class and value type references, `SZARRAY`, generic instances, `VAR` and `MVAR`, and LocalVarSig. FieldSig, PropertySig, multi-dimensional arrays, `calli` (FNPTR), VARARG, TYPEDBYREF, and CMOD_REQD/CMOD_OPT are also covered. Not yet: typed custom attribute values and marshalling beyond simple NATIVE_TYPE.
+* Exception handling supports `catch`, `finally`, and `fault`. `filter` is supported. Clause nesting and order are not validated.
+* Instruction prefixes are validated against the instructions they apply to (`prefix-accepts?` in `src/cli/lower.rkt`).
+* Fixtures run only some of the opcodes. The `ops-*` fixtures cover arithmetic, branches, constants, conversions, locals and args, and EH. `ldstr` and `switch` are run by `ldstr-hello` and `switch-dispatch`.
+* The Assembly row version is 0. AssemblyRef versions come from the source (`asm-refs-versioned`). The assembly name is the output basename.
 * Field and param rows are written, but the lint checks only their counts.
 
 ## Target layering

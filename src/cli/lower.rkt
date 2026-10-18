@@ -924,12 +924,19 @@
 ; III.1.7.5: a tiny header is possible only without locals, exception clauses, code under
 ; 64 bytes, and maxstack 8 or less. Otherwise the fat header is used, with LocalVarSigTok
 ; and the InitLocals flag (0x10). MoreSects (0x08) announces the EH section after the code.
+; The tiny format is 0x2 in the low two bits. The fat format is 0x3 in the low 12 bits, with a
+; header size of 3 dwords (12 bytes) in the top nibble.
+(define tiny-format #x2)
+(define fat-header-flags #x3003)
+(define init-locals-flag #x10)
+(define more-sects-flag #x08)
 (define (method-body code maxstack locals-tok init? eh)
   (cond
     [(and (not eh) (zero? locals-tok) (< (bytes-length code) 64) (<= maxstack 8))
-     (bytes-append (bytes (bitwise-ior (arithmetic-shift (bytes-length code) 2) 2)) code)]
+     (bytes-append (bytes (bitwise-ior (arithmetic-shift (bytes-length code) 2) tiny-format)) code)]
     [else
-     (define flags (bitwise-ior #x3003 (if init? #x10 0) (if eh #x08 0)))
+     (define flags (bitwise-ior fat-header-flags (if init? init-locals-flag 0)
+                                (if eh more-sects-flag 0)))
      ; II.25.4.5: the EH section starts on a 4-byte boundary; the fat header is 12 bytes
      (define pad (if eh (modulo (- 4 (modulo (bytes-length code) 4)) 4) 0))
      (bytes-append (le flags 2)
@@ -939,6 +946,7 @@
                    code
                    (make-bytes pad 0)
                    (or eh #""))]))
+
 
 ; II.25.4.6 Flags: catch 0x0000, filter 0x0001, finally 0x0002, fault 0x0004. ClassToken is the
 ; exception type for a catch, the filter block offset for a filter, and 0 otherwise.
@@ -957,6 +965,7 @@
 
 ; II.25.4.5, II.25.4.6: one fat EHTable section (Kind 0x01 | FatFormat 0x40, 3-byte DataSize)
 ; with a 24-byte clause per handler. Offsets come from the assembled labels.
+(define eh-table-kind #x41)
 (define (eh-section cx asm clauses)
   (define (at l) (assembly-label-offset asm l))
   (define (class-field c)
@@ -974,7 +983,7 @@
                     (le (- (at (eh-clause-handler-end c)) hs) 4)
                     (le (class-field c) 4))))
   (define body (apply bytes-append clause-bytes))
-  (bytes-append (bytes #x41) (le (+ 4 (bytes-length body)) 3) body))
+  (bytes-append (bytes eh-table-kind) (le (+ 4 (bytes-length body)) 3) body))
 
 ; A GenericParamConstraint target (II.22.21, TypeDefOrRef): a class in this module, an external
 ; class, or a generic instantiation (a TypeSpec). Returns (cons 'typedef|'typeref|'typespec rid).

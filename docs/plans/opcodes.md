@@ -54,7 +54,7 @@ Status: encoders in `src/il/encode.rkt` (stream B) cover every operand kind; tes
 
 ### O3 Labels and branch relaxation
 
-Status: label resolution and fixed-point relaxation in `src/il/labels.rkt` (stream B) are done; tests in `tests/il/labels-test.rkt`. The `ldc.i` writer replacement is still open (O4).
+Status: label resolution and fixed-point relaxation in `src/il/labels.rkt` (stream B) are done; tests in `tests/il/labels-test.rkt`. The `ldc.i` writer replacement is done (see O4).
 
 * [x] Labels are `(label name)` forms or `name:` symbols in the instruction stream.
 * [x] Assemble with all branches short, measure, then iteratively widen any branch whose offset does not fit in int8 until a fixed point. Long forms are never shrunk back, which guarantees termination.
@@ -71,11 +71,11 @@ Status: label resolution and fixed-point relaxation in `src/il/labels.rkt` (stre
   * [x] Handler entry stack depth (III.1.7.5): catch 1 (the exception object), finally and fault 0. This feeds `compute-max-stack`.
   * [x] `filter` (0x0001): `(.try (filter <label>) ts te hs he)`. The class token is the filter block offset. Filter blocks come before their handler and end in `endfilter` (0xFE 0x11). The filter entry depth is 1 (II.25.4.6, inferred; see the open items in the lane report). Fixture `ops-eh-filter`.
 * [x] Compute maxstack by abstract interpretation over the opcode table's stack behaviour and the control flow graph, unless `.maxstack` is given. Report stack underflow and inconsistent depths at merge points as assembly errors. An explicit `.maxstack` must be at least the computed depth (`tests/il/stack-test.rkt`).
-* [x] Prefix validation: `unaligned.`, `volatile.`, `tail.` (must be followed by `ret`), `constrained.`, `readonly.`, and `no.` must precede an instruction they apply to. Labels are skipped when checking. `constrained.` is still rejected by `check-passable`.
+* [x] Prefix validation: `unaligned.`, `volatile.`, `tail.` (must be followed by `ret`), `constrained.`, `readonly.`, and `no.` must precede an instruction they apply to. Labels are skipped when checking. `constrained.` is accepted only before `callvirt` (III.2.1).
 
 ### O5 Verification
 
 * [x] Unit tests per operand kind and per macro boundary (`-1`, `0`, `8`, `9`, `127`, `128`, `-128`, `-129`). Merged from `stream/b-tests` in `tests/il/operand-boundary-test.rkt`.
 * [x] Branch relaxation tests with a branch exactly at the int8 limit (127 and 128 bytes). In `tests/il/relaxation-boundary-test.rkt`.
 * [x] An `il-all-opcodes` fixture that uses every opcode at least once in valid, verifiable (where possible) code, run through ildasm and the SRM dumper. Its stdout is checked, and PEVerify and ILVerify both pass. The unverifiable opcodes are in `il-unverifiable-opcodes` (PEVerify `/md` only, no ILVerify). `mkrefany`, `refanyval`, and `calli` are in `il-runtime-only-opcodes`. Neither verifier accepts them, so that fixture is checked by running it only.
-* [ ] ILVerify on every IL fixture. Execution tests exist for loops, catch, finally, fault, filter (`ops-branch`, `ops-eh`, `ops-eh-finally`, `ops-eh-filter`), `ldstr-hello`, and `switch-dispatch`. Not every fixture is covered yet.
+* [x] ILVerify on every IL fixture except the five in `unverified-fixtures` (`tests/lib/fixture.rkt`): `il-unverifiable-opcodes`, `il-runtime-only-opcodes`, `calli-fnptr`, `typedref-param`, and `vararg-call`. ILVerify rejects or cannot model these, so they are checked by running them. The other 52 fixtures pass (`tests/oracles/ilverify-test.rkt`). Execution tests exist for loops, catch, finally, fault, filter (`ops-branch`, `ops-eh`, `ops-eh-finally`, `ops-eh-filter`), `ldstr-hello`, and `switch-dispatch`.

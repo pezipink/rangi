@@ -20,13 +20,17 @@
          prefer-local-policy
          find-methods
          make-declaration-provider
-         declare-type!)
+         declare-type!
+         declare-member!
+         complete-type!
+         declaration-state)
 
 ; asm: the assembly identity this provider answers for.
 ; find: (ns name arity) -> open type-desc or #f.
 ; by-ref: open reference -> open type-desc or #f. Used by env-type.
 ; cacheable?: #t when the provider's answers never change, so env-type may cache them.
-; declare: for declaration providers, (type-desc -> void), otherwise #f.
+; declare: for declaration providers, (op arg ... -> any) for the ops in make-declaration-provider,
+; otherwise #f.
 (struct provider (asm find by-ref cacheable? declare))
 
 ; providers: a list, so iteration order is deterministic.
@@ -147,35 +151,106 @@
         (car locals)
         (fallback id refs))))
 
-; The methods named name, declared by r or any base, most derived first. A base that cannot be
-; found ends the walk silently. Override and hiding are not handled.
+; The methods named name, declared by r or any base, most derived first. A method hides a base
+; method with the same name and parameter types (an override, or a new declaration). The return
+; type is not part of the match. A base that cannot be found ends the walk silently.
 (define (find-methods e r name)
-  (let loop ([r r])
+  (let loop ([r r] [seen '()])
     (define d (and r (env-type e r)))
     (cond
       [(not d) '()]
       [else
-       (append (filter (λ (m) (equal? (method-desc-name m) name)) (force (type-desc-methods d)))
-               (loop (force (type-desc-base d))))])))
+       (define here
+         (for/list ([m (in-list (force (type-desc-methods d)))]
+                    #:when (equal? (method-desc-name m) name)
+                    #:unless (for/or ([s (in-list seen)]) (same-signature? s m)))
+           m))
+       (append here (loop (force (type-desc-base d)) (append seen here)))])))
+
+; II.8.10.1 and II.22.26: a derived method with the same name and parameter types hides the base
+; method. The arity is compared too, because generic method arity is part of its identity.
+(define (same-signature? a b)
+  (and (= (method-desc-arity a) (method-desc-arity b))
+       (equal? (method-desc-params a) (method-desc-params b))))
+
+
+; A declared type. It is 'declared while members may still be added, and 'complete once sealed.
+(struct decl (desc complete?) #:mutable)
 
 ; A provider whose types are added by pass 1 of the module being compiled. Its answers are not
-; cacheable, because declarations can change between expansions.
+; cacheable, because declarations can change between expansions. Its declare procedure takes an
+; op and its arguments: 'declare a type-desc, 'member an owner reference and a method or field,
+; 'complete a reference, or 'state of a reference.
 (define (make-declaration-provider asm)
-  (define table (make-hash))
+  (define table (make-hash)) ; ref-key -> decl. Only looked up by key, never iterated.
+  (define (find-decl r) (hash-ref table (ref-key r) #f))
+  (define (find-open-desc r) (let ([x (find-decl r)]) (and x (decl-desc x))))
   (provider asm
-            (λ (ns name arity) (hash-ref table (list ns name arity) #f))
-            (λ (r) (hash-ref table (ref-key r) #f))
+            (λ (ns name arity) (let ([x (hash-ref table (list ns name arity) #f)]) (and x (decl-desc x))))
+            find-open-desc
             #f
-            (λ (d) (hash-set! table (ref-key (type-desc-ref d)) d))))
+            (λ (op . args)
+              (case op
+                [(declare)
+                 (define d (car args))
+                 (hash-set! table (ref-key (type-desc-ref d)) (decl d #f))]
+                [(member)
+                 (define owner (car args))
+                 (define m (cadr args))
+                 (define x (or (find-decl owner)
+                               (error 'declare-member! "~a is not declared" (type->string owner))))
+                 (when (decl-complete? x)
+                   (error 'declare-member! "~a is complete" (type->string owner)))
+                 (define d (decl-desc x))
+                 (set-decl-desc!
+                  x
+                  (cond
+                    [(and (method-desc? m) (equal? (method-desc-owner m) owner))
+                     (struct-copy type-desc d
+                                  [methods (delay (append (force (type-desc-methods d)) (list m)))])]
+                    [(and (field-desc? m) (equal? (field-desc-owner m) owner))
+                     (struct-copy type-desc d
+                                  [fields (delay (append (force (type-desc-fields d)) (list m)))])]
+                    [else (error 'declare-member! "~a is not a member of ~a"
+                                 (if (method-desc? m) (method-desc-name m) (field-desc-name m))
+                                 (type->string owner))]))]
+                [(complete)
+                 (define x (or (find-decl (car args))
+                               (error 'complete-type! "~a is not declared" (type->string (car args)))))
+                 (set-decl-complete?! x #t)]
+                [(state)
+                 (let ([x (find-decl (car args))])
+                   (and x (if (decl-complete? x) 'complete 'declared)))]
+                [else (error 'declaration-provider "unknown op ~a" op)]))))
 
-; Adds an open type to a declaration provider. A later declaration of the same name replaces it.
+(define (check-declaration-provider who p)
+  (unless (provider-declare p)
+    (raise-argument-error who "declaration provider" p)))
+
+; Adds an open type to a declaration provider. A later declaration of the same name replaces it,
+; and the new declaration starts 'declared.
 (define (declare-type! p d)
   (define r (type-desc-ref d))
-  (unless (provider-declare p)
-    (raise-argument-error 'declare-type! "declaration provider" p))
+  (check-declaration-provider 'declare-type! p)
   (unless (equal? (type-ref-asm r) (provider-asm p))
     (error 'declare-type! "~a belongs to assembly ~a, not ~a"
            (type->string r) (type-ref-asm r) (provider-asm p)))
   (unless (null? (type-ref-args r))
     (error 'declare-type! "~a is a closed instance; declare the open type" (type->string r)))
-  ((provider-declare p) d))
+  ((provider-declare p) 'declare d))
+
+; Appends a method or field to a declared type, so members keep their declaration order. The owner
+; must be declared in p and not yet complete.
+(define (declare-member! p owner m)
+  (check-declaration-provider 'declare-member! p)
+  ((provider-declare p) 'member owner m))
+
+; Marks a declared type complete. Its members can no longer change.
+(define (complete-type! p r)
+  (check-declaration-provider 'complete-type! p)
+  ((provider-declare p) 'complete r))
+
+; 'declared, 'complete, or #f when p does not declare r.
+(define (declaration-state p r)
+  (check-declaration-provider 'declaration-state p)
+  ((provider-declare p) 'state r))

@@ -8,6 +8,8 @@ ms.date: 2026-10-17
 
 Status values are `none`, `partial`, and `done`. A feature is `done` only when a fixture under `tests/fixtures/` passes every layer of [verification.md](verification.md). Record the fixture name in the last column. Spec references are ECMA-335 6th edition.
 
+Scope decision for the remaining `none` rows: File (0x26), ExportedType (0x27), DeclSecurity (0x0E), and FieldMarshal arrays and custom marshalers stay out of scope. The current fixtures do not need them. Revisit when a language needs them.
+
 ## Metadata tables (II.22)
 
 | Id   | Table                  | Read    | Write   | Notes                                                    | Fixture |
@@ -15,11 +17,11 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x00 | Module                 | partial | partial | MVID is a content hash; generation and EnC ids fixed     |         |
 | 0x01 | TypeRef                | partial | partial | ResolutionScope is the referenced AssemblyRef            |         |
 | 0x02 | TypeDef                | partial | partial | Flags from keywords; FieldList from each class's field run |         |
-| 0x03 | FieldPtr               | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
+| 0x03 | FieldPtr               | done    | out of scope | Read: member ranges map through this table in `#-` streams. The writer never emits pointer tables; only the test patcher builds them | pointer-tables-test, pointer-tables-srm-test |
 | 0x04 | Field                  | partial | partial | Same-module fields from `.field` keywords and FieldSig; `ldsfld`/`stsfld` checked for static-ness and type. Instance fields have no positive fixture yet | static-fields |
-| 0x05 | MethodPtr              | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
+| 0x05 | MethodPtr              | done    | out of scope | Read: member ranges map through this table in `#-` streams. The writer never emits pointer tables; only the test patcher builds them | pointer-tables-test, pointer-tables-srm-test |
 | 0x06 | MethodDef              | partial | partial | Flags from keywords; ImplFlags 0; ParamList is the next free Param rid (per method); same-module `call` targets (`(call ret (Class) name (params))`, static only; forward calls and recursion) | calls-multi |
-| 0x07 | ParamPtr               | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
+| 0x07 | ParamPtr               | done    | out of scope | Read: member ranges map through this table in `#-` streams. The writer never emits pointer tables; only the test patcher builds them | pointer-tables-test, pointer-tables-srm-test |
 | 0x08 | Param                  | done    | done    | One row per named param, in method order; Sequence 1-based; flags from `(param [in] [out] [opt] TY NAME [= value])`; unnamed params get no row | param-constants |
 | 0x09 | InterfaceImpl          | done | done | Sorted; `.implements` rows (same-module and external interfaces); interface inheritance (an interface's `.implements` lists the interfaces it extends) | interfaces, interface-inheritance |
 | 0x0A | MemberRef              | partial | partial | Parent is the TypeRef of the call target                 |         |
@@ -31,10 +33,10 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | 0x10 | FieldLayout            | done    | done    | Sorted; one row per field with `offset N` in an explicit class (II.22.16)  | class-layout |
 | 0x11 | StandAloneSig          | done    | done    | LocalVarSig blobs in `sigs.rkt`; `calli` with fnptr args (`calli-fnptr`) and runtime-only `calli void ()` (`il-runtime-only-opcodes`) | ops-locals-args, calli-fnptr, il-runtime-only-opcodes |
 | 0x12 | EventMap               | done    | done    | Sorted by parent                                         | props-events |
-| 0x13 | EventPtr               | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
+| 0x13 | EventPtr               | done    | out of scope | Read: member ranges map through this table in `#-` streams. The writer never emits pointer tables; only the test patcher builds them | pointer-tables-test, pointer-tables-srm-test |
 | 0x14 | Event                  | done    | done    | Sorted; type is a module delegate TypeDef or an external TypeRef | props-events, events-delegate |
 | 0x15 | PropertyMap            | done    | done    | Sorted by parent                                         | props-events |
-| 0x16 | PropertyPtr            | out of scope | n/a | Pointer table, used only in uncompressed metadata (`#-`), which is out of scope | |
+| 0x16 | PropertyPtr            | done    | out of scope | Read: member ranges map through this table in `#-` streams. The writer never emits pointer tables; only the test patcher builds them | pointer-tables-test, pointer-tables-srm-test |
 | 0x17 | Property               | done    | done    | Flags 0 unless specialname/rtspecialname; HASTHIS instance, indexers with params; HasDefault rejected (Constant is metadata-rows) | props-events, events-delegate |
 | 0x18 | MethodSemantics        | done    | done    | Sorted by association; getter, setter, add, remove       | props-events |
 | 0x19 | MethodImpl             | partial | partial | Sorted; `.override` rows (same-module and external base, and same-module or external interfaces in the class's implements closure); the body must be a virtual method of the class | virtual-override, interface-inheritance |
@@ -77,21 +79,21 @@ Status values are `none`, `partial`, and `done`. A feature is `done` only when a
 | Feature                                                          | Read | Write   | Fixture |
 |------------------------------------------------------------------|------|---------|---------|
 | MethodDefSig and MethodRefSig (default, `HASTHIS`, `EXPLICITTHIS`) (II.23.2.1) | partial | partial |         |
-| `VARARG` call convention and sentinel                            | none | none    |         |
+| `VARARG` call convention and sentinel                            | partial | partial | vararg-call (run only; in `unverified-fixtures`, so no ILVerify check) |
 | Generic method sig (`GENERIC`, `GenParamCount`) (II.23.2.1)      | partial | partial | generic-calls |
 | FieldSig (0x06)                                                  | partial | partial | unit tests only (`field-sigs-test.rkt`) |
 | PropertySig (0x08)                                               | partial | partial | props-events (instance, no params), events-delegate (indexer with param); static untested |
 | LocalVarSig (0x07), including `PINNED` and `BYREF` (II.23.2.6)   | partial | partial | ops-locals-args |
-| StandAloneMethodSig for `calli`                                  | none | none    |         |
+| StandAloneMethodSig for `calli`                                  | partial | partial | calli-fnptr, il-runtime-only-opcodes (run only) |
 | Primitive element types (`BOOLEAN` through `U`, `STRING`, `OBJECT`) | partial | partial | |
 | `CLASS` and `VALUETYPE` with TypeDefOrRefOrSpec encoded tokens   | partial | partial |         |
 | `SZARRAY`, and `ARRAY` with rank, sizes, and lower bounds (sizes and bounds each empty or one per dimension; the spec allows fewer) | done | partial | arrays-sum, multidim-arrays, bounded-arrays |
-| `PTR`, `BYREF` (`FNPTR`, `TYPEDBYREF` not yet)                   | partial | partial |         |
+| `PTR`, `BYREF`, `FNPTR`, `TYPEDBYREF`                            | partial | partial | calli-fnptr, typedref-param (run only) |
 | `GENERICINST`, `VAR`, `MVAR`                                     | partial | partial | generic-calls |
-| `CMOD_REQD`, `CMOD_OPT`                                          | none | none    |         |
+| `CMOD_REQD`, `CMOD_OPT`                                          | partial | partial | cmod-params (no ilasm differential yet) |
 | TypeSpec and MethodSpec blobs (II.23.2.14, II.23.2.15)           | partial | partial | generic-calls |
 | Custom attribute value blobs (II.23.3)                           | partial | partial | custom-attrs (literal bytes from `.custom`, not typed; prolog 0x0001 verified against II.23.3; NumNamed is not written by the code, the user's blob is literal. The System.Attribute base is a CLS rule (II.21), not checked) |
-| Marshalling descriptors (II.23.4)                                | none | none    |         |
+| Marshalling descriptors (II.23.4)                                | partial | partial | param-constants (simple NATIVE_TYPE only; no arrays or custom marshalers) |
 
 ## Flags and enumerations (II.23.1)
 
@@ -168,6 +170,6 @@ Tracked in [opcodes.md](opcodes.md). Summary: every opcode in the shared table (
 3. Multiple types with namespaces, extends, and nested types are done. Interfaces and implementation are done (`interfaces`). Interface inheritance and MethodImpl routing for interfaces are done (`interface-inheritance`).
 4. Value types, enums, static data. Single-dimension arrays are done (`arrays-sum`); multi-dimensional arrays with rank, sizes, and lower bounds are done (`multidim-arrays`, `bounded-arrays`). Static data is done (`static-data`). Syntax: a static field takes its initial bytes from a top-level `.data` block, `(.data D_Table = (bytearray (01 00 00 00)))` with hex bytes, and the field names it with `at`, `(.field (public static) int32 Table at D_Table)`. This is the ilasm spelling, so the `bytes` keyword is rejected. The length must equal the primitive's size, and each block belongs to one field. The field gets HasFieldRVA and a FieldRVA row (II.22.18) whose RVA points into the `.sdata` section (II.16). A literal field cannot have data.
 5. Generics: generic methods, TypeSpec, MethodSpec, GenericParam, and GenericParamConstraint are done (see `generic-types`). Generic types are done for same-module type definitions with constraints. Field access on generic instances from outside the class is done (`generic-field-access`, MemberRef with a TypeSpec GENERICINST parent, II.22.25). Method-level constraints are done in syntax (`method-constraints`, `(.typarams (T (class IArea)))` after a method name), and a constraint on a non-generic type or with the wrong argument count is a parse error. A type-variable operand such as `constrained. !!0` is a TypeSpec (II.22.39).
-6. Properties, events, constants.
-7. DLL output and AnyCPU for Framework targets.
+6. Properties and events are done (`props-events`; events are metadata only). Constants are done (`param-constants`).
+7. DLL output is done (`dll-output`). AnyCPU for Framework targets is still to check.
 8. P/Invoke is done (`pinvoke`): `pinvokeimpl` methods lower to ModuleRef, ImplMap, and MethodDef rows with PinvokeImpl and PreserveSig. Win32 resources are done (`win32-resources`): a `.win32resource` payload is laid out in the `.rsrc` section with data directory 2. PDB, strong naming, ARM64, and .NET (Core) are out of scope until requested. PE32+ (AMD64) output is covered by `nano-x64`.
