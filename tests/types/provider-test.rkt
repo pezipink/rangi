@@ -104,7 +104,7 @@
   (define other (type-ref "Geo" "" "Other" 0 'class '()))
   (define e (make-env #:providers (list dp)))
   (define area (method-desc r "Area" #t #f #t #f #f 0 '() (source-primitive "int")))
-  (define count (field-desc r "Count" #t #f (source-primitive "int")))
+  (define count (field-desc r "Count" #t #f (source-primitive "int") #f #f))
   (define scale (method-desc r "Scale" #t #f #t #f #f 0 (list (source-primitive "int")) 'void))
   (declare-type! dp (type-desc r 'class #f #f (delay #f) (delay '()) (delay '()) (delay '())))
   (declare-type! dp (type-desc other 'class #f #f (delay #f) (delay '()) (delay '()) (delay '())))

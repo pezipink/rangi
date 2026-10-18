@@ -27,7 +27,9 @@
 (struct method-desc (owner name public? static? virtual? abstract? vararg? arity params ret)
   #:transparent)
 
-(struct field-desc (owner name public? static? type) #:transparent)
+; literal?: a compile-time constant (II.23.1.5 literal flag). value: its Constant row decoded to a
+; Racket value (see reference.rkt), or #f when the field is not a literal.
+(struct field-desc (owner name public? static? type literal? value) #:transparent)
 
 ; Replaces each (type-param 'type n) with (list-ref args n). Method-level parameters are left
 ; alone: generic method instantiation is not supported yet.

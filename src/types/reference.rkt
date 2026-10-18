@@ -5,7 +5,8 @@
 ; Building a descriptor reads its header row and nothing else. Its members, base and interfaces
 ; are promises, and forcing one decodes the signatures it needs (II.23.2).
 (require racket/promise
-         (only-in "../cli/reader.rkt" read-file read-assembly-meta row-column row-column-raw)
+         (only-in "../cli/reader.rkt" read-file read-assembly-meta row-column row-column-raw
+                  table-row-count)
          (only-in "../cli/index.rkt" find-typedef find-exported-type typedef-methods typedef-fields
                   enclosing-type interface-impls)
          (only-in "../cli/sigs.rkt" decode-typespec decode-method-sig decode-field-sig
@@ -21,7 +22,8 @@
 ; rdr: the reader for the file. asm: the assembly identity. memo: (list ns name arity) -> TypeDef
 ; rid, for every type this provider has named. A nested type is found only through the memo,
 ; because its name carries its enclosing type's name, which is not in the reference alone.
-(struct ctx (rdr asm memo))
+; consts: a promise of the field rid -> Constant row index hash (see constant-rows).
+(struct ctx (rdr asm memo consts))
 
 ; Signature decodes so far, for the laziness test: a member row is decoded only when forced.
 (define decode-count 0)
@@ -162,12 +164,68 @@
   (set! decode-count (add1 decode-count))
   (define flags (row-column-raw rdr 'field f 'flags))
   (define sig (decode-field-sig (row-column rdr 'field f 'signature)))
-  ; II.23.1.5 FieldAttributes: access mask 0x7, Public is 6
+  ; II.23.1.5 FieldAttributes: access mask 0x7, Public is 6; literal is 0x40
+  (define literal? (positive? (bitwise-and flags #x40)))
+  (define k (and literal? (hash-ref (force (ctx-consts c)) f #f)))
   (field-desc owner
               (row-column rdr 'field f 'name)
               (= (bitwise-and flags 7) 6)
               (positive? (bitwise-and flags #x10))
-              (sig->type c (field-signature-type sig))))
+              (sig->type c (field-signature-type sig))
+              literal?
+              (and k (constant-value rdr k))))
+
+; II.22.9 Constant: the Constant rows of fields, keyed by the field rid they belong to. Built once
+; per file, the first time a literal field is decoded.
+(define (constant-rows rdr)
+  (for*/hash ([k (in-range 1 (add1 (table-row-count rdr 'constant)))]
+              [p (in-value (row-column rdr 'constant k 'parent))]
+              #:when (and (pair? p) (eq? (car p) 'field)))
+    (values (cdr p) k)))
+
+; II.22.9: the value blob is little-endian, typed by an ELEMENT_TYPE (II.23.1.16). Integers and
+; chars are exact integers, booleans are #t/#f, floats are flonums, strings are strings, and a
+; null reference is #f.
+(define (constant-value rdr k)
+  (define type (row-column rdr 'constant k 'type))
+  (define b (row-column rdr 'constant k 'value))
+  (define (int size signed?)
+    (if (= size 1)
+        (let ([v (bytes-ref b 0)]) (if (and signed? (>= v 128)) (- v 256) v))
+        (integer-bytes->integer b signed? #f 0 size)))
+  (case type
+    [(#x02) (not (zero? (bytes-ref b 0)))]
+    [(#x03) (int 2 #f)]
+    [(#x04) (int 1 #t)]
+    [(#x05) (int 1 #f)]
+    [(#x06) (int 2 #t)]
+    [(#x07) (int 2 #f)]
+    [(#x08) (int 4 #t)]
+    [(#x09) (int 4 #f)]
+    [(#x0A) (int 8 #t)]
+    [(#x0B) (int 8 #f)]
+    [(#x0C) (floating-point-bytes->real b #f 0 4)]
+    [(#x0D) (floating-point-bytes->real b #f 0 8)]
+    [(#x0E) (utf16le->string b)]
+    [(#x12) #f]
+    [else (error 'rangi "constant row ~a has unsupported type #x~a" k (number->string type 16))]))
+
+; UTF-16LE code units to a string. A lone surrogate becomes U+FFFD.
+(define (utf16le->string b)
+  (define units (for/list ([i (in-range 0 (bytes-length b) 2)])
+                  (integer-bytes->integer b #f #f i (+ i 2))))
+  (let loop ([us units] [acc '()])
+    (cond
+      [(null? us) (list->string (reverse acc))]
+      [(<= #xD800 (car us) #xDBFF)
+       (let ([lo (and (pair? (cdr us)) (cadr us))])
+         (if (and lo (<= #xDC00 lo #xDFFF))
+             (loop (cddr us)
+                   (cons (integer->char (+ #x10000 (* (- (car us) #xD800) 1024) (- lo #xDC00)))
+                         acc))
+             (loop (cdr us) (cons #\uFFFD acc))))]
+      [(<= #xDC00 (car us) #xDFFF) (loop (cdr us) (cons #\uFFFD acc))]
+      [else (loop (cdr us) (cons (integer->char (car us)) acc))])))
 
 (define (typedef-desc c rid)
   (define rdr (ctx-rdr c))
@@ -197,7 +255,7 @@
 (define (open-reference-provider path)
   (define rdr (read-file path))
   (define asm (or (read-assembly-meta rdr) (module-name path)))
-  (define c (ctx rdr asm (make-hash)))
+  (define c (ctx rdr asm (make-hash) (delay (constant-rows rdr))))
   (provider asm
             (λ (ns name arity)
               (define rid (rid-for c ns name arity))

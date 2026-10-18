@@ -47,7 +47,22 @@
     (check-equal? (length fields) 1)
     (check-true (field-desc-static? (car fields)))
     (check-true (field-desc-public? (car fields)))
-    (check-equal? (field-desc-type (car fields)) (source-primitive "int")))
+    (check-equal? (field-desc-type (car fields)) (source-primitive "int"))
+    (check-true (field-desc-literal? (car fields)))
+    (check-equal? (field-desc-value (car fields)) 2147483647))
+
+  (test-case "literal values decode by their element type"
+    (define (field owner name)
+      (findf (λ (f) (equal? (field-desc-name f) name))
+             (force (type-desc-fields (get e "System" owner 0)))))
+    (check-equal? (field-desc-value (field "Byte" "MaxValue")) 255)
+    (check-equal? (field-desc-value (field "Int64" "MinValue")) -9223372036854775808)
+    (check-equal? (field-desc-value (field "Char" "MaxValue")) #xFFFF)
+    (check-equal? (field-desc-value (field "Double" "NaN")) +nan.0)
+    (check-equal? (field-desc-value (field "DayOfWeek" "Monday")) 1)
+    (check-true (field-desc-literal? (field "Math" "PI")))
+    (check-false (field-desc-literal? (field "DateTime" "MinValue")))
+    (check-false (field-desc-value (field "DateTime" "MinValue"))))
 
   (test-case "List<int> has members substituted from its argument"
     (define list-int
